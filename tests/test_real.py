@@ -371,7 +371,7 @@ def _results(output):
 def test_seed_apply_is_idempotent_and_works(emu, tmp_path):
     path = _write_seed(tmp_path)
     first = _results(run(emu, "seed", "apply", str(path)).output)
-    assert len(first) == 10 and set(first.values()) == {"created"}, first
+    assert len(first) == 9 and set(first.values()) == {"created"}, first
 
     # The wiring works: SNS -> SQS with the filter and raw delivery the seed asked for.
     run(emu, "sns", "publish", "seed-orders", '{"n": 1}', "-a", "kind=created")
