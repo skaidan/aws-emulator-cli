@@ -161,3 +161,16 @@ def test_restart_resets_state(emu):
     run(emu, "s3", "mb", "awsemu-gone")
     run(emu, "restart", "--native", "--no-telemetry", "--idle-timeout", "900", "--wait", "60")
     assert "awsemu-gone" not in run(emu, "s3", "ls").output
+
+
+def test_random_port_with_real_binary(emu):
+    """--port 0 relies on the real startup line format (message under "fields")."""
+    result = run(0, "start", "--native", "--no-telemetry", "--idle-timeout", "300", "--wait", "60")
+    ports = [int(p) for p in os.listdir(InstanceFiles(0).dir.parent) if p.isdigit() and int(p) != emu]
+    assert len(ports) == 1, (ports, result.output)
+    port = ports[0]
+    try:
+        assert f"https://127.0.0.1:{port}" in result.output
+        assert ACCOUNT_ID in run(port, "whoami").output
+    finally:
+        run(port, "stop")
