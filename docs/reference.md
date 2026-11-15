@@ -9,19 +9,25 @@ Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 
 
 - [`aws`](#awsemu-aws) — Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
 - [`config`](#awsemu-config) — Read or change the emulator's settings file (config.toml).
+- [`describe`](#awsemu-describe) — Show any supported resource from its ARN.
 - [`doctor`](#awsemu-doctor) — Check your setup and explain how to fix what's missing.
 - [`dynamodb`](#awsemu-dynamodb) — Tables and items (JSON in, JSON out).
 - [`env`](#awsemu-env) — Print shell commands that point the AWS CLI and SDKs at the emulator.
+- [`events`](#awsemu-events) — EventBridge: buses, rules and events.
 - [`exec`](#awsemu-exec) — Run COMMAND with the environment pointed at the emulator.
 - [`image`](#awsemu-image) — Build the Docker image (AWS doesn't publish a prebuilt one).
+- [`kinesis`](#awsemu-kinesis) — Kinesis Data Streams.
 - [`lambda`](#awsemu-lambda) — Deploy, invoke and inspect Lambda functions.
 - [`logs`](#awsemu-logs) — Show the emulator's log, prettified (also after it stopped).
 - [`overview`](#awsemu-overview) — What's inside the emulator, across common services.
 - [`restart`](#awsemu-restart) — Restart the emulator.
 - [`s3`](#awsemu-s3) — Buckets and objects.
+- [`secrets`](#awsemu-secrets) — Secrets Manager: store and read secrets.
+- [`sfn`](#awsemu-sfn) — Step Functions: state machines and executions.
 - [`shell`](#awsemu-shell) — Open a sub-shell already pointed at the emulator ('exit' to leave).
 - [`sns`](#awsemu-sns) — Topics, publishing and subscriptions.
 - [`sqs`](#awsemu-sqs) — Queues and messages.
+- [`ssm`](#awsemu-ssm) — SSM Parameter Store: configuration parameters.
 - [`start`](#awsemu-start) — Start an emulator in the background and wait until it's healthy.
 - [`status`](#awsemu-status) — Show whether the emulator is running and healthy.
 - [`stop`](#awsemu-stop) — Stop the emulator (clean stop: it deletes its files and in-memory state).
@@ -61,6 +67,17 @@ Show or set telemetry ('awsemu config telemetry off').
 
 ```
 awsemu config telemetry [OPTIONS] [on|off]
+```
+
+## `awsemu describe`
+
+Show any supported resource from its ARN.
+
+Works with S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, Kinesis,
+EventBridge, Step Functions, CloudWatch Logs and IAM ARNs.
+
+```
+awsemu describe [OPTIONS] ARN
 ```
 
 ## `awsemu doctor`
@@ -180,6 +197,87 @@ awsemu env [OPTIONS]
 | `--unset` | Print the commands that undo 'awsemu env'. |
 | `--keep-real-creds` | Don't unset AWS_ACCESS_KEY_ID & co. (requests will then fail auth). |
 
+## `awsemu events`
+
+EventBridge: buses, rules and events.
+
+### `awsemu events buses`
+
+List event buses.
+
+```
+awsemu events buses [OPTIONS]
+```
+
+### `awsemu events create-bus`
+
+Create a custom event bus.
+
+```
+awsemu events create-bus [OPTIONS] NAME
+```
+
+### `awsemu events put`
+
+Send an event: 'awsemu events put app.orders OrderCreated '{"id": 42}''.
+
+```
+awsemu events put [OPTIONS] SOURCE DETAIL_TYPE [DETAIL]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--bus TEXT` | Event bus name.  [default: default] |
+
+### `awsemu events rm`
+
+Delete a rule (its targets are removed first).
+
+```
+awsemu events rm [OPTIONS] NAME
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--bus TEXT` | Event bus name.  [default: default] |
+| `-y, --yes` |  |
+
+### `awsemu events rule`
+
+Create or update a rule and (optionally) its target in one step.
+
+```bash
+awsemu events rule orders-created --source app.orders --to-sqs order-events
+awsemu events rule big-orders --pattern '{"detail": {"total": [{"numeric": [">", 100]}]}}' --to-lambda alert
+```
+
+```
+awsemu events rule [OPTIONS] NAME
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--pattern JSON` | Event pattern, e.g. '{"source": ["app.orders"]}'. |
+| `--source TEXT` | Shortcut for a pattern matching these sources. Repeatable. |
+| `--schedule EXPR` | e.g. 'rate(5 minutes)' (instead of a pattern). |
+| `--to-sqs QUEUE` | Send matches to this queue (sets its policy). |
+| `--to-lambda FUNCTION` | Invoke this function (adds permission). |
+| `--to-sns TOPIC` | Publish to this SNS topic. |
+| `--bus TEXT` | Event bus name.  [default: default] |
+
+### `awsemu events rules`
+
+List rules on a bus with their pattern and targets.
+
+```
+awsemu events rules [OPTIONS]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--bus TEXT` | Event bus name.  [default: default] |
+| `--json` |  |
+
 ## `awsemu exec`
 
 Run COMMAND with the environment pointed at the emulator.
@@ -226,6 +324,70 @@ awsemu image dockerfile [OPTIONS]
 | Opción | Descripción |
 | --- | --- |
 | `--arch [x86_64|aarch64]` |  |
+
+## `awsemu kinesis`
+
+Kinesis Data Streams.
+
+### `awsemu kinesis create`
+
+Create a stream and wait until it's active.
+
+```
+awsemu kinesis create [OPTIONS] NAME
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--shards INTEGER RANGE` | [default: 1; 1<=x<=64] |
+
+### `awsemu kinesis ls`
+
+List streams with status and shard count.
+
+```
+awsemu kinesis ls [OPTIONS]
+```
+
+### `awsemu kinesis put`
+
+Put one record: 'awsemu kinesis put clicks '{"page": "/"}''.
+
+```
+awsemu kinesis put [OPTIONS] STREAM [DATA]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--file FILENAME` | Record data from a file ('-' = stdin). |
+| `-k, --key TEXT` | Partition key (default: random). |
+
+### `awsemu kinesis read`
+
+Read records from every shard.
+
+```
+awsemu kinesis read [OPTIONS] STREAM
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--from [start|latest]` | Read from the oldest record or only new ones.  [default: start] |
+| `-n, --limit INTEGER` | Max records (0 = no limit).  [default: 100] |
+| `-f, --follow` | Keep polling for new records. |
+| `--json` | One JSON object per record. |
+
+### `awsemu kinesis rm`
+
+Delete a stream.
+
+```
+awsemu kinesis rm [OPTIONS] STREAM
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `-y, --yes` |  |
 
 ## `awsemu lambda`
 
@@ -454,6 +616,144 @@ awsemu s3 rm [OPTIONS] TARGET
 | `-r, --recursive` | Delete every key under the prefix. |
 | `-y, --yes` |  |
 
+## `awsemu secrets`
+
+Secrets Manager: store and read secrets.
+
+### `awsemu secrets get`
+
+Print a secret's value (JSON values are pretty-printed).
+
+```
+awsemu secrets get [OPTIONS] NAME
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--stage TEXT` | Version stage.  [default: AWSCURRENT] |
+| `--raw` | Print the value untouched (no JSON formatting). |
+
+### `awsemu secrets info`
+
+Show a secret's metadata and versions (not its value).
+
+```
+awsemu secrets info [OPTIONS] NAME
+```
+
+### `awsemu secrets ls`
+
+List secrets (names only, never values).
+
+```
+awsemu secrets ls [OPTIONS]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--json` |  |
+
+### `awsemu secrets put`
+
+Create a secret, or store a new version if it exists.
+
+```bash
+awsemu secrets put db/password 's3cr3t'
+awsemu secrets put db/config '{"host": "localhost", "port": 5432}'
+awsemu secrets put tls/key --file key.pem
+```
+
+```
+awsemu secrets put [OPTIONS] NAME [VALUE]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--file FILENAME` | Read the value from a file ('-' = stdin). |
+| `--description TEXT` |  |
+
+### `awsemu secrets rm`
+
+Delete a secret (with a 7-day recovery window unless --now).
+
+```
+awsemu secrets rm [OPTIONS] NAME
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--now` | Delete immediately, without a recovery window. |
+| `-y, --yes` |  |
+
+## `awsemu sfn`
+
+Step Functions: state machines and executions.
+
+### `awsemu sfn deploy`
+
+Create or update a state machine from a file or inline JSON.
+
+```bash
+awsemu sfn deploy hello flow.asl.json
+awsemu sfn deploy hello '{"StartAt": "Hi", "States": {"Hi": {"Type": "Pass", "End": true}}}'
+```
+
+```
+awsemu sfn deploy [OPTIONS] NAME DEFINITION
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--express` | EXPRESS type (default STANDARD). |
+| `--role ARN` | Execution role (default: creates 'awsemu-sfn-role'). |
+
+### `awsemu sfn executions`
+
+Recent executions of a state machine.
+
+```
+awsemu sfn executions [OPTIONS] NAME
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `-n, --limit INTEGER` | [default: 20] |
+
+### `awsemu sfn ls`
+
+List state machines.
+
+```
+awsemu sfn ls [OPTIONS]
+```
+
+### `awsemu sfn rm`
+
+Delete a state machine.
+
+```
+awsemu sfn rm [OPTIONS] NAME
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `-y, --yes` |  |
+
+### `awsemu sfn start`
+
+Start an execution and (by default) wait for its result.
+
+```
+awsemu sfn start [OPTIONS] NAME [INPUT_JSON]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--file FILENAME` | Input from a file ('-' = stdin). |
+| `--no-wait` | Start and return without waiting for the result. |
+| `--timeout SECONDS` | [default: 120] |
+| `--raw` | Print only the output JSON. |
+
 ## `awsemu shell`
 
 Open a sub-shell already pointed at the emulator ('exit' to leave).
@@ -654,6 +954,58 @@ awsemu sqs send [OPTIONS] QUEUE [BODY]
 | `--dedup-id TEXT` | MessageDeduplicationId (FIFO). |
 | `--delay SECONDS` |  |
 | `-a, --attr KEY=VALUE` | String message attribute. Repeatable. |
+
+## `awsemu ssm`
+
+SSM Parameter Store: configuration parameters.
+
+### `awsemu ssm get`
+
+Print a parameter's value.
+
+```
+awsemu ssm get [OPTIONS] NAME
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--no-decrypt` | Don't decrypt SecureString values. |
+
+### `awsemu ssm ls`
+
+List parameters, optionally under a PATH like /app/prod.
+
+```
+awsemu ssm ls [OPTIONS] [PATH]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--values` | Also show values (SecureString shown as ****). |
+| `--json` |  |
+
+### `awsemu ssm put`
+
+Create or overwrite a parameter: 'awsemu ssm put /app/db/host localhost'.
+
+```
+awsemu ssm put [OPTIONS] NAME [VALUE]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--file FILENAME` | Read the value from a file ('-' = stdin). |
+| `--secure` | Store as SecureString. |
+| `--list` | Store as StringList (comma-separated). |
+| `--description TEXT` |  |
+
+### `awsemu ssm rm`
+
+Delete one or more parameters.
+
+```
+awsemu ssm rm [OPTIONS] NAMES...
+```
 
 ## `awsemu start`
 

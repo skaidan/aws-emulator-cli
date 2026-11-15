@@ -211,3 +211,109 @@ def test_lambda_deploy_invoke(emu, tmp_path):
     assert "updated awsemu-hello" in run(emu, "lambda", "deploy", "awsemu-hello", str(src)).output
     assert json.loads(run(emu, "lambda", "invoke", "awsemu-hello", "--raw").output) == {"v": 2}
     run(emu, "lambda", "rm", "awsemu-hello", "--yes")
+
+
+def test_secrets_and_ssm(emu):
+    run(emu, "secrets", "put", "awsemu/db", '{"user": "app", "pass": "x"}', "--description", "db")
+    run(emu, "secrets", "put", "awsemu/db", '{"user": "app", "pass": "y"}')
+    assert json.loads(run(emu, "secrets", "get", "awsemu/db", "--raw").output) == {"user": "app", "pass": "y"}
+    assert "awsemu/db" in run(emu, "secrets", "ls").output
+    info = run(emu, "secrets", "info", "awsemu/db").output
+    assert "AWSCURRENT" in info and "AWSPREVIOUS" in info
+    run(emu, "secrets", "rm", "awsemu/db", "--now", "--yes")
+
+    run(emu, "ssm", "put", "/awsemu/app/host", "localhost")
+    run(emu, "ssm", "put", "/awsemu/app/key", "s3cr3t", "--secure")
+    assert run(emu, "ssm", "get", "/awsemu/app/key").output.strip() == "s3cr3t"
+    listing = run(emu, "ssm", "ls", "/awsemu/app", "--values").output
+    assert "localhost" in listing and "s3cr3t" not in listing
+    run(emu, "ssm", "rm", "/awsemu/app/host", "/awsemu/app/key")
+
+
+def test_eventbridge_to_sqs(emu):
+    run(emu, "sqs", "create", "awsemu-eb-target")
+    run(emu, "events", "rule", "awsemu-orders", "--source", "awsemu.orders", "--to-sqs", "awsemu-eb-target")
+    rules = json.loads(run(emu, "events", "rules", "--json").output)
+    assert any(r["Name"] == "awsemu-orders" and r["Targets"] for r in rules)
+    run(emu, "events", "put", "awsemu.orders", "OrderCreated", '{"id": 7}')
+    run(emu, "events", "put", "other.source", "Ignored", "{}")
+    msgs = json.loads(run(emu, "sqs", "receive", "awsemu-eb-target", "--wait", "5", "--delete",
+                          "--json").output)
+    assert len(msgs) == 1, msgs
+    event = json.loads(msgs[0]["Body"])
+    assert event["source"] == "awsemu.orders" and event["detail"] == {"id": 7}
+    run(emu, "events", "rm", "awsemu-orders", "--yes")
+    run(emu, "sqs", "rm", "awsemu-eb-target", "--yes")
+
+
+def test_kinesis_roundtrip(emu):
+    run(emu, "kinesis", "create", "awsemu-clicks")
+    assert "awsemu-clicks" in run(emu, "kinesis", "ls").output
+    run(emu, "kinesis", "put", "awsemu-clicks", '{"page": "/"}', "-k", "user-1")
+    run(emu, "kinesis", "put", "awsemu-clicks", "plain text", "-k", "user-2")
+    lines = run(emu, "kinesis", "read", "awsemu-clicks", "--json").output.strip().splitlines()
+    records = [json.loads(line) for line in lines]
+    assert [r["data"] for r in records] == ['{"page": "/"}', "plain text"]
+    run(emu, "kinesis", "rm", "awsemu-clicks", "--yes")
+
+
+def test_step_functions(emu, tmp_path):
+    flow = tmp_path / "flow.asl.json"
+    flow.write_text(json.dumps({
+        "StartAt": "Greet",
+        "States": {
+            "Greet": {"Type": "Pass", "Parameters": {"greeting.$": "States.Format('hola {}', $.name)"},
+                      "Next": "Done"},
+            "Done": {"Type": "Succeed"},
+        }}))
+    run(emu, "sfn", "deploy", "awsemu-flow", str(flow))
+    out = run(emu, "sfn", "start", "awsemu-flow", '{"name": "Ana"}', "--raw").output
+    assert json.loads(out) == {"greeting": "hola Ana"}
+
+    run(emu, "sfn", "deploy", "awsemu-flow",
+        '{"StartAt": "X", "States": {"X": {"Type": "Fail", "Error": "Nope", "Cause": "on purpose"}}}')
+    result = run(emu, "sfn", "start", "awsemu-flow", ok=False)
+    assert result.exit_code == 1 and "FAILED" in result.output and "Nope" in result.output
+    assert "SUCCEEDED" in run(emu, "sfn", "executions", "awsemu-flow").output
+    run(emu, "sfn", "rm", "awsemu-flow", "--yes")
+
+
+def test_describe_arns(emu):
+    run(emu, "ddb", "create", "awsemu-describe", "--pk", "id")
+    run(emu, "sqs", "create", "awsemu-describe-q")
+    run(emu, "sns", "create", "awsemu-describe-t")
+    table = json.loads(run(emu, "describe", "arn:aws:dynamodb:us-east-1:000000000000:table/awsemu-describe").output)
+    assert table["TableName"] == "awsemu-describe"
+    queue = json.loads(run(emu, "describe", "arn:aws:sqs:us-east-1:000000000000:awsemu-describe-q").output)
+    assert queue["QueueArn"].endswith(":awsemu-describe-q")
+    topic = json.loads(run(emu, "describe", "arn:aws:sns:us-east-1:000000000000:awsemu-describe-t").output)
+    assert topic["TopicArn"].endswith(":awsemu-describe-t")
+    run(emu, "ddb", "drop", "awsemu-describe", "--yes")
+    run(emu, "sqs", "rm", "awsemu-describe-q", "--yes")
+    run(emu, "sns", "rm", "awsemu-describe-t", "--yes")
+
+
+def test_lambda_logs_async_and_sns_trigger(emu, tmp_path):
+    src = tmp_path / "echo.py"
+    src.write_text("def handler(event, context):\n"
+                   "    print('AWSEMU-MARK', event)\n"
+                   "    return event\n")
+    run(emu, "lambda", "deploy", "awsemu-echo", str(src))
+    assert "queued" in run(emu, "lambda", "invoke", "awsemu-echo", '{"via": "async"}', "--async").output
+
+    run(emu, "sns", "create", "awsemu-to-lambda")
+    run(emu, "sns", "subscribe", "awsemu-to-lambda", "--to-lambda", "awsemu-echo")
+    run(emu, "sns", "publish", "awsemu-to-lambda", "from-sns")
+
+    import time
+    deadline = time.monotonic() + 30
+    out = ""
+    while time.monotonic() < deadline:
+        out = run(emu, "lambda", "logs", "awsemu-echo").output
+        if "async" in out and "from-sns" in out:
+            break
+        time.sleep(1)
+    assert "AWSEMU-MARK" in out and "async" in out, out
+    assert "from-sns" in out, out
+    run(emu, "sns", "rm", "awsemu-to-lambda", "--yes")
+    run(emu, "lambda", "rm", "awsemu-echo", "--yes")

@@ -14,13 +14,9 @@ import click
 from .. import ui
 from ..clients import client
 from ..context import Ctx, handle_errors, pass_ctx
+from ._common import ensure_service_role, is_error, parse_kv
 
 DEFAULT_ROLE_NAME = "awsemu-lambda-role"
-TRUST_POLICY = {
-    "Version": "2012-10-17",
-    "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"},
-                   "Action": "sts:AssumeRole"}],
-}
 SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules/.cache", ".pytest_cache",
              ".mypy_cache"}
 SKIP_SUFFIXES = (".pyc", ".pyo")
@@ -83,25 +79,12 @@ def guess_handler_and_runtime(source: Path) -> tuple[str | None, str | None]:
 
 
 def parse_env(pairs) -> dict[str, str]:
-    env = {}
-    for pair in pairs:
-        k, sep, v = pair.partition("=")
-        if not sep or not k:
-            raise click.BadParameter(f"'{pair}' is not KEY=VALUE", param_hint="--env")
-        env[k] = v
-    return env
+    return parse_kv(pairs, "--env")
 
 
 def ensure_role(iam) -> str:
-    try:
-        return iam.get_role(RoleName=DEFAULT_ROLE_NAME)["Role"]["Arn"]
-    except Exception as exc:
-        if "NoSuchEntity" not in type(exc).__name__ and \
-                "NoSuchEntity" not in str(getattr(exc, "response", "")):
-            raise
-    return iam.create_role(RoleName=DEFAULT_ROLE_NAME,
-                           AssumeRolePolicyDocument=json.dumps(TRUST_POLICY),
-                           Description="Created by awsemu for Lambda functions")["Role"]["Arn"]
+    return ensure_service_role(iam, DEFAULT_ROLE_NAME, "lambda.amazonaws.com",
+                               "Created by awsemu for Lambda functions")
 
 
 def _wait(lam, waiter_name: str, name: str) -> None:
@@ -118,8 +101,7 @@ def _exists(lam, name: str) -> bool:
         lam.get_function(FunctionName=name)
         return True
     except Exception as exc:
-        if "ResourceNotFound" in type(exc).__name__ or \
-                "ResourceNotFound" in str(getattr(exc, "response", "")):
+        if is_error(exc, "ResourceNotFound"):
             return False
         raise
 
@@ -286,7 +268,7 @@ def logs_cmd(c: Ctx, name: str, follow: bool, since: int):
                         ui.echo(f"{ts}  {ev['message'].rstrip()}")
                         start = max(start, ev["timestamp"])
             except Exception as exc:
-                if "ResourceNotFound" not in type(exc).__name__:
+                if not is_error(exc, "ResourceNotFound"):
                     raise
                 if not follow:
                     ui.echo(f"No logs yet ({group} doesn't exist).", "muted")

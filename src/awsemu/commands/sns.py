@@ -10,7 +10,7 @@ from .. import ui
 from ..clients import client
 from ..context import Ctx, handle_errors, pass_ctx
 from ..paths import ACCOUNT_ID, REGION
-from .sqs import queue_url
+from ._common import allow_lambda, allow_queue, parse_kv, queue_policy_allowing
 
 
 def topic_arn(topic: str) -> str:
@@ -26,19 +26,8 @@ def topic_name(arn: str) -> str:
 
 def queue_policy_for_topic(queue_arn: str, topic_arn_: str, existing: str | None = None) -> str:
     """A queue policy that lets ``topic_arn_`` send messages, merged with ``existing``."""
-    policy = json.loads(existing) if existing else {"Version": "2012-10-17", "Statement": []}
-    sid = f"awsemu-sns-{topic_name(topic_arn_)}"
-    statements = [s for s in policy.get("Statement", []) if s.get("Sid") != sid]
-    statements.append({
-        "Sid": sid,
-        "Effect": "Allow",
-        "Principal": {"Service": "sns.amazonaws.com"},
-        "Action": "sqs:SendMessage",
-        "Resource": queue_arn,
-        "Condition": {"ArnEquals": {"aws:SourceArn": topic_arn_}},
-    })
-    policy["Statement"] = statements
-    return json.dumps(policy)
+    return queue_policy_allowing(queue_arn, "sns.amazonaws.com", topic_arn_,
+                                 f"awsemu-sns-{topic_name(topic_arn_)}", existing)
 
 
 def _list_subscriptions(sns, arn: str | None = None) -> list[dict]:
@@ -54,13 +43,7 @@ def _list_subscriptions(sns, arn: str | None = None) -> list[dict]:
 
 
 def _parse_attrs(attrs) -> dict:
-    parsed = {}
-    for a in attrs:
-        k, sep, v = a.partition("=")
-        if not sep:
-            raise click.BadParameter(f"'{a}' is not KEY=VALUE", param_hint="--attr")
-        parsed[k] = {"DataType": "String", "StringValue": v}
-    return parsed
+    return {k: {"DataType": "String", "StringValue": v} for k, v in parse_kv(attrs).items()}
 
 
 @click.group()
@@ -163,25 +146,13 @@ def subscribe(c: Ctx, topic: str, queue, function, endpoint, raw: bool, filter_p
         raise click.UsageError("give exactly one of --to-sqs, --to-lambda or --endpoint")
     arn = topic_arn(topic)
     s = client("sns", c.port)
+    sid = f"awsemu-sns-{topic_name(arn)}"
     if queue:
-        q = client("sqs", c.port)
-        url = queue_url(q, queue)
-        attrs = q.get_queue_attributes(QueueUrl=url, AttributeNames=["QueueArn", "Policy"])["Attributes"]
-        q.set_queue_attributes(QueueUrl=url, Attributes={
-            "Policy": queue_policy_for_topic(attrs["QueueArn"], arn, attrs.get("Policy"))})
-        protocol, target = "sqs", attrs["QueueArn"]
+        target = allow_queue(client("sqs", c.port), queue, "sns.amazonaws.com", arn, sid)
+        protocol = "sqs"
     elif function:
-        lam = client("lambda", c.port)
-        fn_arn = lam.get_function(FunctionName=function)["Configuration"]["FunctionArn"]
-        try:
-            lam.add_permission(FunctionName=function, StatementId=f"awsemu-sns-{topic_name(arn)}",
-                               Action="lambda:InvokeFunction", Principal="sns.amazonaws.com",
-                               SourceArn=arn)
-        except Exception as exc:  # already there is fine
-            if "ResourceConflict" not in type(exc).__name__ and \
-                    "ResourceConflict" not in str(getattr(exc, "response", "")):
-                raise
-        protocol, target = "lambda", fn_arn
+        target = allow_lambda(client("lambda", c.port), function, "sns.amazonaws.com", arn, sid)
+        protocol = "lambda"
     else:
         protocol, _, target = endpoint.partition(":")
         if not target:

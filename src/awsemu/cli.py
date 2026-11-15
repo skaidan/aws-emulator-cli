@@ -23,7 +23,8 @@ class AliasedGroup(click.Group):
     """Lets users type unambiguous prefixes (``awsemu st`` -> status) and a few aliases."""
 
     ALIASES = {"ps": "status", "up": "start", "down": "stop", "reset": "restart",
-               "ddb": "dynamodb", "ls": "overview", "fn": "lambda"}
+               "ddb": "dynamodb", "ls": "overview", "fn": "lambda",
+               "eb": "events", "stepfunctions": "sfn", "secretsmanager": "secrets"}
 
     def get_command(self, ctx, cmd_name):
         cmd_name = self.ALIASES.get(cmd_name, cmd_name)
@@ -570,10 +571,15 @@ def config_path():
 
 # =========================================================================== services
 
+from .commands import describe as _describe  # noqa: E402
 from .commands import dynamodb as _dynamodb  # noqa: E402
+from .commands import events as _events  # noqa: E402
+from .commands import kinesis as _kinesis  # noqa: E402
 from .commands import overview as _overview  # noqa: E402
 from .commands import lambda_ as _lambda  # noqa: E402
 from .commands import s3 as _s3  # noqa: E402
+from .commands import secrets as _secrets  # noqa: E402
+from .commands import sfn as _sfn  # noqa: E402
 from .commands import sns as _sns  # noqa: E402
 from .commands import sqs as _sqs  # noqa: E402
 
@@ -583,6 +589,12 @@ cli.add_command(_sqs.sqs)
 cli.add_command(_dynamodb.dynamodb)
 cli.add_command(_sns.sns)
 cli.add_command(_lambda.lambda_)
+cli.add_command(_secrets.secrets)
+cli.add_command(_secrets.ssm)
+cli.add_command(_events.events)
+cli.add_command(_kinesis.kinesis)
+cli.add_command(_sfn.sfn)
+cli.add_command(_describe.describe)
 
 
 def main() -> None:
