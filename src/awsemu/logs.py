@@ -1,7 +1,8 @@
 """Make the emulator's JSON-lines log readable.
 
 Only the startup line (``message == "emulator server information"``) is a stable
-interface; every other field is shown generically.
+interface; every other field is shown generically. The emulator logs in the
+``tracing`` JSON format, where the message and its fields sit under ``"fields"``.
 """
 
 from __future__ import annotations
@@ -30,9 +31,12 @@ class LogLine:
     def _first(self, keys) -> str | None:
         if not self.data:
             return None
-        for k in keys:
-            if k in self.data and self.data[k] is not None:
-                return str(self.data[k])
+        nested = self.data.get("fields")
+        sources = [self.data] + ([nested] if isinstance(nested, dict) else [])
+        for source in sources:
+            for k in keys:
+                if k in source and source[k] is not None:
+                    return str(source[k])
         return None
 
     @property

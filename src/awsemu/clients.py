@@ -40,16 +40,20 @@ def ensure_running(port: int) -> InstanceFiles:
     return files
 
 
-@lru_cache(maxsize=None)
-def _session(port: int):
+@lru_cache(maxsize=8)
+def _session_for(key: str, secret: str):
     try:
         import boto3
     except ImportError as exc:  # pragma: no cover
         raise RuntimeErrorWithHint("boto3 is not installed.",
                                    "pip install boto3  (or reinstall aws-emulator-cli)") from exc
-    key, secret = read_credentials(port)
     return boto3.session.Session(aws_access_key_id=key, aws_secret_access_key=secret,
                                  region_name=REGION)
+
+
+def _session(port: int):
+    # Keyed by the credentials, not the port: the emulator makes new keys on every start.
+    return _session_for(*read_credentials(port))
 
 
 def client(service: str, port: int):

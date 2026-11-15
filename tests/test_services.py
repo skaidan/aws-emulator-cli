@@ -152,3 +152,20 @@ def test_client_errors_show_hint(runner, monkeypatch, running):
     result = runner.invoke(cli, ["s3", "ls"])
     assert result.exit_code == 1
     assert "AccessDenied" in result.output and 'eval "$(awsemu env)"' in result.output
+
+
+def test_generated_botocore_subclasses_are_handled(runner, monkeypatch, running):
+    """botocore raises classes named after the code (seen against the real emulator)."""
+    ClientError = type("ClientError", (Exception,), {"__module__": "botocore.exceptions"})
+    NoSuchBucket = type("NoSuchBucket", (ClientError,), {"__module__": "botocore.errorfactory"})
+
+    def boom(**_):
+        exc = NoSuchBucket("nope")
+        exc.response = {"Error": {"Code": "NoSuchBucket", "Message": "The bucket does not exist"}}
+        raise exc
+
+    patch_client(monkeypatch, s3, FakeClient(list_objects_v2=boom, get_object=boom))
+    result = runner.invoke(cli, ["s3", "cat", "missing/key"])
+    assert result.exit_code == 1
+    assert "NoSuchBucket: The bucket does not exist" in result.output
+    assert result.exception is None or isinstance(result.exception, SystemExit)

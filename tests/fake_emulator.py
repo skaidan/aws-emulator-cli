@@ -23,11 +23,12 @@ import json
 import os
 import shutil
 import signal
+import socketserver
 import ssl
 import sys
 import tempfile
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: F401
 from pathlib import Path
 
 from cryptography import x509
@@ -37,8 +38,18 @@ from cryptography.x509.oid import NameOID
 
 
 def log(message, **fields):
+    # Same shape as the real emulator (Rust ``tracing`` JSON): message inside "fields".
     print(json.dumps({"timestamp": "2026-11-15T12:00:00.123456Z", "level": "INFO",
-                      "message": message, **fields}), flush=True)
+                      "fields": {"message": message, **fields},
+                      "target": "aws_emulator"}), flush=True)
+
+
+class Server(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer.server_bind calls socket.getfqdn(), a reverse DNS lookup that
+        # can take longer than the tests wait on macOS CI runners. Skip it.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 def make_cert(cert_path: Path, key_path: Path) -> None:
@@ -96,7 +107,7 @@ def main():
         print("emulator serve failed: boom", file=sys.stderr)
         return 1
 
-    server = ThreadingHTTPServer((args.bind, args.port), Handler)
+    server = Server((args.bind, args.port), Handler)
     port = server.server_address[1]  # the real port, also for -p 0
 
     root = Path(os.path.expanduser("~")) / ".aws" / "emulator" / str(port)

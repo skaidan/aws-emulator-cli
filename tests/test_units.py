@@ -231,3 +231,15 @@ def test_no_hint_for_ordinary_errors():
 def test_split_binary():
     assert runtime.split_binary("aws-emulator") == ["aws-emulator"]
     assert runtime.split_binary('"/opt/my emu/aws-emulator" --x') == ["/opt/my emu/aws-emulator", "--x"]
+
+
+def test_parse_real_tracing_format():
+    """The real emulator nests message and fields under "fields" (seen in CI)."""
+    line = json.dumps({"timestamp": "2026-11-15T12:57:03.273Z", "level": "INFO",
+                       "fields": {"message": "emulator server information",
+                                  "endpoint_url": "https://127.0.0.1:49275"},
+                       "target": "aws_emulator_router"})
+    entry = logs.parse(line)
+    assert entry.message == "emulator server information" and entry.is_startup
+    assert "message" not in entry.extra and entry.extra["endpoint_url"].endswith(":49275")
+    assert logs.find_startup([line])["endpoint_url"] == "https://127.0.0.1:49275"

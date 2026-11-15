@@ -38,7 +38,7 @@ def test_start_status_logs_stop(runner, fake_binary, free_port):
         result = runner.invoke(cli, ["--port", port, "start", "--native"])
         assert result.exit_code == 1 and "already listening" in result.output
 
-        result = runner.invoke(cli, ["--port", port, "env"])
+        result = runner.invoke(cli, ["--port", port, "env", "--shell", "bash"])
         assert f"export AWS_ENDPOINT_URL=https://127.0.0.1:{port}" in result.output
     finally:
         result = runner.invoke(cli, ["--port", port, "stop"])
