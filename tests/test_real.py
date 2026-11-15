@@ -174,3 +174,40 @@ def test_random_port_with_real_binary(emu):
         assert ACCOUNT_ID in run(port, "whoami").output
     finally:
         run(port, "stop")
+
+
+def test_sns_to_sqs_end_to_end(emu):
+    run(emu, "sns", "create", "awsemu-orders")
+    run(emu, "sqs", "create", "awsemu-order-events")
+    run(emu, "sns", "subscribe", "awsemu-orders", "--to-sqs", "awsemu-order-events", "--raw")
+    assert "awsemu-order-events" in run(emu, "sns", "ls").output
+    run(emu, "sns", "publish", "awsemu-orders", '{"order": 42}', "-a", "kind=created")
+    msgs = json.loads(run(emu, "sqs", "receive", "awsemu-order-events", "--wait", "5",
+                          "--delete", "--json").output)
+    assert len(msgs) == 1, msgs
+    assert json.loads(msgs[0]["Body"]) == {"order": 42}  # raw delivery: no SNS envelope
+    run(emu, "sns", "rm", "awsemu-orders", "--yes")
+    run(emu, "sqs", "rm", "awsemu-order-events", "--yes")
+
+
+def test_lambda_deploy_invoke(emu, tmp_path):
+    src = tmp_path / "fn"
+    src.mkdir()
+    (src / "app.py").write_text(
+        "import os\n"
+        "def handler(event, context):\n"
+        "    print('hello from the emulator')\n"
+        "    return {'greeting': f\"hola {event.get('name', 'nadie')}\", 'stage': os.environ.get('STAGE')}\n")
+    out = run(emu, "lambda", "deploy", "awsemu-hello", str(src), "-e", "STAGE=local").output
+    assert "created awsemu-hello" in out and "app.handler" in out
+    assert "awsemu-hello" in run(emu, "lambda", "ls").output
+    assert "STAGE=local" in run(emu, "lambda", "info", "awsemu-hello").output
+
+    result = run(emu, "lambda", "invoke", "awsemu-hello", '{"name": "Ana"}', "--raw")
+    assert json.loads(result.output) == {"greeting": "hola Ana", "stage": "local"}
+
+    # Redeploy updates in place.
+    (src / "app.py").write_text("def handler(event, context):\n    return {'v': 2}\n")
+    assert "updated awsemu-hello" in run(emu, "lambda", "deploy", "awsemu-hello", str(src)).output
+    assert json.loads(run(emu, "lambda", "invoke", "awsemu-hello", "--raw").output) == {"v": 2}
+    run(emu, "lambda", "rm", "awsemu-hello", "--yes")

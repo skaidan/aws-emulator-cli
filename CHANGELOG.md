@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `awsemu sns`: `ls`, `create`, `publish`, `subscribe` (`--to-sqs` configura la política de la cola; `--to-lambda` añade el permiso), `subs`, `unsubscribe`, `rm`.
+- `awsemu lambda` (alias `fn`): `deploy` desde carpeta, fichero o `.zip` (adivina handler y runtime, crea el rol si hace falta, actualiza si ya existe), `invoke` con payload JSON y log, `logs`, `info`, `ls`, `rm`.
+- Workflow de release: cada versión nueva en `pyproject.toml` se publica sola en GitHub con su wheel.
+
 ## 0.2.0 — 2026-11-15
 
 Validación contra el emulador real y robustez.

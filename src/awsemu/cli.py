@@ -23,7 +23,7 @@ class AliasedGroup(click.Group):
     """Lets users type unambiguous prefixes (``awsemu st`` -> status) and a few aliases."""
 
     ALIASES = {"ps": "status", "up": "start", "down": "stop", "reset": "restart",
-               "ddb": "dynamodb", "ls": "overview"}
+               "ddb": "dynamodb", "ls": "overview", "fn": "lambda"}
 
     def get_command(self, ctx, cmd_name):
         cmd_name = self.ALIASES.get(cmd_name, cmd_name)
@@ -572,13 +572,17 @@ def config_path():
 
 from .commands import dynamodb as _dynamodb  # noqa: E402
 from .commands import overview as _overview  # noqa: E402
+from .commands import lambda_ as _lambda  # noqa: E402
 from .commands import s3 as _s3  # noqa: E402
+from .commands import sns as _sns  # noqa: E402
 from .commands import sqs as _sqs  # noqa: E402
 
 cli.add_command(_overview.overview)
 cli.add_command(_s3.s3)
 cli.add_command(_sqs.sqs)
 cli.add_command(_dynamodb.dynamodb)
+cli.add_command(_sns.sns)
+cli.add_command(_lambda.lambda_)
 
 
 def main() -> None:

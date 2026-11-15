@@ -130,7 +130,21 @@ awsemu ddb get TABLA '{"id": "u1"}'
 awsemu ddb scan TABLA [-n 50] [--json]
 awsemu ddb delete TABLA '{"id": "u1"}'
 awsemu ddb drop TABLA
+
+awsemu sns ls
+awsemu sns create TOPIC [--fifo]
+awsemu sns subscribe TOPIC --to-sqs COLA [--raw]     # configura la política de la cola
+awsemu sns subscribe TOPIC --to-lambda FUNCION
+awsemu sns publish TOPIC 'mensaje' [--subject S] [-a clave=valor]
+awsemu sns subs [TOPIC]   |   awsemu sns rm TOPIC
+
+awsemu lambda deploy NOMBRE ./carpeta|fichero.py|code.zip [-e CLAVE=valor]   # alias: fn
+awsemu lambda invoke NOMBRE '{"name": "Ana"}' [--raw] [--async]
+awsemu lambda logs NOMBRE [-f]
+awsemu lambda ls   |   awsemu lambda info NOMBRE   |   awsemu lambda rm NOMBRE
 ```
+
+`lambda deploy` adivina el handler y el runtime a partir del código (`def handler(...)` en Python, `exports.handler` / `export const handler` en Node), crea un rol de ejecución si no le pasas `--role` y, si la función ya existe, la actualiza.
 
 Para cualquier otro servicio u operación: `awsemu aws <servicio> <operación> ...`.
 

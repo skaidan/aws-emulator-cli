@@ -31,12 +31,12 @@ Objetivo: confiar en que todo funciona contra el emulador de verdad, en todos lo
 - ✅ **Mejores errores**: pistas concretas para `AccessDenied`, `SignatureDoesNotMatch`, peticiones sin firmar, `UnknownService`, reloj desfasado, operaciones no emuladas y TLS.
 - ✅ `AWSEMU_BINARY` para usar un binario que no esté en el `PATH`.
 
-## v0.3 — Más servicios
+## v0.3 — Más servicios 🚧
 
 Objetivo: cubrir los servicios que más se usan en tests de aplicaciones.
 
-- ⬜ **SNS**: `topics`, `create`, `publish`, `subscribe` (con atajo `--to-sqs COLA` que crea la suscripción y la política).
-- ⬜ **Lambda**: `ls`, `deploy` (desde carpeta o zip), `invoke` con payload JSON y salida legible, `logs`.
+- ✅ **SNS**: `ls`, `create`, `publish`, `subscribe` (con `--to-sqs COLA`, que crea la suscripción y la política de la cola, y `--to-lambda`).
+- ✅ **Lambda**: `ls`, `deploy` (desde carpeta, fichero o zip; adivina handler y runtime), `invoke` con payload JSON y salida legible, `logs`, `info`, `rm`.
 - ⬜ **Secrets Manager y SSM Parameter Store**: `get`, `put`, `ls`, `rm`.
 - ⬜ **EventBridge**: `buses`, `rules`, `put-event`.
 - ⬜ **Kinesis y Step Functions**: listados, `put-record` y `start-execution` con seguimiento del estado.
@@ -73,7 +73,8 @@ Objetivo: explorar el emulador sin recordar comandos.
 
 Objetivo: instalar y actualizar en cualquier sitio con un comando.
 
-- ⬜ Publicación en **PyPI** (`pipx install aws-emulator-cli`) con releases automáticas desde tags.
+- ✅ Releases automáticas en GitHub desde `CHANGELOG.md` (wheel y sdist adjuntos).
+- ⬜ Publicación en **PyPI** (`pipx install aws-emulator-cli`).
 - ⬜ **Homebrew tap** y binarios autónomos (PyInstaller) para quien no tenga Python.
 - ⬜ `CHANGELOG.md`, versionado semántico y promesa de estabilidad para la salida `--json`.
 - ⬜ Web de documentación (MkDocs) con guías: "tests de integración con pytest", "CI con GitHub Actions" y "Node y Java contra el emulador".
