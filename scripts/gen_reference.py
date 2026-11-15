@@ -112,7 +112,11 @@ def main() -> int:
     if "--check" in sys.argv:
         current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
         if current != text:
+            import difflib
+
             print("docs/reference.md is out of date: run python scripts/gen_reference.py")
+            sys.stdout.writelines(difflib.unified_diff(
+                current.splitlines(True), text.splitlines(True), "committed", "generated", n=1))
             return 1
         print("docs/reference.md is up to date")
         return 0
