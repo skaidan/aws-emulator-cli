@@ -39,11 +39,14 @@ src/awsemu/
   logs.py         parseo del log JSON del emulador
   settings.py     edición de config.toml conservando comentarios
   seed.py         formato de seed: parseo YAML con mapa de líneas y validación (sin llamadas a AWS)
+  project.py      awsemu.toml / [tool.awsemu]: búsqueda hacia arriba, validación, caché por fichero
+  pytest_plugin.py  plugin de pytest (entry point pytest11): fixtures aws_emulator y aws_emulator_fresh
   paths.py        rutas y constantes (puerto, región, cuenta 000000000000)
   ui.py           salida con Rich, o texto plano si no está o con --plain
   commands/       un módulo por servicio: overview, s3, sqs, dynamodb, sns, lambda_,
                   secrets (secrets + ssm), events, kinesis, sfn, describe,
-                  seed (apply idempotente, export)
+                  seed (apply idempotente, export), compose
+action.yml        GitHub Action compuesta (paquete verificado, awsemu, seed, variables)
   commands/_common.py  roles de servicio, políticas de cola, permisos de Lambda, códigos de error
 ```
 
@@ -61,6 +64,10 @@ src/awsemu/
 
 **Seeds idempotentes y que nunca borran.** `seed apply` compara antes de escribir (secretos, parámetros, atributos de colas y suscripciones) para que repetirlo no genere versiones ni cambios innecesarios, y no elimina nada que no esté en el seed: para partir de cero está `reset --seed`. La validación es una capa aparte (`seed.py`) que se ejecuta entera antes de tocar el emulador.
 
+**Precedencia única.** Flag > variable de entorno > `awsemu.toml` > valor por defecto, en todos los comandos. Por eso las opciones de `start` no tienen valor por defecto en Click: `None` significa "no lo has dicho" y deja paso al proyecto.
+
+**El plugin de pytest no hace nada si no se usa.** Se registra para todo el que instale `awsemu`, así que solo añade opciones y fixtures; el emulador arranca únicamente cuando un test pide `aws_emulator`, y en un puerto libre para no interferir con nada.
+
 **No escribir en la carpeta del emulador.** El estado propio va en `~/.aws/emulator-cli/`. La única excepción es borrar, tras comprobar que el puerto está libre, los ficheros documentados que el emulador dejó al no poder pararse limpiamente.
 
 ## Cómo se prueba
@@ -68,5 +75,6 @@ src/awsemu/
 - `tests/fake_emulator.py` imita el comportamiento documentado del binario: opciones, `-p 0`, ficheros, certificado, health check, log en formato `tracing` y limpieza al pararse. Permite probar el ciclo de vida en Linux, macOS y Windows sin el emulador.
 - Los comandos de servicio se prueban con un cliente boto3 simulado (`tests/test_services.py`).
 - `tests/test_real.py` corre contra el emulador real (`AWSEMU_REAL_TESTS=1`), en el job `real-emulator` de la CI.
+- El job `docker` prueba `image build`, `start --docker` y `compose` con el emulador real, y el job `action` usa la GitHub Action del propio repositorio.
 
 Más detalles en [CONTRIBUTING.md](../CONTRIBUTING.md).

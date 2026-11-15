@@ -35,6 +35,16 @@ Revisa Python, el binario, Docker y la imagen, el AWS CLI, boto3, el estado del 
 | `CERTIFICATE_VERIFY_FAILED` | El emulador crea un `ca.pem` nuevo en cada arranque. | `AWS_CA_BUNDLE` debe apuntar a `~/.aws/emulator/<puerto>/ca.pem` (la ruta, no una copia). Comprueba que el puerto es del emulador. |
 | `Could not connect to the endpoint URL` | No hay nada escuchando. | `awsemu status`, `awsemu start`. |
 
+## Configuración del proyecto y tests
+
+| Mensaje | Causa | Solución |
+| --- | --- | --- |
+| `…/awsemu.toml: unknown setting 'X'` o `'port' must be int` | Error en `awsemu.toml` o `[tool.awsemu]`; afecta a todos los comandos de esa carpeta. | Corrígelo (el mensaje sugiere el nombre correcto) o usa `AWSEMU_CONFIG` para apuntar a otro. |
+| `awsemu: --awsemu-reuse but no healthy emulator on port N` | El plugin de pytest debía usar un emulador ya arrancado. | `awsemu up` antes de `pytest`, o quita `--awsemu-reuse`. |
+| `awsemu: invalid seed` en pytest | El seed del plugin tiene errores; no se arranca nada. | `awsemu seed validate` con el mismo fichero. |
+| `This action needs a Linux runner` | La GitHub Action solo funciona en Linux. | `runs-on: ubuntu-latest`. |
+| Los comandos usan otro puerto del que esperas | `awsemu.toml` en esta carpeta o en una superior, o `AWSEMU_PORT`. | `awsemu config show` dice qué fichero se usa; `--port` siempre gana. |
+
 ## Problemas típicos
 
 **Mis tests llegan a AWS real.** `AWS_ENDPOINT_URL` no estaba definida en la shell que ejecuta los tests. Usa `awsemu exec -- <comando>`, o ejecuta `awsemu whoami` al principio del script: falla si la cuenta no es `000000000000`.

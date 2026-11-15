@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0 — 2026-11-15
+
+Integración con proyectos y CI.
+
+- `awsemu.toml` (o `[tool.awsemu]` en `pyproject.toml`), buscado desde la carpeta actual hacia arriba (o `AWSEMU_CONFIG`): `port`, `mode`, `auth`, `telemetry`, `idle_timeout`, `seed`, `sdk`, `image`, `memory`. Todos los comandos lo respetan; los flags y `AWSEMU_PORT` siguen teniendo prioridad.
+- `awsemu init`, `awsemu up` (arranca si hace falta y aplica el seed) y `awsemu down`. `up` y `down` ya no son alias de `start` y `stop`.
+- Plugin de pytest (se instala con awsemu): fixtures `aws_emulator` y `aws_emulator_fresh`; opciones `--awsemu-seed`, `--awsemu-port`, `--awsemu-reuse`, `--awsemu-docker` y sus equivalentes ini.
+- GitHub Action en `action.yml`: paquete del emulador con firma verificada, `awsemu`, seed y variables para los pasos siguientes.
+- `awsemu compose`: servicio de Docker Compose con la receta oficial.
+- `doctor` y `config show` muestran el proyecto activo.
+- CI: jobs para el modo Docker con el emulador real y para la propia Action.
+
 ## 0.4.0 — 2026-11-15
 
 Seeds: el mismo estado de partida después de cada arranque o reinicio.

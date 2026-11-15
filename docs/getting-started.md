@@ -7,7 +7,7 @@ Necesitas Python 3.10 o superior.
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
 # o, desde una release concreta:
-pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.4.0/aws_emulator_cli-0.4.0-py3-none-any.whl
+pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.5.0/aws_emulator_cli-0.5.0-py3-none-any.whl
 ```
 
 Comprueba qué tienes y qué falta:
@@ -46,6 +46,8 @@ AWS no publica una imagen; `awsemu` la construye con la receta oficial (detecta 
 awsemu image build
 awsemu image dockerfile   # para ver el Dockerfile que usa
 ```
+
+¿Prefieres Docker Compose? `awsemu compose -o compose.emulator.yaml` genera el servicio con la misma configuración (ver [Tests y CI](testing.md#docker-compose)).
 
 ## 3. Arrancar
 
@@ -118,6 +120,18 @@ awsemu sqs create trabajos
 ```
 
 Sigue con la [guía de servicios](services.md).
+
+## En un proyecto
+
+Si trabajas siempre con la misma configuración, guárdala en el proyecto:
+
+```bash
+awsemu init      # crea awsemu.toml con un puerto propio y tu seed
+awsemu up        # arranca (si hace falta) y aplica el seed
+awsemu down
+```
+
+Ver [Configuración por proyecto](project-config.md).
 
 ## Varias instancias
 

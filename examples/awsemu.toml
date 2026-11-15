@@ -1,0 +1,11 @@
+# Example awsemu project settings (copy to your project root as awsemu.toml,
+# or create one with `awsemu init`). Docs: docs/project-config.md
+port = 9343
+mode = "auto"              # auto | native | docker
+auth = true
+telemetry = false
+idle_timeout = 3600
+seed = "seed.yaml"         # relative to this file: examples/seed.yaml
+# sdk = ["node"]
+# image = "aws-emulator"
+# memory = "2g"

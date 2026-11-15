@@ -15,12 +15,17 @@ pytest
 
 | Tipo | Dónde | Cómo se ejecuta |
 | --- | --- | --- |
-| Unitarios | `tests/test_units.py`, `tests/test_seed.py` | `pytest` |
+| Unitarios | `tests/test_units.py`, `tests/test_seed.py`, `tests/test_project.py` | `pytest` |
+| Plugin de pytest | `tests/test_pytest_plugin.py` (sesiones reales con `pytester`) | `pytest` |
 | Ciclo de vida con el emulador falso | `tests/test_lifecycle.py` | `pytest` (Linux, macOS y Windows) |
 | Servicios con cliente simulado | `tests/test_services.py`, `tests/test_sns_lambda.py`, `tests/test_more_services.py` | `pytest` |
 | Contra el emulador real | `tests/test_real.py` | `AWSEMU_REAL_TESTS=1 pytest -m real -v` |
 
 Los tests reales necesitan el binario `aws-emulator` en el `PATH` (o `AWSEMU_BINARY`) y boto3. En la CI los ejecuta el job `real-emulator`, que instala el `.deb` oficial y verifica su firma.
+
+Jobs de la CI: `tests` (Linux, macOS y Windows; Python 3.10 y 3.13), `real-emulator`, `docker` (modo Docker y `compose` con el emulador real) y `action` (la GitHub Action de `action.yml`).
+
+No pongas `[tool.awsemu]` en el `pyproject.toml` de este repositorio: los tests lo encontrarían como configuración de proyecto.
 
 Cada test corre con un `HOME` temporal propio, así que nunca toca tu `~/.aws`.
 

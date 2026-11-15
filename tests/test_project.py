@@ -110,3 +110,11 @@ def test_up_down_with_project(runner, fake_binary, free_port, proj_dir):
     finally:
         result = runner.invoke(cli, ["down"])
     assert result.exit_code == 0 and "stopped pid" in result.output
+
+
+def test_example_project_file_is_valid():
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parents[1] / "examples" / "awsemu.toml"
+    p = project.parse(example)
+    assert p.port == 9343 and p.seed == example.parent / "seed.yaml" and p.seed.is_file()

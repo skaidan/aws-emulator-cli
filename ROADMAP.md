@@ -57,14 +57,17 @@ Objetivo: arrancar siempre con los mismos datos. El emulador lo guarda todo en m
 
 Fuera de esta versión: funciones Lambda, reglas de EventBridge, streams de Kinesis y máquinas de Step Functions en el seed.
 
-## v0.5 — Integración con proyectos y CI
+## v0.5 — Integración con proyectos y CI ✅
 
 Objetivo: que un proyecto declare su emulador y cualquiera lo levante con `awsemu up`.
 
-- ⬜ **`awsemu.toml` por proyecto**: puerto, modo, auth, seed, extras de SDK. `awsemu up` / `down` lo leen.
-- ⬜ **Plugin de pytest**: fixture `aws_emulator` que arranca una instancia por sesión (o por test, en un puerto libre), aplica el seed y configura el entorno.
-- ⬜ **GitHub Action** (`skaidan/aws-emulator-cli@v1`): instala el emulador y el CLI, arranca la instancia y exporta las variables para los pasos siguientes.
-- ⬜ **`awsemu compose`**: genera el servicio de `docker compose` con la configuración segura (puerto solo en `127.0.0.1`, volumen y límite de memoria).
+- ✅ **`awsemu.toml` por proyecto** (o `[tool.awsemu]` en `pyproject.toml`): puerto, modo, auth, telemetría, `idle_timeout`, seed, extras de SDK, imagen y memoria. `awsemu init` lo crea (con un puerto propio del proyecto), `awsemu up` arranca y aplica el seed, `awsemu down` lo para. Precedencia: flag > entorno > proyecto > defecto.
+- ✅ **Plugin de pytest**: fixtures `aws_emulator` (sesión, puerto libre, seed, entorno) y `aws_emulator_fresh` (reinicio por test), con opciones `--awsemu-*` e ini.
+- ✅ **GitHub Action** (`uses: skaidan/aws-emulator-cli@v0.5.0`): instala el paquete verificado y `awsemu`, arranca, aplica el seed y exporta las variables.
+- ✅ **`awsemu compose`**: genera el servicio de Docker Compose con la configuración segura.
+- ✅ CI con el modo Docker real (`image build`, `start --docker`, `compose`) y con la propia Action.
+
+Aprendido en CI: el modo Docker funcionó a la primera; el plugin tenía un bug de orden con `HOME` que solo se veía con el emulador real (corregido y cubierto por un test).
 
 ## v0.6 — Experiencia interactiva
 
