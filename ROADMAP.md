@@ -77,6 +77,7 @@ Objetivo: instalar y actualizar en cualquier sitio con un comando.
 - ⬜ Publicación en **PyPI** (`pipx install aws-emulator-cli`).
 - ⬜ **Homebrew tap** y binarios autónomos (PyInstaller) para quien no tenga Python.
 - ⬜ `CHANGELOG.md`, versionado semántico y promesa de estabilidad para la salida `--json`.
+- ✅ Documentación en `docs/`: primeros pasos, servicios, tests y CI, solución de problemas, arquitectura y referencia generada desde el código.
 - ⬜ Web de documentación (MkDocs) con guías: "tests de integración con pytest", "CI con GitHub Actions" y "Node y Java contra el emulador".
 
 ---

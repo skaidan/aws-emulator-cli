@@ -22,6 +22,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install -e ".[dev]"
       - run: pytest -q
+      - name: Command reference is up to date
+        run: python scripts/gen_reference.py --check
       - run: awsemu --help
       - run: awsemu doctor
         continue-on-error: true

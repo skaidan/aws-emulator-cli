@@ -7,7 +7,7 @@ El emulador en sí es un único binario sin subcomandos: se ejecuta en primer pl
 - **Arrancar y parar** el emulador en segundo plano, con el binario nativo o con Docker, esperando a que esté sano.
 - **Conectar tu shell** con un solo comando (`eval "$(awsemu env)"`), sin tocar tus credenciales reales.
 - **Ver qué hay dentro**: buckets, colas, tablas, funciones, secretos… en una sola pantalla.
-- **Trabajar con S3, SQS y DynamoDB** con comandos cortos y tablas legibles (DynamoDB con JSON normal, sin `{"S": ...}`).
+- **Trabajar con S3, SQS, DynamoDB, SNS y Lambda** con comandos cortos y tablas legibles (DynamoDB con JSON normal, sin `{"S": ...}`; `lambda deploy` desde una carpeta).
 - **Diagnosticar** problemas típicos (`awsemu doctor`).
 
 ```
@@ -27,6 +27,15 @@ S3 buckets       1      fotos
 SQS queues       1      trabajos
 DynamoDB tables  1      usuarios
 ```
+
+## Documentación
+
+- [Primeros pasos](docs/getting-started.md): instalar, arrancar y conectar tus herramientas.
+- [Guía de servicios](docs/services.md): S3, SQS, DynamoDB, SNS y Lambda con ejemplos.
+- [Tests y CI](docs/testing.md): pytest, scripts y GitHub Actions.
+- [Solución de problemas](docs/troubleshooting.md): qué significa cada error.
+- [Referencia de comandos](docs/reference.md): todos los comandos y opciones.
+- [Arquitectura](docs/architecture.md) y [cómo contribuir](CONTRIBUTING.md).
 
 ## Instalación
 
@@ -189,6 +198,8 @@ python -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev]'
 pytest
 ```
+
+Guía completa (tests, añadir un servicio, documentación y releases) en [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Los tests normales no necesitan el emulador real: `tests/fake_emulator.py` imita su comportamiento documentado (opciones, `-p 0`, ficheros, health check, log JSON y limpieza al pararse). Los comandos de servicios se prueban con un cliente boto3 simulado. Corren en Linux, macOS y Windows.
 
