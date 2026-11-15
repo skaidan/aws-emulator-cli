@@ -439,6 +439,20 @@ def test_pytest_plugin_with_real_emulator(emu, pytester):
         import boto3
 
         def test_seeded(aws_emulator):
+            import os, pathlib, botocore.session
+            print("### DIAG HOME", os.environ.get("HOME"))
+            for k in sorted(os.environ):
+                if k.startswith("AWS"):
+                    print("### DIAG", k, os.environ[k])
+            cf = os.environ.get("AWS_SHARED_CREDENTIALS_FILE")
+            print("### DIAG creds exists", cf and pathlib.Path(cf).exists())
+            if cf and pathlib.Path(cf).exists():
+                print("### DIAG creds sections", [l for l in pathlib.Path(cf).read_text().splitlines() if l.startswith("[")])
+            cfg = os.environ.get("AWS_CONFIG_FILE")
+            if cfg and pathlib.Path(cfg).exists():
+                print("### DIAG config", pathlib.Path(cfg).read_text().replace(chr(10), " | "))
+            c = botocore.session.get_session().get_credentials()
+            print("### DIAG botocore creds", c and c.method)
             s3 = boto3.client("s3")                     # plain boto3: env points at the emulator
             body = s3.get_object(Bucket="plugin-bucket", Key="a.txt")["Body"].read()
             assert body == b"hola"
@@ -452,5 +466,6 @@ def test_pytest_plugin_with_real_emulator(emu, pytester):
     eps = importlib.metadata.entry_points()
     group = eps.select(group="pytest11") if hasattr(eps, "select") else eps.get("pytest11", [])
     plugin = [] if any(ep.value == "awsemu.pytest_plugin" for ep in group) else ["-p", "awsemu.pytest_plugin"]
-    result = pytester.runpytest_subprocess(*plugin, "-p", "no:cacheprovider", "--awsemu-seed", "seed.yaml", "-v")
+    result = pytester.runpytest_subprocess(*plugin, "-p", "no:cacheprovider", "--awsemu-seed", "seed.yaml", "-v", "-s")
+    print(result.stdout.str())
     result.assert_outcomes(passed=2)
