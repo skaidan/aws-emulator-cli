@@ -33,6 +33,8 @@ Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 
 def _option_rows(cmd: click.Command, ctx: click.Context) -> list[tuple[str, str]]:
     rows = []
     for param in cmd.get_params(ctx):
+        if not isinstance(param, click.Option):  # arguments are in the usage line
+            continue
         record = param.get_help_record(ctx)
         if record and not record[0].startswith(("-h", "--help")):
             rows.append(record)
