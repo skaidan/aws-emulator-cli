@@ -154,6 +154,10 @@ awsemu start --no-telemetry        # solo para esta ejecución
 - El emulador no persiste datos: al parar o reiniciar se pierde todo. Es así por diseño del emulador.
 - S3 Control no funciona contra el emulador (el SDK siempre mete el ID de cuenta en el host). Es una limitación del emulador.
 
+## Roadmap
+
+Lo que viene: validación contra el emulador real, más servicios (SNS, Lambda, Secrets…), seeds para arrancar con datos reproducibles, plugin de pytest, GitHub Action y una TUI. Detalles en [ROADMAP.md](ROADMAP.md).
+
 ## Desarrollo
 
 ```bash
