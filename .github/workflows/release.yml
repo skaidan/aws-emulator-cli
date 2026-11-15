@@ -7,7 +7,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths: [pyproject.toml, CHANGELOG.md]
+    paths: [pyproject.toml, CHANGELOG.md, .github/workflows/release.yml]
   workflow_dispatch:
 
 permissions:
