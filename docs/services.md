@@ -1,5 +1,7 @@
 # Guía de servicios
 
+[Vista general](#vista-general) · [S3](#s3) · [SQS](#sqs) · [DynamoDB](#dynamodb) · [SNS](#sns) · [Lambda](#lambda) · [Secrets Manager](#secrets-manager) · [SSM](#ssm-parameter-store) · [EventBridge](#eventbridge) · [Kinesis](#kinesis) · [Step Functions](#step-functions) · [describe](#cualquier-recurso-por-su-arn)
+
 Todos los comandos de servicio hablan con el emulador del puerto seleccionado (`--port`, por defecto 9297), con su endpoint, su certificado y sus claves configurados de forma explícita. Aunque tu shell tenga credenciales reales de AWS, **estos comandos nunca llaman a AWS**.
 
 Casi todos aceptan `--json` para usarlos en scripts, y los que borran piden confirmación salvo con `--yes`.
@@ -141,13 +143,112 @@ awsemu lambda deploy api ./src --handler app.main --runtime python3.13 \
     -e STAGE=local -e TABLE=usuarios --timeout 30 --memory 512
 awsemu lambda invoke api --file evento.json
 awsemu lambda invoke api '{}' --async          # sin esperar el resultado
-awsemu lambda logs api -f                      # logs de CloudWatch (/aws/lambda/api)
+awsemu lambda logs api -f                      # logs de CloudWatch (/aws/lambda/api), ver nota
 awsemu lambda info api
 awsemu lambda ls
 awsemu lambda rm api --yes
 ```
 
 `invoke` termina con código 1 si la función lanza un error, para que los scripts lo detecten.
+
+> **Dónde ver lo que imprime una función.** El emulador no envía la salida de Lambda a CloudWatch Logs (comprobado en CI), así que `lambda logs` no encuentra nada. `lambda invoke` sí muestra el log de cada invocación: `START`, lo que imprima la función y `REPORT` con la duración. Las invocaciones `--async` y las disparadas por SNS o EventBridge se aceptan, pero su salida no queda visible.
+
+## Secrets Manager
+
+```bash
+awsemu secrets put db/password 's3cr3t'                         # crea el secreto
+awsemu secrets put db/config '{"host": "db", "port": 5432}'     # JSON
+awsemu secrets put db/password 'nuevo'                          # si existe, guarda una versión nueva
+awsemu secrets put tls/key --file key.pem
+awsemu secrets get db/config                                    # JSON formateado
+awsemu secrets get db/config --raw                              # tal cual (para scripts)
+awsemu secrets get db/password --stage AWSPREVIOUS              # versión anterior
+awsemu secrets ls                                               # nombres, nunca valores
+awsemu secrets info db/password                                 # metadatos y versiones
+awsemu secrets rm db/password --yes                             # recuperable 7 días
+awsemu secrets rm db/password --now --yes                       # sin recuperación
+```
+
+## SSM Parameter Store
+
+```bash
+awsemu ssm put /app/db/host localhost
+awsemu ssm put /app/db/password s3cr3t --secure     # SecureString (se muestra como ****)
+awsemu ssm put /app/hosts a,b,c --list              # StringList
+awsemu ssm get /app/db/password                     # descifrado
+awsemu ssm ls                                       # todos
+awsemu ssm ls /app --values                         # bajo una ruta, con valores
+awsemu ssm rm /app/db/host /app/db/password
+```
+
+`put` sobrescribe si ya existe (y sube la versión). Como en AWS, los nombres no pueden empezar por `aws` ni `ssm`: `/awsapp/x` también se rechaza.
+
+## EventBridge
+
+`events rule` crea la regla y su destino en un solo paso, con los permisos necesarios (política de la cola SQS o permiso de invocación de Lambda):
+
+```bash
+awsemu sqs create eventos-pedidos
+awsemu events rule pedidos-creados --source app.pedidos --to-sqs eventos-pedidos
+awsemu events put app.pedidos PedidoCreado '{"id": 42, "total": 120}'
+awsemu sqs receive eventos-pedidos --delete            # el evento completo, con "detail"
+
+awsemu events rule pedidos-grandes \
+    --pattern '{"source": ["app.pedidos"], "detail": {"total": [{"numeric": [">", 100]}]}}' \
+    --to-lambda avisar
+awsemu events rule cada-5-min --schedule 'rate(5 minutes)' --to-sns recordatorios
+
+awsemu events rules                    # reglas del bus default con patrón y destinos
+awsemu events buses
+awsemu events create-bus pedidos       # bus propio; luego --bus pedidos en rule/put/rules/rm
+awsemu events rm pedidos-creados --yes # quita los destinos y borra la regla
+```
+
+## Kinesis
+
+```bash
+awsemu kinesis create clics --shards 2         # espera a que esté activo
+awsemu kinesis put clics '{"pagina": "/"}' -k usuario-1
+cat evento.bin | awsemu kinesis put clics --file -
+awsemu kinesis read clics                      # desde el principio, todos los shards
+awsemu kinesis read clics --from latest -f     # solo lo nuevo, sin parar (Ctrl+C)
+awsemu kinesis read clics --json -n 0          # un JSON por registro, sin límite
+awsemu kinesis ls
+awsemu kinesis rm clics --yes
+```
+
+`read` muestra los datos como JSON compacto si lo son, como texto si son UTF-8, y en hexadecimal si no.
+
+## Step Functions
+
+```bash
+# flujo.asl.json
+# {"StartAt": "Saludar",
+#  "States": {"Saludar": {"Type": "Pass",
+#                         "Parameters": {"saludo.$": "States.Format('hola {}', $.nombre)"},
+#                         "End": true}}}
+
+awsemu sfn deploy saludo flujo.asl.json        # crea (y el rol awsemu-sfn-role) o actualiza
+awsemu sfn start saludo '{"nombre": "Ana"}'    # espera y muestra la salida
+awsemu sfn start saludo --raw                  # solo la salida JSON; código 1 si falla
+awsemu sfn start saludo --no-wait
+awsemu sfn executions saludo
+awsemu sfn ls
+awsemu sfn rm saludo --yes
+```
+
+Si la ejecución falla, `start` muestra el error y la causa (o los busca en el historial) y termina con código 1. La definición puede ser un fichero o JSON en línea; se valida antes de enviarla.
+
+## Cualquier recurso por su ARN
+
+```bash
+awsemu describe arn:aws:dynamodb:us-east-1:000000000000:table/usuarios
+awsemu describe arn:aws:sqs:us-east-1:000000000000:trabajos
+awsemu describe arn:aws:s3:::fotos/gato.jpg
+awsemu describe arn:aws:states:us-east-1:000000000000:execution:saludo:awsemu-1a2b3c
+```
+
+Funciona con ARNs de S3, SQS, DynamoDB, SNS (temas y suscripciones), Lambda, Secrets Manager, SSM, Kinesis, EventBridge (reglas y buses), Step Functions (máquinas y ejecuciones), CloudWatch Logs e IAM (roles, usuarios y políticas). La salida es JSON.
 
 ## Configuración del emulador
 

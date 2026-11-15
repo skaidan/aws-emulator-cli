@@ -31,16 +31,19 @@ Objetivo: confiar en que todo funciona contra el emulador de verdad, en todos lo
 - ✅ **Mejores errores**: pistas concretas para `AccessDenied`, `SignatureDoesNotMatch`, peticiones sin firmar, `UnknownService`, reloj desfasado, operaciones no emuladas y TLS.
 - ✅ `AWSEMU_BINARY` para usar un binario que no esté en el `PATH`.
 
-## v0.3 — Más servicios 🚧
+## v0.3 — Más servicios ✅
 
-Objetivo: cubrir los servicios que más se usan en tests de aplicaciones.
+Objetivo: cubrir los servicios que más se usan en tests de aplicaciones. Todo probado contra el emulador real en CI.
 
 - ✅ **SNS**: `ls`, `create`, `publish`, `subscribe` (con `--to-sqs COLA`, que crea la suscripción y la política de la cola, y `--to-lambda`).
-- ✅ **Lambda**: `ls`, `deploy` (desde carpeta, fichero o zip; adivina handler y runtime), `invoke` con payload JSON y salida legible, `logs`, `info`, `rm`.
-- ⬜ **Secrets Manager y SSM Parameter Store**: `get`, `put`, `ls`, `rm`.
-- ⬜ **EventBridge**: `buses`, `rules`, `put-event`.
-- ⬜ **Kinesis y Step Functions**: listados, `put-record` y `start-execution` con seguimiento del estado.
-- ⬜ **`awsemu describe <ARN>`**: muestra cualquier recurso a partir de su ARN, sin tener que saber qué servicio es.
+- ✅ **Lambda**: `ls`, `deploy` (desde carpeta, fichero o zip; adivina handler y runtime), `invoke` con payload JSON y su log, `logs`, `info`, `rm`.
+- ✅ **Secrets Manager y SSM Parameter Store**: `put`, `get`, `ls`, `rm` (y `info` en secretos).
+- ✅ **EventBridge**: `rule` con su destino y permisos en un paso (`--to-sqs`, `--to-lambda`, `--to-sns`), `put`, `rules`, `buses`, `rm`.
+- ✅ **Kinesis**: `create`, `put`, `read` (todos los shards, `--follow`), `ls`, `rm`.
+- ✅ **Step Functions**: `deploy`, `start` (espera y muestra salida o causa del fallo), `executions`, `rm`.
+- ✅ **`awsemu describe <ARN>`** para 12 servicios.
+
+Aprendido en CI: el emulador no envía la salida de Lambda a CloudWatch Logs; `lambda invoke` muestra el log de cada invocación.
 
 ## v0.4 — Estado reproducible (seeds)
 

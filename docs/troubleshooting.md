@@ -49,6 +49,10 @@ Revisa Python, el binario, Docker y la imagen, el AWS CLI, boto3, el estado del 
 
 **Mi proceso tiene que hablar con el emulador y con AWS real a la vez.** `AWS_CA_BUNDLE` sustituye los certificados de confianza. Crea un bundle con los certificados del sistema más `ca.pem`, y regenéralo tras cada arranque. `NODE_EXTRA_CA_CERTS` es la excepción: añade en vez de sustituir.
 
+**`lambda logs` no encuentra nada.** El emulador no envía la salida de las funciones a CloudWatch Logs. Usa `awsemu lambda invoke`, que muestra el log de esa invocación.
+
+**`ParameterPatternMismatchException` en SSM.** Los nombres de parámetro no pueden empezar por `aws` ni `ssm` (tampoco `/awsapp/...`), igual que en AWS.
+
 **Los recursos desaparecen.** Es por diseño: el emulador guarda todo en memoria. Al parar o reiniciar, se pierde. La v0.4 del roadmap añade *seeds* para recargar datos automáticamente.
 
 **Windows: tras parar, quedan ficheros en `~/.aws/emulator/<puerto>/`.** `awsemu` intenta una parada limpia con Ctrl+Break y, si el emulador no la atiende, borra él mismo esos ficheros. `awsemu stop` en un puerto sin emulador también los limpia.

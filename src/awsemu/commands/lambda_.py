@@ -250,7 +250,11 @@ def invoke(c: Ctx, name: str, payload: str | None, file_, is_async: bool, show_l
 @pass_ctx
 @handle_errors
 def logs_cmd(c: Ctx, name: str, follow: bool, since: int):
-    """Show the function's CloudWatch logs (/aws/lambda/NAME)."""
+    """Show the function's CloudWatch logs (/aws/lambda/NAME).
+
+    Note: AWS Emulator doesn't write Lambda output to CloudWatch Logs; use
+    'awsemu lambda invoke', which prints the log of that invocation.
+    """
     logs = client("logs", c.port)
     group = f"/aws/lambda/{name}"
     start = int((time.time() - since * 60) * 1000)
@@ -271,7 +275,10 @@ def logs_cmd(c: Ctx, name: str, follow: bool, since: int):
                 if not is_error(exc, "ResourceNotFound"):
                     raise
                 if not follow:
-                    ui.echo(f"No logs yet ({group} doesn't exist).", "muted")
+                    ui.warn(f"No log group {group}.")
+                    ui.echo("AWS Emulator doesn't send Lambda output to CloudWatch Logs. "
+                            f"'awsemu lambda invoke {name}' shows the log of each invocation.",
+                            "muted", err=True)
                     return
             if not follow:
                 return

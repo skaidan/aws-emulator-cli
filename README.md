@@ -7,7 +7,7 @@ El emulador en sí es un único binario sin subcomandos: se ejecuta en primer pl
 - **Arrancar y parar** el emulador en segundo plano, con el binario nativo o con Docker, esperando a que esté sano.
 - **Conectar tu shell** con un solo comando (`eval "$(awsemu env)"`), sin tocar tus credenciales reales.
 - **Ver qué hay dentro**: buckets, colas, tablas, funciones, secretos… en una sola pantalla.
-- **Trabajar con S3, SQS, DynamoDB, SNS y Lambda** con comandos cortos y tablas legibles (DynamoDB con JSON normal, sin `{"S": ...}`; `lambda deploy` desde una carpeta).
+- **Trabajar con S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis y Step Functions** con comandos cortos y tablas legibles: DynamoDB con JSON normal, `lambda deploy` desde una carpeta, reglas de EventBridge con su destino y permisos en un paso, y `describe` para cualquier ARN.
 - **Diagnosticar** problemas típicos (`awsemu doctor`).
 
 ```
@@ -31,7 +31,7 @@ DynamoDB tables  1      usuarios
 ## Documentación
 
 - [Primeros pasos](docs/getting-started.md): instalar, arrancar y conectar tus herramientas.
-- [Guía de servicios](docs/services.md): S3, SQS, DynamoDB, SNS y Lambda con ejemplos.
+- [Guía de servicios](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions y `describe`, con ejemplos.
 - [Tests y CI](docs/testing.md): pytest, scripts y GitHub Actions.
 - [Solución de problemas](docs/troubleshooting.md): qué significa cada error.
 - [Referencia de comandos](docs/reference.md): todos los comandos y opciones.
@@ -154,6 +154,8 @@ awsemu lambda ls   |   awsemu lambda info NOMBRE   |   awsemu lambda rm NOMBRE
 ```
 
 `lambda deploy` adivina el handler y el runtime a partir del código (`def handler(...)` en Python, `exports.handler` / `export const handler` en Node), crea un rol de ejecución si no le pasas `--role` y, si la función ya existe, la actualiza.
+
+Y además `awsemu secrets`, `ssm`, `events`, `kinesis`, `sfn` y `describe ARN`: ejemplos de todos en la [guía de servicios](docs/services.md).
 
 Para cualquier otro servicio u operación: `awsemu aws <servicio> <operación> ...`.
 

@@ -7,7 +7,7 @@ Necesitas Python 3.10 o superior.
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
 # o, desde una release concreta:
-pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.2.0/aws_emulator_cli-0.2.0-py3-none-any.whl
+pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.3.0/aws_emulator_cli-0.3.0-py3-none-any.whl
 ```
 
 Comprueba qué tienes y qué falta:

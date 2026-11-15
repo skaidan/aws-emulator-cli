@@ -40,7 +40,9 @@ src/awsemu/
   settings.py     edición de config.toml conservando comentarios
   paths.py        rutas y constantes (puerto, región, cuenta 000000000000)
   ui.py           salida con Rich, o texto plano si no está o con --plain
-  commands/       un módulo por servicio: overview, s3, sqs, dynamodb, sns, lambda_
+  commands/       un módulo por servicio: overview, s3, sqs, dynamodb, sns, lambda_,
+                  secrets (secrets + ssm), events, kinesis, sfn, describe
+  commands/_common.py  roles de servicio, políticas de cola, permisos de Lambda, códigos de error
 ```
 
 ## Decisiones de diseño

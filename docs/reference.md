@@ -442,6 +442,9 @@ awsemu lambda invoke [OPTIONS] NAME [PAYLOAD]
 
 Show the function's CloudWatch logs (/aws/lambda/NAME).
 
+Note: AWS Emulator doesn't write Lambda output to CloudWatch Logs; use
+'awsemu lambda invoke', which prints the log of that invocation.
+
 ```
 awsemu lambda logs [OPTIONS] NAME
 ```

@@ -293,25 +293,27 @@ def test_describe_arns(emu):
     run(emu, "sns", "rm", "awsemu-describe-t", "--yes")
 
 
-def test_zz_diagnose_lambda_output(emu, tmp_path):
-    """TEMPORARY: find out where function output goes in the real emulator."""
-    import time
+def test_lambda_invoke_log_async_and_sns_subscription(emu, tmp_path):
     src = tmp_path / "echo.py"
     src.write_text("def handler(event, context):\n"
                    "    print('AWSEMU-MARK', event)\n"
                    "    return event\n")
     run(emu, "lambda", "deploy", "awsemu-echo", str(src))
-    sync = run(emu, "lambda", "invoke", "awsemu-echo", '{"via": "sync"}', ok=False)
-    print("\n### DIAG invoke output:\n" + sync.output)
-    print("### DIAG async:", run(emu, "lambda", "invoke", "awsemu-echo", '{"via": "async"}', "--async", ok=False).output)
+
+    # The invocation log tail is how you see function output with the emulator.
+    out = run(emu, "lambda", "invoke", "awsemu-echo", '{"via": "sync"}').output
+    assert "AWSEMU-MARK {'via': 'sync'}" in out and "REPORT RequestId" in out
+
+    assert "queued (HTTP 202)" in run(emu, "lambda", "invoke", "awsemu-echo", "{}", "--async").output
+
     run(emu, "sns", "create", "awsemu-to-lambda")
-    print("### DIAG subscribe:", run(emu, "sns", "subscribe", "awsemu-to-lambda", "--to-lambda", "awsemu-echo", ok=False).output)
-    print("### DIAG publish:", run(emu, "sns", "publish", "awsemu-to-lambda", "from-sns", ok=False).output)
-    time.sleep(8)
-    print("### DIAG lambda logs:", run(emu, "lambda", "logs", "awsemu-echo", ok=False).output)
-    log = run(emu, "logs", "-n", "400", "--raw", ok=False).output
-    print("### DIAG emulator log lines with MARK/sync/async/from-sns:")
-    for line in log.splitlines():
-        if any(m in line for m in ("AWSEMU-MARK", "async", "from-sns", "awsemu-echo")):
-            print("   ", line[:400])
-    print("### DIAG log groups:", run(emu, "aws", "logs", "describe-log-groups", ok=False).output[:300])
+    run(emu, "sns", "subscribe", "awsemu-to-lambda", "--to-lambda", "awsemu-echo")
+    assert "lambda" in run(emu, "sns", "subs", "awsemu-to-lambda").output
+    run(emu, "sns", "publish", "awsemu-to-lambda", "from-sns")
+
+    # The emulator doesn't write Lambda output to CloudWatch Logs: explain, don't fail.
+    result = run(emu, "lambda", "logs", "awsemu-echo")
+    assert "doesn't send Lambda output to CloudWatch Logs" in result.output
+
+    run(emu, "sns", "rm", "awsemu-to-lambda", "--yes")
+    run(emu, "lambda", "rm", "awsemu-echo", "--yes")

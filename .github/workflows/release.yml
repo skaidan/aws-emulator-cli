@@ -1,13 +1,14 @@
 name: Release
 
-# Creates the tag vX.Y.Z and a GitHub release (with wheel and sdist) whenever
-# main has a version in pyproject.toml that hasn't been released yet.
+# Creates the tag vX.Y.Z and a GitHub release (with wheel and sdist) when CI
+# passes on main and pyproject.toml has a version that hasn't been released yet.
 # Release notes come from the matching section of CHANGELOG.md.
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths: [pyproject.toml, CHANGELOG.md, .github/workflows/release.yml]
   workflow_dispatch:
 
 permissions:
@@ -15,10 +16,15 @@ permissions:
 
 jobs:
   release:
+    # Only after a green CI (including the tests against the real emulator).
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 0
 
       - name: Read version
@@ -66,6 +72,6 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           gh release create "v$VERSION" dist/* \
-            --target "$GITHUB_SHA" \
+            --target "$RELEASE_SHA" \
             --title "v$VERSION" \
             --notes-file notes.md

@@ -17,7 +17,7 @@ pytest
 | --- | --- | --- |
 | Unitarios | `tests/test_units.py` | `pytest` |
 | Ciclo de vida con el emulador falso | `tests/test_lifecycle.py` | `pytest` (Linux, macOS y Windows) |
-| Servicios con cliente simulado | `tests/test_services.py`, `tests/test_sns_lambda.py` | `pytest` |
+| Servicios con cliente simulado | `tests/test_services.py`, `tests/test_sns_lambda.py`, `tests/test_more_services.py` | `pytest` |
 | Contra el emulador real | `tests/test_real.py` | `AWSEMU_REAL_TESTS=1 pytest -m real -v` |
 
 Los tests reales necesitan el binario `aws-emulator` en el `PATH` (o `AWSEMU_BINARY`) y boto3. En la CI los ejecuta el job `real-emulator`, que instala el `.deb` oficial y verifica su firma.
@@ -36,7 +36,8 @@ Variables para provocar casos raros: `FAKE_EMULATOR_CRASH=1` (sale con código 1
    - obtén el cliente con `client("<servicio>", c.port)`;
    - decora cada comando con `@pass_ctx` y `@handle_errors`;
    - usa `ui.table`, `ui.kv`, `ui.success` y `ui.print_json` para la salida;
-   - ofrece `--json` en los listados y `--yes` en lo que borre.
+   - ofrece `--json` en los listados y `--yes` en lo que borre;
+   - para roles, políticas de cola, permisos de Lambda o errores esperados (`is_error(exc, "ResourceNotFound")`), usa `commands/_common.py`.
 2. Regístralo en `cli.py` (`cli.add_command(...)`).
 3. Si tiene recursos que listar, añádelo a `SERVICES` en `commands/overview.py`.
 4. Tests con `FakeClient` (ver `tests/test_services.py`) y, si puedes, un test en `tests/test_real.py`.
@@ -59,7 +60,7 @@ Variables para provocar casos raros: `FAKE_EMULATOR_CRASH=1` (sale con código 1
 1. Mueve las entradas de `## Unreleased` de `CHANGELOG.md` a `## X.Y.Z — AAAA-MM-DD`.
 2. Sube la versión en `pyproject.toml` y en `src/awsemu/__init__.py`.
 3. Actualiza el ROADMAP.
-4. Haz push a `main`. El workflow `Release` crea el tag `vX.Y.Z` y la release de GitHub con el wheel y el sdist, usando la sección del CHANGELOG como notas.
+4. Haz push a `main`. Cuando la CI pasa (incluidos los tests contra el emulador real), el workflow `Release` crea el tag `vX.Y.Z` y la release de GitHub con el wheel y el sdist, usando la sección del CHANGELOG como notas. Si la CI falla, no se publica nada.
 
 ## Estilo
 

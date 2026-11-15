@@ -3,7 +3,7 @@
 | Documento | Para qué |
 | --- | --- |
 | [Primeros pasos](getting-started.md) | Instalar, arrancar el emulador (nativo o Docker) y conectar tus herramientas. |
-| [Guía de servicios](services.md) | S3, SQS, DynamoDB, SNS y Lambda con ejemplos de flujos completos. |
+| [Guía de servicios](services.md) | Los 10 servicios con comandos propios y `describe ARN`, con ejemplos de flujos completos. |
 | [Tests y CI](testing.md) | Usar el emulador desde pytest, scripts y GitHub Actions. |
 | [Solución de problemas](troubleshooting.md) | Qué significa cada error y cómo arreglarlo. |
 | [Referencia de comandos](reference.md) | Todos los comandos y opciones (generada desde el código). |
