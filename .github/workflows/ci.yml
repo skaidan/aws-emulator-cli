@@ -61,3 +61,70 @@ jobs:
         continue-on-error: true
       - name: Integration tests
         run: AWSEMU_REAL_TESTS=1 pytest -m real -v -s
+
+  docker:
+    name: Docker mode and compose (real emulator)
+    runs-on: ubuntu-latest
+    env:
+      EMULATOR_TELEMETRY: "off"
+      AWSEMU_PLAIN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+
+      - name: awsemu image build
+        run: awsemu image build
+
+      - name: awsemu start --docker
+        run: |
+          awsemu --port 9301 start --docker --wait 90
+          awsemu --port 9301 status
+          awsemu --port 9301 whoami
+          awsemu --port 9301 s3 mb docker-mode
+          awsemu --port 9301 s3 ls | grep docker-mode
+          awsemu --port 9301 logs -n 5 | grep "emulator server information"
+          awsemu --port 9301 stop
+          if awsemu --port 9301 status; then echo 'still running after stop'; exit 1; fi
+          awsemu --port 9301 logs -n 200 | grep "emulator server information"   # log kept after stop
+
+      - name: awsemu compose
+        run: |
+          awsemu --port 9302 compose -o compose.emulator.yaml --no-telemetry
+          cat compose.emulator.yaml
+          docker compose -f compose.emulator.yaml up -d
+          for i in $(seq 60); do awsemu --port 9302 status >/dev/null && break; sleep 1; done
+          awsemu --port 9302 status
+          awsemu --port 9302 whoami
+          awsemu --port 9302 exec -- python -c "import boto3; boto3.client('sqs').create_queue(QueueName='from-compose')"
+          awsemu --port 9302 sqs ls | grep from-compose
+          docker compose -f compose.emulator.yaml down
+
+  action:
+    name: GitHub Action (uses ./)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up AWS Emulator with the example seed
+        id: emu
+        uses: ./
+        with:
+          seed: examples/seed.yaml
+          port: "9303"
+      - name: Following steps talk to the emulator with no extra setup
+        env:
+          ENDPOINT: ${{ steps.emu.outputs.endpoint-url }}
+        run: |
+          test "$ENDPOINT" = "https://127.0.0.1:9303"
+          test "$AWS_ENDPOINT_URL" = "$ENDPOINT"
+          aws sts get-caller-identity --query Account --output text | grep -x 000000000000
+          aws s3 ls | grep shop-assets
+          python3 -c "import boto3; t = boto3.client('dynamodb').scan(TableName='customers')['Count']; assert t == 2, t"
+          awsemu status
+          awsemu overview
+      - if: always()
+        run: awsemu logs -n 50 || true
+      - if: always()
+        run: awsemu stop

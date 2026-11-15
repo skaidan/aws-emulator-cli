@@ -243,3 +243,27 @@ def test_parse_real_tracing_format():
     assert entry.message == "emulator server information" and entry.is_startup
     assert "message" not in entry.extra and entry.extra["endpoint_url"].endswith(":49275")
     assert logs.find_startup([line])["endpoint_url"] == "https://127.0.0.1:49275"
+
+
+# ---------------------------------------------------------------- compose
+
+
+def test_compose_service_matches_docker_recipe(isolated_home):
+    import yaml
+
+    from awsemu.commands import compose
+
+    opts = runtime.StartOptions(port=9310, mode="docker", auth=False, telemetry=False, idle_timeout=600)
+    svc = compose.service(opts, system="Linux", arch="x86_64")
+    assert svc["ports"] == ["127.0.0.1:9310:9310"]
+    assert svc["command"] == ["-p", "9310", "-a", "off", "-t", "off", "--idle-timeout", "600"]
+    assert svc["mem_limit"] == svc["memswap_limit"] == "2g"
+    root = isolated_home / ".aws" / "emulator"
+    assert svc["volumes"] == [f"{root}:{root}"] and svc["environment"] == {"HOME": str(isolated_home)}
+    assert "aws-emulator-x86_64.rpm" in svc["build"]["dockerfile_inline"]
+    text = compose.render("emu", svc, 9310)
+    assert yaml.safe_load(text)["services"]["emu"] == svc  # valid YAML, round-trips
+
+    win = compose.service(opts, system="Windows", build=False)
+    assert "build" not in win and "user" not in win
+    assert win["volumes"][0].endswith(":/home/emulator/.aws/emulator")

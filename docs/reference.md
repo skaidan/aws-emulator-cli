@@ -8,14 +8,17 @@ Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 
 
 
 - [`aws`](#awsemu-aws) — Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
+- [`compose`](#awsemu-compose) — Print a Docker Compose service for the emulator (same setup as 'start --docker').
 - [`config`](#awsemu-config) — Read or change the emulator's settings file (config.toml).
 - [`describe`](#awsemu-describe) — Show any supported resource from its ARN.
 - [`doctor`](#awsemu-doctor) — Check your setup and explain how to fix what's missing.
+- [`down`](#awsemu-down) — Stop this project's emulator (same as 'awsemu stop').
 - [`dynamodb`](#awsemu-dynamodb) — Tables and items (JSON in, JSON out).
 - [`env`](#awsemu-env) — Print shell commands that point the AWS CLI and SDKs at the emulator.
 - [`events`](#awsemu-events) — EventBridge: buses, rules and events.
 - [`exec`](#awsemu-exec) — Run COMMAND with the environment pointed at the emulator.
 - [`image`](#awsemu-image) — Build the Docker image (AWS doesn't publish a prebuilt one).
+- [`init`](#awsemu-init) — Create awsemu.toml in this folder.
 - [`kinesis`](#awsemu-kinesis) — Kinesis Data Streams.
 - [`lambda`](#awsemu-lambda) — Deploy, invoke and inspect Lambda functions.
 - [`logs`](#awsemu-logs) — Show the emulator's log, prettified (also after it stopped).
@@ -32,6 +35,7 @@ Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 
 - [`start`](#awsemu-start) — Start an emulator in the background and wait until it's healthy.
 - [`status`](#awsemu-status) — Show whether the emulator is running and healthy.
 - [`stop`](#awsemu-stop) — Stop the emulator (clean stop: it deletes its files and in-memory state).
+- [`up`](#awsemu-up) — Make sure this project's emulator is running and seeded.
 - [`whoami`](#awsemu-whoami) — Check that requests reach the emulator (STS GetCallerIdentity).
 
 ## `awsemu aws`
@@ -41,6 +45,28 @@ Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
 ```
 awsemu aws [OPTIONS] [ARGS]...
 ```
+
+## `awsemu compose`
+
+Print a Docker Compose service for the emulator (same setup as 'start --docker').
+
+```bash
+awsemu compose -o compose.emulator.yaml
+docker compose -f compose.emulator.yaml up -d
+```
+
+```
+awsemu compose [OPTIONS]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `-o, --output FILE` | Write to this file (default: stdout). |
+| `--name TEXT` | Service name.  [default: aws-emulator] |
+| `--no-build` | Omit the build section (image built with 'awsemu image build'). |
+| `--auth / --no-auth` | [default: (auth)] |
+| `--telemetry / --no-telemetry` |  |
+| `--idle-timeout SECONDS` | [1<=x<=31536000] |
 
 ## `awsemu config`
 
@@ -56,7 +82,7 @@ awsemu config path [OPTIONS]
 
 ### `awsemu config show`
 
-Show the settings file and effective telemetry setting.
+Show the emulator's settings file and this project's awsemu.toml.
 
 ```
 awsemu config show [OPTIONS]
@@ -88,6 +114,18 @@ Check your setup and explain how to fix what's missing.
 ```
 awsemu doctor [OPTIONS]
 ```
+
+## `awsemu down`
+
+Stop this project's emulator (same as 'awsemu stop').
+
+```
+awsemu down [OPTIONS]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--all` | Stop every instance awsemu knows about. |
 
 ## `awsemu dynamodb`
 
@@ -326,6 +364,22 @@ awsemu image dockerfile [OPTIONS]
 | --- | --- |
 | `--arch [x86_64|aarch64]` |  |
 
+## `awsemu init`
+
+Create awsemu.toml in this folder.
+
+Without '--port', picks a port from the folder name (9300-9399), so
+several projects can run their emulators side by side.
+
+```
+awsemu init [OPTIONS]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--seed PATH` | Seed file to reference (default: auto-detect). |
+| `--force` | Overwrite an existing awsemu.toml. |
+
 ## `awsemu kinesis`
 
 Kinesis Data Streams.
@@ -518,11 +572,11 @@ awsemu restart [OPTIONS] [EXTRA]...
 | --- | --- |
 | `--docker` | Run in Docker even if the binary is installed. |
 | `--native` | Run the installed 'aws-emulator' binary. |
-| `--auth / --no-auth` | Require SigV4-signed requests (emulator '-a').  [default: auth] |
+| `--auth / --no-auth` | Require SigV4-signed requests (emulator '-a').  [default: (auth)] |
 | `--telemetry / --no-telemetry` | Force telemetry on/off for this run (default: emulator settings). |
 | `--idle-timeout SECONDS` | Stop automatically after this many seconds without API calls.  [1<=x<=31536000] |
-| `--image TEXT` | Docker image to run.  [default: aws-emulator] |
-| `--memory TEXT` | Docker memory limit.  [default: 2g] |
+| `--image TEXT` | Docker image to run.  [default: (aws-emulator)] |
+| `--memory TEXT` | Docker memory limit.  [default: (2g)] |
 | `--wait SECONDS` | How long to wait for the health check.  [default: 30] |
 | `-f, --foreground` | Run attached to this terminal instead of in the background. |
 | `--seed FILE` | Apply this seed file once the emulator is healthy. |
@@ -1072,11 +1126,11 @@ awsemu start [OPTIONS] [EXTRA]...
 | --- | --- |
 | `--docker` | Run in Docker even if the binary is installed. |
 | `--native` | Run the installed 'aws-emulator' binary. |
-| `--auth / --no-auth` | Require SigV4-signed requests (emulator '-a').  [default: auth] |
+| `--auth / --no-auth` | Require SigV4-signed requests (emulator '-a').  [default: (auth)] |
 | `--telemetry / --no-telemetry` | Force telemetry on/off for this run (default: emulator settings). |
 | `--idle-timeout SECONDS` | Stop automatically after this many seconds without API calls.  [1<=x<=31536000] |
-| `--image TEXT` | Docker image to run.  [default: aws-emulator] |
-| `--memory TEXT` | Docker memory limit.  [default: 2g] |
+| `--image TEXT` | Docker image to run.  [default: (aws-emulator)] |
+| `--memory TEXT` | Docker memory limit.  [default: (2g)] |
 | `--wait SECONDS` | How long to wait for the health check.  [default: 30] |
 | `-f, --foreground` | Run attached to this terminal instead of in the background. |
 | `--seed FILE` | Apply this seed file once the emulator is healthy. |
@@ -1107,6 +1161,24 @@ awsemu stop [OPTIONS]
 | `--all` | Stop every instance awsemu knows about. |
 | `--force` | SIGKILL / docker kill (loses the clean shutdown). |
 | `--timeout SECONDS` | [default: 15] |
+
+## `awsemu up`
+
+Make sure this project's emulator is running and seeded.
+
+Uses awsemu.toml (port, mode, auth, telemetry, idle_timeout, seed...).
+Starts the emulator if it isn't running; either way, applies the seed,
+which is safe to repeat.
+
+```
+awsemu up [OPTIONS]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--seed FILE` | Seed to apply (default: 'seed' from awsemu.toml). |
+| `--no-seed` | Don't apply any seed. |
+| `--wait SECONDS` | [default: 30] |
 
 ## `awsemu whoami`
 

@@ -1,0 +1,120 @@
+name: Set up AWS Emulator (awsemu)
+description: >
+  Install AWS Emulator (official package, GPG-verified) and awsemu, start the
+  emulator, apply a seed, and point the rest of the job at it.
+author: skaidan
+branding:
+  icon: cloud
+  color: orange
+
+inputs:
+  seed:
+    description: Seed file to apply (path in your repository).
+    required: false
+    default: ""
+  port:
+    description: Port for the emulator.
+    required: false
+    default: "9297"
+  auth:
+    description: Require signed requests ("true" or "false").
+    required: false
+    default: "true"
+  telemetry:
+    description: Send the emulator's telemetry ("true" or "false").
+    required: false
+    default: "false"
+  idle-timeout:
+    description: Stop the emulator after this many seconds without API calls.
+    required: false
+    default: "3600"
+  export-env:
+    description: >
+      Point the following steps at the emulator (AWS_ENDPOINT_URL, AWS_CA_BUNDLE,
+      credentials file, region...). Set to "false" to only start it.
+    required: false
+    default: "true"
+
+outputs:
+  port:
+    description: Port the emulator listens on.
+    value: ${{ steps.start.outputs.port }}
+  endpoint-url:
+    description: Endpoint URL (https://127.0.0.1:PORT).
+    value: ${{ steps.start.outputs.endpoint-url }}
+  ca-bundle:
+    description: Path to the emulator's CA certificate.
+    value: ${{ steps.start.outputs.ca-bundle }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the runner
+      if: runner.os != 'Linux'
+      shell: bash
+      run: |
+        echo "::error::This action needs a Linux runner (AWS Emulator ships Linux packages). Use runs-on: ubuntu-latest."
+        exit 1
+
+    - name: Install AWS Emulator (verified package)
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ runner.arch }}" in
+          X64) DEB=aws-emulator_amd64.deb ;;
+          ARM64) DEB=aws-emulator_arm64.deb ;;
+          *) echo "::error::Unsupported runner architecture ${{ runner.arch }}"; exit 1 ;;
+        esac
+        BASE=https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest
+        TMP=$(mktemp -d)
+        curl -fsSL -o "$TMP/$DEB" "$BASE/$DEB"
+        curl -fsSL -o "$TMP/$DEB.sig" "$BASE/$DEB.sig"
+        curl -fsSL -o "$TMP/key.asc" https://downloads.aws.com/keys/gpg/current.asc
+        export GNUPGHOME="$TMP/gnupg"; mkdir -m 700 "$GNUPGHOME"
+        gpg --quiet --import "$TMP/key.asc"
+        FPR=$(gpg --with-colons --fingerprint ssm-publishing@amazon.com | awk -F: '/^fpr/ {print $10; exit}')
+        if [ "$FPR" != "98BCF336A3BE53B734E967C52E5BF49BD940F624" ]; then
+          echo "::error::Unexpected signing key fingerprint: $FPR"; exit 1
+        fi
+        gpg --quiet --verify "$TMP/$DEB.sig" "$TMP/$DEB"
+        sudo apt-get install -y -qq "$TMP/$DEB" >/dev/null
+        aws-emulator -v
+
+    - name: Install awsemu
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 -m pip install --quiet --user "${{ github.action_path }}" \
+          || python3 -m pip install --quiet --user --break-system-packages "${{ github.action_path }}"
+        echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
+        "$(python3 -m site --user-base)/bin/awsemu" --version
+
+    - name: Start AWS Emulator
+      id: start
+      shell: bash
+      env:
+        AWSEMU_PLAIN: "1"
+        INPUT_SEED: ${{ inputs.seed }}
+        INPUT_PORT: ${{ inputs.port }}
+        INPUT_AUTH: ${{ inputs.auth }}
+        INPUT_TELEMETRY: ${{ inputs.telemetry }}
+        INPUT_IDLE: ${{ inputs.idle-timeout }}
+        INPUT_EXPORT: ${{ inputs.export-env }}
+      run: |
+        set -euo pipefail
+        AWSEMU="$(python3 -m site --user-base)/bin/awsemu"
+        args=(--port "$INPUT_PORT" start --native --wait 90 --idle-timeout "$INPUT_IDLE")
+        [ "$INPUT_AUTH" = "false" ] && args+=(--no-auth)
+        [ "$INPUT_TELEMETRY" = "true" ] && args+=(--telemetry) || args+=(--no-telemetry)
+        [ -n "$INPUT_SEED" ] && args+=(--seed "$GITHUB_WORKSPACE/$INPUT_SEED")
+        "$AWSEMU" "${args[@]}"
+        echo "port=$INPUT_PORT" >> "$GITHUB_OUTPUT"
+        echo "endpoint-url=https://127.0.0.1:$INPUT_PORT" >> "$GITHUB_OUTPUT"
+        echo "ca-bundle=$HOME/.aws/emulator/$INPUT_PORT/ca.pem" >> "$GITHUB_OUTPUT"
+        echo "AWSEMU_PORT=$INPUT_PORT" >> "$GITHUB_ENV"
+        if [ "$INPUT_EXPORT" = "true" ]; then
+          "$AWSEMU" --port "$INPUT_PORT" env --shell dotenv >> "$GITHUB_ENV"
+          if [ -n "${AWS_ACCESS_KEY_ID:-}${AWS_PROFILE:-}" ]; then
+            echo "::warning::Real AWS credentials are set in this job. They take precedence over the emulator's credentials file; remove them or run your commands with 'awsemu exec --'."
+          fi
+        fi

@@ -47,12 +47,21 @@ def emulator_settings_file() -> Path:
 
 
 def default_port() -> int:
+    """``$AWSEMU_PORT``, else the project's ``port`` (awsemu.toml), else 9297."""
     raw = os.environ.get("AWSEMU_PORT")
     if raw:
         try:
             return int(raw)
         except ValueError:
             pass
+    from . import project
+
+    try:
+        proj = project.load()
+    except project.ProjectError:
+        return DEFAULT_PORT  # reported by the CLI when it loads the project
+    if proj and proj.port:
+        return proj.port
     return DEFAULT_PORT
 
 

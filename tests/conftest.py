@@ -1,3 +1,5 @@
+pytest_plugins = ["pytester"]
+
 import os
 import socket
 import stat
@@ -17,7 +19,7 @@ def isolated_home(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
-    for var in ("AWSEMU_HOME", "AWSEMU_PORT", "AWSEMU_BINARY", "EMULATOR_CONFIG", "EMULATOR_TELEMETRY",
+    for var in ("AWSEMU_HOME", "AWSEMU_PORT", "AWSEMU_BINARY", "AWSEMU_CONFIG", "EMULATOR_CONFIG", "EMULATOR_TELEMETRY",
                 "AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("AWSEMU_PLAIN", "1")

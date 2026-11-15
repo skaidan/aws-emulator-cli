@@ -427,3 +427,30 @@ def test_example_seed_applies(emu):
     results = _results(run(emu, "seed", "apply", str(example)).output)
     assert len(results) == 12 and "failed" not in results.values(), results
     assert "invoices.fifo" in run(emu, "sqs", "ls").output
+
+
+def test_pytest_plugin_with_real_emulator(emu, pytester):
+    """A pytest session using the plugin: own emulator, seed, plain boto3, fresh state."""
+    import importlib.metadata
+
+    pytester.makefile(".yaml", seed="version: 1\nbuckets:\n  - name: plugin-bucket\n"
+                                    "    objects: [{key: a.txt, content: hola}]\n")
+    pytester.makepyfile(test_inner="""
+        import boto3
+
+        def test_seeded(aws_emulator):
+            s3 = boto3.client("s3")                     # plain boto3: env points at the emulator
+            body = s3.get_object(Bucket="plugin-bucket", Key="a.txt")["Body"].read()
+            assert body == b"hola"
+            s3.create_bucket(Bucket="made-in-test")
+            assert boto3.client("sts").get_caller_identity()["Account"] == "000000000000"
+
+        def test_fresh_is_back_to_seed(aws_emulator_fresh):
+            names = [b["Name"] for b in aws_emulator_fresh.client("s3").list_buckets()["Buckets"]]
+            assert names == ["plugin-bucket"]
+    """)
+    eps = importlib.metadata.entry_points()
+    group = eps.select(group="pytest11") if hasattr(eps, "select") else eps.get("pytest11", [])
+    plugin = [] if any(ep.value == "awsemu.pytest_plugin" for ep in group) else ["-p", "awsemu.pytest_plugin"]
+    result = pytester.runpytest_subprocess(*plugin, "-p", "no:cacheprovider", "--awsemu-seed", "seed.yaml", "-v")
+    result.assert_outcomes(passed=2)

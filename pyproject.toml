@@ -31,6 +31,9 @@ dev = ["pytest>=8.0", "cryptography>=42"]
 [project.scripts]
 awsemu = "awsemu.cli:main"
 
+[project.entry-points.pytest11]
+awsemu = "awsemu.pytest_plugin"
+
 [project.urls]
 Homepage = "https://github.com/skaidan/aws-emulator-cli"
 "AWS Emulator" = "https://github.com/aws/aws-emulator"
