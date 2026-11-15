@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import inspect
 import sys
 from pathlib import Path
 
@@ -50,7 +51,8 @@ def _section(cmd: click.Command, path: list[str], parent: click.Context, out: li
     level = "#" * min(len(path), 4)
     out.append(f"{level} `{' '.join(path)}`\n")
     if cmd.help:
-        text = cmd.help.replace("\b\n", "")
+        # cleandoc: Python < 3.13 keeps docstring indentation, 3.13+ strips it.
+        text = inspect.cleandoc(cmd.help).replace("\b\n", "")
         lines = text.strip().splitlines()
         out.append(lines[0].strip() + "\n")
         rest = "\n".join(lines[1:]).strip("\n")
