@@ -36,6 +36,8 @@ def test_fixture_starts_points_env_and_stops(pytester, fake_binary, monkeypatch)
             assert health.check(aws_emulator.port).healthy
             assert os.environ["AWS_ENDPOINT_URL"] == aws_emulator.endpoint_url
             assert "AWS_ACCESS_KEY_ID" not in os.environ
+            for var in ("AWS_CA_BUNDLE", "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE"):
+                assert pathlib.Path(os.environ[var]).is_file(), (var, os.environ[var])
             pathlib.Path("port.txt").write_text(str(aws_emulator.port))
 
         def test_same_instance(aws_emulator):

@@ -195,8 +195,10 @@ def aws_emulator(request):
         emu = Emulator(port=port, seed_path=seed_path, started_here=True, mode=mode, _seed=seed)
 
     saved = dict(os.environ)
+    # Compute first: paths depend on HOME, which must still be in os.environ.
+    new_env = envvars.child_env(port, base=saved, extras=_project_sdk())
     os.environ.clear()
-    os.environ.update(envvars.child_env(port, base=saved, extras=_project_sdk()))
+    os.environ.update(new_env)
     try:
         emu.apply_seed()
         yield emu
