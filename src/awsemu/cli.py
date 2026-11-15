@@ -8,12 +8,13 @@ import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import click
 
 from . import __version__, envvars, health, logs, runtime, settings, ui
 from .context import Ctx, handle_errors, pass_ctx
-from .paths import ACCOUNT_ID, CliFiles, InstanceFiles, default_port, emulator_settings_file, known_ports
+from .paths import ACCOUNT_ID, InstanceFiles, default_port, emulator_settings_file, known_ports
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"], "max_content_width": 100}
 
@@ -102,25 +103,23 @@ def _do_start(port, docker, native, auth, telemetry, idle_timeout, image, memory
               foreground, extra):
     if docker and native:
         raise click.UsageError("--docker and --native are mutually exclusive.")
-    if port == 0:
-        raise click.UsageError("Port 0 isn't supported by awsemu; pick a port with --port.")
     opts = _start_options(port, docker, native, auth, telemetry, idle_timeout, image, memory, extra)
     if foreground:
         ui.info(f"Starting AWS Emulator on https://127.0.0.1:{port} (Ctrl+C to stop)…")
         sys.exit(runtime.run_foreground(opts))
 
     mode = runtime.resolve_mode(opts.mode, opts.binary)
-    ui.info(f"Starting AWS Emulator ({mode}) on port {port}…")
+    where = "a free port" if port == 0 else f"port {port}"
+    ui.info(f"Starting AWS Emulator ({mode}) on {where}…")
     state, status = runtime.start(opts, wait=wait)
     if not status.healthy:
         ui.error(f"The emulator did not become healthy: {status.detail}")
-        if state.mode == "native" and state.log:
-            for line in runtime.tail(CliFiles(port).log, 15):
+        if state.log:
+            for line in runtime.tail(Path(state.log), 15):
                 ui.echo("  " + logs.format_plain(logs.parse(line)), "muted", err=True)
-        else:
-            ui.echo(f"  See: docker logs {state.container}", "muted", err=True)
         sys.exit(1)
 
+    port = state.port
     files = InstanceFiles(port)
     ui.success(f"AWS Emulator is up at {files.endpoint_url}")
     ui.kv([
@@ -143,7 +142,8 @@ def _do_start(port, docker, native, auth, telemetry, idle_timeout, image, memory
 def start(c: Ctx, **kwargs):
     """Start an emulator in the background and wait until it's healthy.
 
-    Uses the 'aws-emulator' binary if it's on PATH, otherwise Docker.
+    Uses the 'aws-emulator' binary if it's on PATH (or $AWSEMU_BINARY),
+    otherwise Docker. '--port 0' lets the OS pick a free port (native only).
     Anything after '--' is passed to the emulator as-is.
     """
     _do_start(c.port, **kwargs)
@@ -162,8 +162,8 @@ def stop(c: Ctx, all_: bool, force: bool, timeout: float):
         ui.echo("No instances found.", "muted")
     for port in ports:
         result = runtime.stop(port, timeout=timeout, force=force)
-        if result == "not running":
-            ui.echo(f"Port {port}: not running.", "muted")
+        if result.startswith("not running"):
+            ui.echo(f"Port {port}: {result}.", "muted")
         else:
             ui.success(f"Port {port}: {result}")
 
@@ -182,7 +182,7 @@ def restart(c: Ctx, **kwargs):
         kwargs["docker"] = state.mode == "docker"
         kwargs["native"] = state.mode == "native"
     result = runtime.stop(c.port)
-    if result != "not running":
+    if not result.startswith("not running"):
         ui.echo(f"Stopped ({result}).", "muted")
     # Port may linger for a moment after the process exits.
     for _ in range(25):
@@ -233,11 +233,17 @@ def status(c: Ctx, all_: bool, as_json: bool):
 @pass_ctx
 @handle_errors
 def logs_cmd(c: Ctx, follow: bool, lines: int, raw: bool, grep: str | None):
-    """Show the emulator's log, prettified."""
+    """Show the emulator's log, prettified (also after it stopped)."""
+    path = runtime.log_path(c.port)
     state = runtime.State.load(c.port)
-    if state is None:
+    if not path.exists():
+        if state and state.mode == "docker":
+            # Started by an older awsemu that didn't keep a log file.
+            cmd = ["docker", "logs", "--tail", str(lines), *(["-f"] if follow else []),
+                   state.container or runtime.container_name(c.port)]
+            sys.exit(subprocess.call(cmd))
         raise runtime.RuntimeErrorWithHint(
-            f"awsemu didn't start an emulator on port {c.port}, so it has no log for it.",
+            f"No log for port {c.port}: awsemu didn't start an emulator there.",
             "Start it with 'awsemu start' (or check 'awsemu status --all').")
 
     def emit(line: str):
@@ -248,34 +254,26 @@ def logs_cmd(c: Ctx, follow: bool, lines: int, raw: bool, grep: str | None):
         else:
             ui.log_line(logs.parse(line))
 
-    if state.mode == "docker":
-        cmd = ["docker", "logs", "--tail", str(lines)]
-        if follow:
-            cmd.append("-f")
-        cmd.append(state.container or runtime.container_name(c.port))
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        try:
-            assert proc.stdout is not None
-            for line in proc.stdout:
-                emit(line)
-        except KeyboardInterrupt:
-            proc.terminate()
-        return
-
-    path = CliFiles(c.port).log
     for line in runtime.tail(path, lines):
         emit(line)
     if not follow:
         return
+    if state is None:
+        ui.echo("(emulator is not running)", "muted")
+        return
     try:
         with path.open("r", encoding="utf-8", errors="replace") as fh:
             fh.seek(0, os.SEEK_END)
+            idle = 0
             while True:
                 line = fh.readline()
                 if line:
                     emit(line)
                     continue
-                if state.pid and not runtime.pid_alive(state.pid):
+                idle += 1
+                if idle % 5 == 0 and not runtime.is_running(c.port):
+                    for line in fh.readlines():
+                        emit(line)
                     ui.echo("(emulator stopped)", "muted")
                     return
                 time.sleep(0.3)
@@ -428,10 +426,11 @@ def doctor(c: Ctx):
 
     add("python", sys.version_info >= (3, 10), platform.python_version())
 
-    binary = shutil.which(runtime.BINARY)
+    binary = runtime.binary_command(runtime.default_binary())
     if binary:
-        out = _run_quiet([binary, "-v"])
-        add("aws-emulator", True, f"{binary}  {out.splitlines()[0] if out else ''}".strip())
+        out = _run_quiet([*binary, "-v"])
+        shown = " ".join(binary)
+        add("aws-emulator", True, f"{shown}  {out.splitlines()[0] if out else ''}".strip())
     else:
         add("aws-emulator", None, "binary not on PATH",
             "Linux: install the .rpm/.deb package; macOS/Windows: use Docker")

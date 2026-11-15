@@ -4,20 +4,58 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
+    name: tests (${{ matrix.os }}, py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        python: ["3.10", "3.12", "3.13"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install -e '.[dev]'
+      - run: pip install -e ".[dev]"
       - run: pytest -q
-      - run: awsemu --help && awsemu doctor || true
+      - run: awsemu --help
+      - run: awsemu doctor
+        continue-on-error: true
+
+  real-emulator:
+    name: against the real AWS Emulator
+    runs-on: ubuntu-latest
+    env:
+      EMULATOR_TELEMETRY: "off"
+      PKG_BASE: https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest
+      PKG_FILE: aws-emulator_amd64.deb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download and verify the AWS Emulator package
+        run: |
+          curl -fsSLO "$PKG_BASE/$PKG_FILE"
+          curl -fsSLO "$PKG_BASE/$PKG_FILE.sig"
+          curl -fsSLo aws-publishing.asc https://downloads.aws.com/keys/gpg/current.asc
+          gpg --import aws-publishing.asc
+          FPR=$(gpg --with-colons --fingerprint ssm-publishing@amazon.com | awk -F: '/^fpr/ {print $10; exit}')
+          test "$FPR" = "98BCF336A3BE53B734E967C52E5BF49BD940F624" || { echo "unexpected key fingerprint: $FPR"; exit 1; }
+          gpg --verify "$PKG_FILE.sig" "$PKG_FILE"
+
+      - name: Install AWS Emulator
+        run: |
+          sudo apt-get install -y "./$PKG_FILE"
+          aws-emulator -v
+
+      - run: pip install -e ".[dev]"
+      - run: awsemu doctor
+        continue-on-error: true
+      - name: Integration tests
+        run: AWSEMU_REAL_TESTS=1 pytest -m real -v -s

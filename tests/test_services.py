@@ -138,3 +138,17 @@ def test_service_command_without_emulator(runner):
     result = runner.invoke(cli, ["s3", "ls"])
     assert result.exit_code == 1
     assert "awsemu start" in result.output
+
+
+def test_client_errors_show_hint(runner, monkeypatch, running):
+    class ClientError(Exception):  # same name as botocore's, which is what awsemu checks
+        response = {"Error": {"Code": "AccessDenied",
+                              "Message": "Sign the request with the emulator credentials"}}
+
+    def boom(**_):
+        raise ClientError("denied")
+
+    patch_client(monkeypatch, s3, FakeClient(list_buckets=boom))
+    result = runner.invoke(cli, ["s3", "ls"])
+    assert result.exit_code == 1
+    assert "AccessDenied" in result.output and 'eval "$(awsemu env)"' in result.output

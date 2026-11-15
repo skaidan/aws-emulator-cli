@@ -67,6 +67,51 @@ def client(service: str, port: int):
                                  verify=str(files.ca), config=config)
 
 
+def error_code(exc: Exception) -> tuple[str, str]:
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict) and "Error" in response:
+        err = response["Error"]
+        return str(err.get("Code", "")), str(err.get("Message", ""))
+    return "", str(exc)
+
+
+def hint_for(exc: Exception) -> str | None:
+    """A concrete next step for errors that have a known cause with the emulator.
+
+    Based on "Credentials and authentication" in the AWS Emulator command reference.
+    """
+    code, message = error_code(exc)
+    text = f"{type(exc).__name__} {code} {message}".lower()
+    if "emulator credentials" in text or (code == "AccessDenied" and "sign the request" in text):
+        return ("The request was signed with keys the emulator doesn't accept: real AWS keys or "
+                "keys from an earlier run (they change on every start). Reload your shell with "
+                "eval \"$(awsemu env)\", or use 'awsemu exec' / 'awsemu aws'.")
+    if code == "SignatureDoesNotMatch":
+        return ("The secret key doesn't match this run. Did the emulator restart? "
+                "Re-run eval \"$(awsemu env)\" so your tools read the new credentials file.")
+    if code in ("InvalidClientTokenId", "MissingAuthenticationToken", "IncompleteSignature"):
+        return ("The request isn't signed. Point your tool at the emulator's credentials "
+                "(eval \"$(awsemu env)\") or start it with 'awsemu start --no-auth'.")
+    if code == "UnknownService" or "unknownservice" in text:
+        return ("The emulator couldn't tell which service this is: usually an unsigned request, "
+                "otherwise the service may not be emulated yet "
+                "(see https://github.com/aws/aws-emulator/issues).")
+    if code in ("RequestTimeTooSkewed", "SignatureExpired") or "signature expired" in text:
+        return "Your clock is more than 15 minutes off. Sync it (e.g. enable NTP) and retry."
+    if code in ("UnknownOperationException", "NotImplemented", "InvalidAction") or \
+            "not implemented" in text:
+        return ("This operation may not be emulated yet. Check the fidelity notes and open "
+                "issues at https://github.com/aws/aws-emulator/issues.")
+    if "certificate_verify_failed" in text or "sslerror" in text or "ssl:" in text:
+        return ("TLS check failed. The emulator makes a new ca.pem on every start: make sure "
+                "AWS_CA_BUNDLE points to ~/.aws/emulator/<port>/ca.pem (not a copy) and that "
+                "the port belongs to the emulator ('awsemu status').")
+    if "could not connect" in text or "endpointconnectionerror" in text or \
+            "connectionclosederror" in text:
+        return "Nothing answered. Is the emulator running? Try 'awsemu status'."
+    return None
+
+
 def describe_error(exc: Exception) -> str:
     """Short, readable text for botocore errors."""
     response = getattr(exc, "response", None)

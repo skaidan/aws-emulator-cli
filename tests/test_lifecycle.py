@@ -1,15 +1,15 @@
 """End-to-end lifecycle tests against tests/fake_emulator.py (no real emulator needed)."""
 
 import json
-import shutil
+import os
 
 import pytest
 
 from awsemu import runtime
 from awsemu.cli import cli
-from awsemu.paths import InstanceFiles
+from awsemu.paths import CliFiles, InstanceFiles
 
-pytestmark = pytest.mark.skipif(shutil.which("openssl") is None, reason="needs openssl")
+pytest.importorskip("cryptography", reason="the fake emulator needs cryptography")
 
 
 def test_start_status_logs_stop(runner, fake_binary, free_port):
@@ -82,6 +82,7 @@ def test_exec_requires_running_emulator(runner, free_port):
     assert result.exit_code == 1 and "awsemu --port" in result.output
 
 
+@pytest.mark.skipif(os.name == "nt", reason="uses sh")
 def test_exec_passes_environment(runner, fake_binary, free_port, tmp_path):
     port = str(free_port)
     assert runner.invoke(cli, ["--port", port, "start", "--native"]).exit_code == 0
@@ -113,3 +114,88 @@ def test_aliases_and_prefixes(runner, free_port):
     assert "stopped" in result.output
     result = runner.invoke(cli, ["st"])
     assert "ambiguous" in result.output
+
+
+def test_random_port(runner, fake_binary):
+    result = runner.invoke(cli, ["--port", "0", "start", "--native"])
+    assert result.exit_code == 0, result.output
+    assert "free port" in result.output
+    ports = [p for p in os.listdir(InstanceFiles(0).dir.parent) if p.isdigit()]
+    assert len(ports) == 1
+    port = int(ports[0])
+    assert f"https://127.0.0.1:{port}" in result.output
+    assert f"--port {port}" in result.output
+    try:
+        state = runtime.State.load(port)
+        assert state is not None and state.port == port
+        log = runner.invoke(cli, ["--port", str(port), "logs"])
+        assert "emulator server information" in log.output
+    finally:
+        assert runner.invoke(cli, ["--port", str(port), "stop"]).exit_code == 0
+
+
+def test_random_port_refused_with_docker(runner, monkeypatch):
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    result = runner.invoke(cli, ["--port", "0", "start", "--docker"])
+    assert result.exit_code == 1 and "Port 0 doesn't work with Docker" in result.output
+
+
+def test_logs_survive_stop(runner, fake_binary, free_port):
+    port = str(free_port)
+    assert runner.invoke(cli, ["--port", port, "start", "--native"]).exit_code == 0
+    runner.invoke(cli, ["--port", port, "stop"])
+    result = runner.invoke(cli, ["--port", port, "logs", "--grep", "shutting"])
+    assert result.exit_code == 0, result.output
+    assert "shutting down" in result.output
+    assert "emulator server information" not in result.output  # --grep filtered it
+
+
+def test_forced_stop_cleans_files(runner, fake_binary, free_port, monkeypatch):
+    monkeypatch.setenv("FAKE_EMULATOR_IGNORE_STOP", "1")
+    port = str(free_port)
+    assert runner.invoke(cli, ["--port", port, "start", "--native"]).exit_code == 0
+    files = InstanceFiles(free_port)
+    result = runner.invoke(cli, ["--port", port, "stop", "--timeout", "1"])
+    assert result.exit_code == 1 and "stop --force" in result.output
+    assert files.ca.exists()  # still running
+    result = runner.invoke(cli, ["--port", port, "stop", "--force"])
+    assert result.exit_code == 0, result.output
+    assert "forced pid" in result.output and "removed files it left behind" in result.output
+    assert not files.dir.exists()
+    assert runtime.State.load(free_port) is None
+
+
+def test_stop_removes_stale_files_after_crash(runner, free_port):
+    files = InstanceFiles(free_port)
+    files.dir.mkdir(parents=True)
+    for name in ("config", "ca.pem", "emulator_credentials"):
+        (files.dir / name).write_text("stale")
+    result = runner.invoke(cli, ["--port", str(free_port), "stop"])
+    assert result.exit_code == 0 and "removed stale files" in result.output
+    assert not files.dir.exists()
+
+
+def test_cleanup_leaves_unknown_files(free_port):
+    files = InstanceFiles(free_port)
+    files.dir.mkdir(parents=True)
+    files.ca.write_text("stale")
+    (files.dir / "mine.txt").write_text("keep me")
+    assert runtime.cleanup_instance_files(free_port) is True
+    assert (files.dir / "mine.txt").exists() and not files.ca.exists()
+
+
+def test_awsemu_binary_env(runner, monkeypatch, free_port):
+    import sys
+    from pathlib import Path
+
+    fake = Path(__file__).with_name("fake_emulator.py")
+    monkeypatch.setenv("PATH", os.path.dirname(sys.executable))
+    monkeypatch.setenv("AWSEMU_BINARY", f'"{sys.executable}" "{fake}"')
+    assert runtime.resolve_mode("auto") == "native"
+    port = str(free_port)
+    result = runner.invoke(cli, ["--port", port, "start"])
+    assert result.exit_code == 0, result.output
+    try:
+        assert CliFiles(free_port).log.exists()
+    finally:
+        runner.invoke(cli, ["--port", port, "stop"])

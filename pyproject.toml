@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aws-emulator-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "A friendly CLI for AWS Emulator: start/stop it, wire your shell to it and browse what's inside."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,7 +25,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "cryptography>=42"]
 
 [project.scripts]
 awsemu = "awsemu.cli:main"
@@ -40,3 +40,4 @@ packages = ["src/awsemu"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = ["real: runs against the real aws-emulator (set AWSEMU_REAL_TESTS=1)"]

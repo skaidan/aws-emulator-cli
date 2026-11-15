@@ -58,14 +58,22 @@ awsemu image build     # solo si vas a usar Docker
 | `awsemu start --docker` / `--native` | Fuerza el modo. |
 | `awsemu start --no-auth` | Sin firma SigV4 (el emulador acepta cualquier petición). |
 | `awsemu start --idle-timeout 600` | Se para solo tras 10 min sin llamadas (útil en CI). |
+| `awsemu --port 0 start` | El sistema elige un puerto libre (solo en modo nativo); `awsemu` te dice cuál. |
 | `awsemu start -f` | En primer plano, como el binario original (Ctrl+C para parar). |
 | `awsemu start -- <opciones>` | Pasa opciones extra al emulador tal cual. |
 | `awsemu status` / `awsemu ps` | Estado, modo, PID o contenedor, uptime. `--all` para todos los puertos, `--json` para scripts. |
-| `awsemu logs [-f] [--grep TEXTO]` | Logs JSON del emulador, legibles. `--raw` para verlos tal cual. |
-| `awsemu stop [--all]` | Parada limpia (SIGTERM): el emulador borra sus ficheros. |
+| `awsemu logs [-f] [--grep TEXTO]` | Logs JSON del emulador, legibles, también después de pararlo y también en Docker. `--raw` para verlos tal cual. |
+| `awsemu stop [--all]` | Parada limpia (SIGTERM; Ctrl+Break en Windows): el emulador borra sus ficheros. |
+| `awsemu stop --force` | Si no responde. `awsemu` borra los ficheros que el emulador no haya podido limpiar. |
 | `awsemu restart` / `awsemu reset` | Reinicia. El emulador guarda todo en memoria, así que esto **vacía el estado**. |
 
 Varias instancias a la vez: usa `--port` (o la variable `AWSEMU_PORT`) en cualquier comando.
+
+Si el binario no está en el `PATH`, indícalo con `AWSEMU_BINARY` (admite argumentos):
+
+```bash
+export AWSEMU_BINARY=/opt/aws-emulator/bin/aws-emulator
+```
 
 ```bash
 awsemu --port 9300 start
@@ -150,7 +158,8 @@ awsemu start --no-telemetry        # solo para esta ejecución
 
 ## Limitaciones
 
-- `--port 0` (puerto aleatorio) no está soportado: `awsemu` necesita conocer el puerto de antemano.
+- `--port 0` solo funciona en modo nativo: Docker no puede redirigir un puerto que se elige al arrancar.
+- En Windows, la parada limpia usa Ctrl+Break. Si el emulador no la atiende, `awsemu` borra igualmente sus ficheros, pero el emulador no llega a enviar su último lote de telemetría.
 - El emulador no persiste datos: al parar o reiniciar se pierde todo. Es así por diseño del emulador.
 - S3 Control no funciona contra el emulador (el SDK siempre mete el ID de cuenta en el host). Es una limitación del emulador.
 
@@ -167,7 +176,15 @@ pip install -e '.[dev]'
 pytest
 ```
 
-Los tests no necesitan el emulador real: `tests/fake_emulator.py` imita su comportamiento documentado (opciones, ficheros, health check, log JSON y limpieza al recibir SIGTERM). Los comandos de servicios se prueban con un cliente boto3 simulado.
+Los tests normales no necesitan el emulador real: `tests/fake_emulator.py` imita su comportamiento documentado (opciones, `-p 0`, ficheros, health check, log JSON y limpieza al pararse). Los comandos de servicios se prueban con un cliente boto3 simulado. Corren en Linux, macOS y Windows.
+
+Los tests contra el emulador real (`tests/test_real.py`) se activan aparte:
+
+```bash
+AWSEMU_REAL_TESTS=1 pytest -m real -v
+```
+
+En CI, el job `real-emulator` descarga el `.deb` oficial, verifica su firma GPG y los ejecuta.
 
 ## Licencia
 

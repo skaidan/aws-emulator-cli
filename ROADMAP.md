@@ -19,16 +19,17 @@ Objetivo: que arrancar, conectar y explorar el emulador sea un comando cada cosa
 
 ---
 
-## v0.2 — Validado contra el emulador real
+## v0.2 — Validado contra el emulador real ✅
 
 Objetivo: confiar en que todo funciona contra el emulador de verdad, en todos los sistemas.
 
-- ⬜ **Tests de integración reales en CI**: un job que instale el `.deb` oficial en Ubuntu, arranque el emulador y ejecute S3, SQS, DynamoDB y `overview` contra él. Marcarlos con `@pytest.mark.real` para poder lanzarlos también en local.
-- ⬜ **Parada limpia en Windows**: en Windows, `os.kill(SIGTERM)` cierra el proceso a la fuerza y el emulador no llega a borrar sus ficheros. Hay que enviar `CTRL_BREAK_EVENT` al grupo de procesos y añadir un test.
-- ⬜ **CI en macOS y Windows**: generar el certificado del emulador falso con Python en vez de con `openssl -addext`, porque LibreSSL en macOS no siempre lo soporta.
-- ⬜ **Soporte de `--port 0`**: leer el puerto real de la línea de arranque (`endpoint_url`) y guardar el estado con ese puerto.
-- ⬜ **Logs de Docker persistentes**: con `--rm`, los logs se pierden al parar. Hay que volcarlos a `~/.aws/emulator-cli/<puerto>/emulator.log` igual que en modo nativo.
-- ⬜ **Mejores errores**: traducir `AccessDenied` ("Sign the request with the emulator credentials"), `UnknownService` y los errores de TLS por certificado caducado a mensajes con solución concreta.
+- ✅ **Tests de integración reales en CI**: el job `real-emulator` descarga el `.deb` oficial, verifica su firma GPG y ejecuta `tests/test_real.py` (S3, SQS, DynamoDB, `overview`, `exec`, `restart`). En local: `AWSEMU_REAL_TESTS=1 pytest -m real`.
+- ✅ **Parada limpia en Windows**: se envía Ctrl+Break al grupo de procesos del emulador. Si tras una parada forzada (o en Windows) quedan ficheros en `~/.aws/emulator/<puerto>/`, `awsemu` los borra.
+- ✅ **CI en Linux, macOS y Windows**: el emulador falso genera su certificado con `cryptography`.
+- ✅ **Soporte de `--port 0`**: el puerto real se lee de la línea de arranque.
+- ✅ **Logs persistentes**: también en Docker, y legibles después de parar.
+- ✅ **Mejores errores**: pistas concretas para `AccessDenied`, `SignatureDoesNotMatch`, peticiones sin firmar, `UnknownService`, reloj desfasado, operaciones no emuladas y TLS.
+- ✅ `AWSEMU_BINARY` para usar un binario que no esté en el `PATH`.
 
 ## v0.3 — Más servicios
 

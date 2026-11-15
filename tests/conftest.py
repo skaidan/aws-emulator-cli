@@ -17,7 +17,7 @@ def isolated_home(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
-    for var in ("AWSEMU_HOME", "AWSEMU_PORT", "EMULATOR_CONFIG", "EMULATOR_TELEMETRY",
+    for var in ("AWSEMU_HOME", "AWSEMU_PORT", "AWSEMU_BINARY", "EMULATOR_CONFIG", "EMULATOR_TELEMETRY",
                 "AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("AWSEMU_PLAIN", "1")
@@ -41,11 +41,18 @@ def free_port():
 
 @pytest.fixture
 def fake_binary(tmp_path, monkeypatch):
-    """Put a fake 'aws-emulator' on PATH (and hide docker)."""
+    """Make tests/fake_emulator.py the 'aws-emulator' that awsemu runs.
+
+    On Linux/macOS it is a wrapper script found on PATH (the normal lookup);
+    on Windows it is set through AWSEMU_BINARY.
+    """
+    if os.name == "nt":
+        monkeypatch.setenv("AWSEMU_BINARY", f'"{sys.executable}" "{FAKE}"')
+        return FAKE
     bindir = tmp_path / "bin"
     bindir.mkdir()
     exe = bindir / "aws-emulator"
-    exe.write_text(f"#!/bin/sh\nexec {sys.executable} {FAKE} \"$@\"\n")
+    exe.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{FAKE}" "$@"\n')
     exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
-    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}/usr/bin{os.pathsep}/bin")
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}")
     return exe

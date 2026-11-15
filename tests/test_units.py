@@ -146,7 +146,9 @@ def test_docker_command_linux_matches_docs(isolated_home):
     assert f"-e HOME={isolated_home}" in joined
     root = isolated_home / ".aws" / "emulator"
     assert f"-v {root}:{root}" in joined
-    assert "--user" in cmd and "--rm" in cmd and "-d" in cmd
+    assert "--rm" in cmd and "-d" in cmd
+    if hasattr(__import__("os"), "getuid"):
+        assert "--user" in cmd
     assert cmd[-3:] == ["aws-emulator", "-p", "9297"]
 
 
@@ -195,3 +197,37 @@ def test_dynamodb_sets_and_keys():
     assert ddb.parse_key_spec("ts:n") == ("ts", "N")
     with pytest.raises(click.BadParameter):
         ddb.parse_key_spec("x:BOOL")
+
+
+# ---------------------------------------------------------------- error hints
+
+
+class FakeClientError(Exception):
+    def __init__(self, code, message=""):
+        super().__init__(f"{code}: {message}")
+        self.response = {"Error": {"Code": code, "Message": message}}
+
+
+@pytest.mark.parametrize("exc,needle", [
+    (FakeClientError("AccessDenied", "Sign the request with the emulator credentials"), "awsemu env"),
+    (FakeClientError("SignatureDoesNotMatch"), "restart"),
+    (FakeClientError("InvalidClientTokenId"), "--no-auth"),
+    (FakeClientError("UnknownService"), "aws-emulator/issues"),
+    (FakeClientError("RequestTimeTooSkewed"), "clock"),
+    (Exception("SSL: CERTIFICATE_VERIFY_FAILED"), "ca.pem"),
+])
+def test_error_hints(exc, needle):
+    from awsemu.clients import hint_for
+
+    assert needle in hint_for(exc)
+
+
+def test_no_hint_for_ordinary_errors():
+    from awsemu.clients import hint_for
+
+    assert hint_for(FakeClientError("NoSuchBucket", "The bucket does not exist")) is None
+
+
+def test_split_binary():
+    assert runtime.split_binary("aws-emulator") == ["aws-emulator"]
+    assert runtime.split_binary('"/opt/my emu/aws-emulator" --x') == ["/opt/my emu/aws-emulator", "--x"]

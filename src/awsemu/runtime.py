@@ -2,7 +2,9 @@
 
 The emulator itself always runs in the foreground and has no subcommands, so
 this module runs it in the background, remembers how (pid or container name)
-and stops it with SIGTERM, which is a clean stop for the emulator.
+and stops it cleanly: SIGTERM on Linux/macOS, Ctrl+Break on Windows. If the
+emulator can't clean up after itself (forced stop, Windows), awsemu removes the
+stale files it left in ``~/.aws/emulator/<port>/``.
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import shlex
 import shutil
 import signal
 import subprocess
@@ -18,13 +21,14 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from . import health
-from .paths import CliFiles, InstanceFiles, emulator_root
+from . import health, logs
+from .paths import CliFiles, InstanceFiles, cli_root, emulator_root
 
 BINARY = "aws-emulator"
 DEFAULT_IMAGE = "aws-emulator"
 CONTAINER_PREFIX = "awsemu-"
 PACKAGE_BASE = "https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest"
+IS_WINDOWS = os.name == "nt"
 
 DOCKERFILE_TEMPLATE = """\
 FROM public.ecr.aws/amazonlinux/amazonlinux:2023-minimal
@@ -44,6 +48,15 @@ class RuntimeErrorWithHint(RuntimeError):
         self.hint = hint
 
 
+def default_binary() -> str:
+    """The emulator command: ``$AWSEMU_BINARY`` or ``aws-emulator``.
+
+    ``AWSEMU_BINARY`` may include arguments, e.g. ``"/opt/emu/aws-emulator"`` or
+    ``"python fake_emulator.py"``.
+    """
+    return os.environ.get("AWSEMU_BINARY") or BINARY
+
+
 @dataclass
 class StartOptions:
     port: int
@@ -53,7 +66,7 @@ class StartOptions:
     idle_timeout: int | None = None
     image: str = DEFAULT_IMAGE
     memory: str = "2g"
-    binary: str = BINARY
+    binary: str = field(default_factory=default_binary)
     extra_args: list[str] = field(default_factory=list)
 
 
@@ -91,15 +104,31 @@ class State:
 # --------------------------------------------------------------------------- helpers
 
 
+def split_binary(binary: str) -> list[str]:
+    parts = shlex.split(binary, posix=not IS_WINDOWS)
+    if IS_WINDOWS:  # shlex keeps the quotes with posix=False
+        parts = [p[1:-1] if len(p) > 1 and p[0] == p[-1] == '"' else p for p in parts]
+    return parts or [BINARY]
+
+
+def binary_command(binary: str) -> list[str] | None:
+    """Resolve ``binary`` to an argv prefix, or ``None`` if it can't be found."""
+    parts = split_binary(binary)
+    exe = shutil.which(parts[0])
+    if exe is None:
+        return None
+    return [exe, *parts[1:]]
+
+
 def docker_available() -> bool:
     return shutil.which("docker") is not None
 
 
-def native_available(binary: str = BINARY) -> bool:
-    return shutil.which(binary) is not None
+def native_available(binary: str | None = None) -> bool:
+    return binary_command(binary or default_binary()) is not None
 
 
-def resolve_mode(mode: str, binary: str = BINARY) -> str:
+def resolve_mode(mode: str, binary: str | None = None) -> str:
     if mode in ("native", "docker"):
         return mode
     if mode != "auto":
@@ -110,8 +139,8 @@ def resolve_mode(mode: str, binary: str = BINARY) -> str:
         return "docker"
     raise RuntimeErrorWithHint(
         "Neither the 'aws-emulator' binary nor Docker was found.",
-        "Install the Linux package (https://github.com/aws/aws-emulator) or install "
-        "Docker and run 'awsemu image build'.",
+        "Install the Linux package (https://github.com/aws/aws-emulator), set "
+        "AWSEMU_BINARY, or install Docker and run 'awsemu image build'.",
     )
 
 
@@ -132,7 +161,8 @@ def emulator_args(opts: StartOptions) -> list[str]:
 
 
 def native_command(opts: StartOptions) -> list[str]:
-    return [opts.binary, *emulator_args(opts)]
+    prefix = binary_command(opts.binary) or split_binary(opts.binary)
+    return [*prefix, *emulator_args(opts)]
 
 
 def docker_command(opts: StartOptions, detach: bool = True,
@@ -191,10 +221,11 @@ def list_cli_containers() -> list[tuple[str, int]]:
 def pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
-    if os.name == "nt":  # pragma: no cover - windows only
-        result = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+    if IS_WINDOWS:  # pragma: no cover - windows only
+        result = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
                                 capture_output=True, text=True)
-        return str(pid) in result.stdout
+        return f'"{pid}"' in result.stdout
+    _reap(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -202,6 +233,16 @@ def pid_alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def _reap(pid: int) -> None:
+    """Collect a zombie child if we happen to be its parent."""
+    if IS_WINDOWS:  # pragma: no cover
+        return
+    try:
+        os.waitpid(pid, os.WNOHANG)
+    except ChildProcessError:
+        pass
 
 
 def detect_arch(machine: str | None = None) -> str:
@@ -220,6 +261,38 @@ def tail(path: Path, lines: int = 20) -> list[str]:
         return fh.readlines()[-lines:]
 
 
+def log_path(port: int) -> Path:
+    """Where the log of the instance on ``port`` is (also after it stopped)."""
+    state = State.load(port)
+    if state and state.log:
+        return Path(state.log)
+    return CliFiles(port).log
+
+
+INSTANCE_FILE_NAMES = ("config", "emulator_credentials", "ca.pem", "truststore.p12")
+
+
+def cleanup_instance_files(port: int) -> bool:
+    """Remove files a stopped emulator left behind. Returns True if anything was removed.
+
+    Only touches the documented files, and only when nothing listens on the port.
+    """
+    files = InstanceFiles(port)
+    if not files.dir.is_dir() or health.port_open(port):
+        return False
+    removed = False
+    for name in INSTANCE_FILE_NAMES:
+        path = files.dir / name
+        if path.exists():
+            path.unlink()
+            removed = True
+    try:
+        files.dir.rmdir()
+    except OSError:
+        pass  # not empty: something else lives there, leave it alone
+    return removed
+
+
 # --------------------------------------------------------------------------- lifecycle
 
 
@@ -232,38 +305,87 @@ def is_running(port: int) -> bool:
     return health.port_open(port)
 
 
-def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]:
-    mode = resolve_mode(opts.mode, opts.binary)
-    if health.port_open(opts.port):
-        raise RuntimeErrorWithHint(
-            f"Something is already listening on 127.0.0.1:{opts.port}.",
-            f"Run 'awsemu status' or pick another port with '--port'.")
-
-    cli_files = CliFiles(opts.port)
-    cli_files.dir.mkdir(parents=True, exist_ok=True)
-
-    if mode == "native":
-        if not native_available(opts.binary):
-            raise RuntimeErrorWithHint(f"'{opts.binary}' not found on PATH.",
-                                       "Install the package or use '--docker'.")
-        cmd = native_command(opts)
-        log_fh = cli_files.log.open("w", encoding="utf-8")
-        kwargs: dict = {"stdout": log_fh, "stderr": subprocess.STDOUT,
-                        "stdin": subprocess.DEVNULL}
-        if os.name == "nt":  # pragma: no cover
+def _popen_detached(cmd: list[str], log_file: Path, append: bool = False) -> subprocess.Popen:
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    with log_file.open("a" if append else "w", encoding="utf-8") as fh:
+        kwargs: dict = {"stdout": fh, "stderr": subprocess.STDOUT, "stdin": subprocess.DEVNULL}
+        if IS_WINDOWS:  # pragma: no cover
+            # Own process group, so Ctrl+Break can be sent to it (and only to it).
             kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
         else:
             kwargs["start_new_session"] = True
-        proc = subprocess.Popen(cmd, **kwargs)
-        log_fh.close()
-        state = State(port=opts.port, mode="native", started_at=time.time(),
-                      command=cmd, pid=proc.pid, log=str(cli_files.log))
+        return subprocess.Popen(cmd, **kwargs)
+
+
+def _wait_for_startup(log_file: Path, proc: subprocess.Popen, timeout: float) -> dict | None:
+    """Wait for the ``emulator server information`` line (used with ``-p 0``)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if log_file.exists():
+            info = logs.find_startup(tail(log_file, 200))
+            if info:
+                return info
+        if proc.poll() is not None:
+            return None
+        time.sleep(0.2)
+    return None
+
+
+def _port_from_url(url: str) -> int | None:
+    try:
+        return int(url.rsplit(":", 1)[1].split("/", 1)[0])
+    except (IndexError, ValueError):
+        return None
+
+
+def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]:
+    """Start in the background. With ``opts.port == 0`` the OS picks the port (native only).
+
+    Returns the saved state (``state.port`` is the real port) and the health result.
+    """
+    mode = resolve_mode(opts.mode, opts.binary)
+    random_port = opts.port == 0
+    if random_port and mode == "docker":
+        raise RuntimeErrorWithHint(
+            "Port 0 doesn't work with Docker: Docker can't forward a port chosen at startup.",
+            "Pick a port with --port, or use --native.")
+    if not random_port and health.port_open(opts.port):
+        raise RuntimeErrorWithHint(
+            f"Something is already listening on 127.0.0.1:{opts.port}.",
+            "Run 'awsemu status --all' or pick another port with '--port'.")
+
+    if mode == "native":
+        if not native_available(opts.binary):
+            raise RuntimeErrorWithHint(f"'{split_binary(opts.binary)[0]}' not found on PATH.",
+                                       "Install the package, set AWSEMU_BINARY, or use '--docker'.")
+        cmd = native_command(opts)
+        if random_port:
+            log_file = cli_root() / "pending" / f"{time.time_ns()}.log"
+        else:
+            log_file = CliFiles(opts.port).log
+        proc = _popen_detached(cmd, log_file)
+        port = opts.port
 
         def abort() -> str | None:
             code = proc.poll()
-            if code is not None:
-                return f"emulator exited with code {code}"
-            return None
+            return f"emulator exited with code {code}" if code is not None else None
+
+        if random_port:
+            info = _wait_for_startup(log_file, proc, wait)
+            port = _port_from_url(str((info or {}).get("endpoint_url", ""))) or 0
+            if not port:
+                reason = abort() or "no startup line with endpoint_url in the log"
+                return (State(port=0, mode="native", started_at=time.time(), command=cmd,
+                              pid=proc.pid, log=str(log_file)),
+                        health.Health(0, False, False, reason))
+            final_log = CliFiles(port).log
+            if not IS_WINDOWS:  # an open file can be renamed on POSIX
+                final_log.parent.mkdir(parents=True, exist_ok=True)
+                log_file.replace(final_log)
+                log_file = final_log
+
+        state = State(port=port, mode="native", started_at=time.time(),
+                      command=cmd, pid=proc.pid, log=str(log_file))
     else:
         if not docker_available():
             raise RuntimeErrorWithHint("Docker not found on PATH.")
@@ -276,18 +398,22 @@ def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeErrorWithHint(f"docker run failed: {result.stderr.strip()}")
+        name = container_name(opts.port)
+        # Keep a copy of the log on disk: with --rm, 'docker logs' is gone after a stop.
+        log_file = CliFiles(opts.port).log
+        _popen_detached(["docker", "logs", "-f", name], log_file)
         state = State(port=opts.port, mode="docker", started_at=time.time(),
-                      command=cmd, container=container_name(opts.port))
+                      command=cmd, container=name, log=str(log_file))
 
         def abort() -> str | None:
-            if not docker_container_running(state.container or ""):
-                return "container stopped (see 'docker logs' output above)"
+            if not docker_container_running(name):
+                return "container stopped"
             return None
 
     state.save()
-    status = health.wait_healthy(opts.port, timeout=wait, abort=abort)
+    status = health.wait_healthy(state.port, timeout=wait, abort=abort)
     if not status.healthy and abort():
-        State.clear(opts.port)
+        State.clear(state.port)
     return state, status
 
 
@@ -305,12 +431,32 @@ def run_foreground(opts: StartOptions) -> int:
         return 130
 
 
+def _send_stop(pid: int, force: bool) -> None:
+    if IS_WINDOWS:  # pragma: no cover - windows only
+        if force:
+            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+        else:
+            # The process was started in its own group; Ctrl+Break is the closest
+            # thing to SIGTERM that can be delivered to it.
+            os.kill(pid, signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+        return
+    os.kill(pid, signal.SIGKILL if force else signal.SIGTERM)
+
+
+def _wait_gone(pid: int, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while pid_alive(pid):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.2)
+    return True
+
+
 def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
     """Stop the instance on ``port``. Returns a human description of what happened."""
     state = State.load(port)
 
     if state is None:
-        # Maybe a container we started from another machine state, or nothing at all.
         name = container_name(port)
         if docker_available() and docker_container_running(name):
             state = State(port=port, mode="docker", started_at=0, command=[], container=name)
@@ -319,7 +465,8 @@ def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
                 f"An emulator is listening on port {port} but wasn't started by awsemu.",
                 "Stop it where it runs (Ctrl+C or SIGTERM).")
         else:
-            return "not running"
+            cleaned = cleanup_instance_files(port)
+            return "not running" + (" (removed stale files)" if cleaned else "")
 
     if state.mode == "docker":
         name = state.container or container_name(port)
@@ -329,33 +476,28 @@ def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
                 cmd += ["-t", str(int(timeout))]
             subprocess.run(cmd + [name], capture_output=True, text=True)
         State.clear(port)
+        cleanup_instance_files(port)
         return f"stopped container {name}"
 
     pid = state.pid or 0
     if not pid_alive(pid):
         State.clear(port)
+        cleanup_instance_files(port)
         return "was not running (cleaned up stale state)"
-    sig = signal.SIGKILL if (force and hasattr(signal, "SIGKILL")) else signal.SIGTERM
-    os.kill(pid, sig)
-    deadline = time.monotonic() + timeout
-    while pid_alive(pid) and time.monotonic() < deadline:
-        time.sleep(0.2)
-        _reap(pid)
-    if pid_alive(pid):
+
+    _send_stop(pid, force)
+    if not _wait_gone(pid, timeout):
         raise RuntimeErrorWithHint(f"pid {pid} is still running after {timeout:.0f}s.",
                                    "Try 'awsemu stop --force'.")
+    # Give the port a moment to close before deciding the files are stale.
+    for _ in range(10):
+        if not health.port_open(port):
+            break
+        time.sleep(0.1)
     State.clear(port)
-    return f"stopped pid {pid}"
-
-
-def _reap(pid: int) -> None:
-    """Collect a zombie child if we happen to be its parent."""
-    if os.name == "nt":  # pragma: no cover
-        return
-    try:
-        os.waitpid(pid, os.WNOHANG)
-    except ChildProcessError:
-        pass
+    cleaned = cleanup_instance_files(port)
+    how = "forced" if force else "stopped"
+    return f"{how} pid {pid}" + (" (removed files it left behind)" if cleaned else "")
 
 
 def build_image(image: str = DEFAULT_IMAGE, arch: str | None = None) -> int:

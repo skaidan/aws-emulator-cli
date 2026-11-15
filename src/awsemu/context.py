@@ -32,13 +32,11 @@ def handle_errors(fn):
         except Exception as exc:  # botocore errors without importing botocore here
             name = type(exc).__name__
             if name in ("ClientError", "EndpointConnectionError", "SSLError",
-                        "NoCredentialsError", "ParamValidationError", "ConnectionClosedError"):
-                from .clients import describe_error
+                        "NoCredentialsError", "ParamValidationError", "ConnectionClosedError",
+                        "WaiterError", "ReadTimeoutError", "ConnectTimeoutError"):
+                from .clients import describe_error, hint_for
 
-                hint = None
-                if name in ("EndpointConnectionError", "SSLError", "ConnectionClosedError"):
-                    hint = "Is the emulator running? Try 'awsemu status'."
-                ui.error(describe_error(exc), hint)
+                ui.error(describe_error(exc), hint_for(exc))
                 sys.exit(1)
             raise
 
