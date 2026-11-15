@@ -3,6 +3,7 @@
 | Documento | Para qué |
 | --- | --- |
 | [Primeros pasos](getting-started.md) | Instalar, arrancar el emulador (nativo o Docker) y conectar tus herramientas. |
+| [Seeds](seeds.md) | Arrancar siempre con los mismos datos: formato, validación, `apply`, `export`. |
 | [Guía de servicios](services.md) | Los 10 servicios con comandos propios y `describe ARN`, con ejemplos de flujos completos. |
 | [Tests y CI](testing.md) | Usar el emulador desde pytest, scripts y GitHub Actions. |
 | [Solución de problemas](troubleshooting.md) | Qué significa cada error y cómo arreglarlo. |

@@ -7,7 +7,7 @@ Necesitas Python 3.10 o superior.
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
 # o, desde una release concreta:
-pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.3.0/aws_emulator_cli-0.3.0-py3-none-any.whl
+pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.4.0/aws_emulator_cli-0.4.0-py3-none-any.whl
 ```
 
 Comprueba qué tienes y qué falta:
@@ -64,12 +64,14 @@ awsemu start
 | Aceptar peticiones sin firmar | `awsemu start --no-auth` |
 | Sin telemetría | `awsemu start --no-telemetry` o `awsemu config telemetry off` |
 | Verlo en primer plano | `awsemu start -f` |
+| Arrancar con datos | `awsemu start --seed seed.yaml` (ver [Seeds](seeds.md)) |
 
 ```bash
 awsemu status          # ¿está sano?
 awsemu logs -f         # su log, legible
 awsemu stop            # parada limpia
 awsemu reset           # reinicio = estado vacío (el emulador guarda todo en memoria)
+awsemu reset --seed seed.yaml   # estado vacío + tus datos de partida
 ```
 
 ## 4. Conectar tus herramientas

@@ -16,11 +16,14 @@ exit $code
 
 ## Estado limpio entre suites
 
-El emulador guarda todo en memoria y no tiene una ruta para vaciarlo. Para empezar de cero, reinícialo:
+El emulador guarda todo en memoria y no tiene una ruta para vaciarlo. Para empezar de cero, reinícialo; con un [seed](seeds.md), vuelve además con tus datos de partida:
 
 ```bash
 awsemu reset
+awsemu reset --seed tests/seed.yaml
 ```
+
+Para montar ese seed, crea el escenario a mano o con tu aplicación y expórtalo: `awsemu seed export -o tests/seed.yaml --no-secrets`.
 
 ## Varias suites en paralelo
 
@@ -51,7 +54,8 @@ PORT = os.environ.get("AWSEMU_PORT", "9297")
 
 @pytest.fixture(scope="session", autouse=True)
 def aws_emulator():
-    subprocess.run(["awsemu", "--port", PORT, "start", "--idle-timeout", "900"], check=True)
+    subprocess.run(["awsemu", "--port", PORT, "start", "--idle-timeout", "900",
+                    "--seed", "tests/seed.yaml"], check=True)
     env = subprocess.run(["awsemu", "--port", PORT, "env", "--shell", "dotenv"],
                          check=True, capture_output=True, text=True).stdout
     for var in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE"):
@@ -94,7 +98,7 @@ jobs:
           sudo apt-get install -y ./aws-emulator_amd64.deb
 
       - run: pipx install git+https://github.com/skaidan/aws-emulator-cli
-      - run: awsemu start --idle-timeout 1800
+      - run: awsemu start --idle-timeout 1800 --seed tests/seed.yaml
       - run: awsemu exec -- pytest tests/integration
       - if: always()
         run: awsemu logs -n 200

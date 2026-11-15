@@ -53,7 +53,13 @@ Revisa Python, el binario, Docker y la imagen, el AWS CLI, boto3, el estado del 
 
 **`ParameterPatternMismatchException` en SSM.** Los nombres de parámetro no pueden empezar por `aws` ni `ssm` (tampoco `/awsapp/...`), igual que en AWS.
 
-**Los recursos desaparecen.** Es por diseño: el emulador guarda todo en memoria. Al parar o reiniciar, se pierde. La v0.4 del roadmap añade *seeds* para recargar datos automáticamente.
+**Los recursos desaparecen.** Es por diseño: el emulador guarda todo en memoria. Al parar o reiniciar, se pierde. Usa un [seed](seeds.md): `awsemu start --seed seed.yaml`.
+
+**`seed apply`: "exists with a different key".** La tabla ya existe con otra clave de partición u ordenación. `apply` nunca borra: usa `awsemu reset --seed seed.yaml` para partir de cero.
+
+**`seed apply` termina con código 1.** Algún recurso falló (fila `failed` con el motivo); el resto se aplicó. Corrige y vuelve a aplicar: lo ya creado aparecerá como `unchanged`.
+
+**El seed tiene errores.** `awsemu seed validate seed.yaml` muestra todos con su línea y campo, sin tocar el emulador.
 
 **Windows: tras parar, quedan ficheros en `~/.aws/emulator/<puerto>/`.** `awsemu` intenta una parada limpia con Ctrl+Break y, si el emulador no la atiende, borra él mismo esos ficheros. `awsemu stop` en un puerto sin emulador también los limpia.
 

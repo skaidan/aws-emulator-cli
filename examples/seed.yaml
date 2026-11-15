@@ -1,0 +1,58 @@
+# Example seed for awsemu. Apply it with:
+#   awsemu seed apply examples/seed.yaml
+#   awsemu start --seed examples/seed.yaml      # start + apply
+#   awsemu reset --seed examples/seed.yaml      # empty the emulator + apply
+# Paths ('from', 'items_from') are relative to this file.
+version: 1
+
+buckets:
+  - name: shop-assets
+    objects:
+      - key: robots.txt
+        content: |
+          User-agent: *
+          Disallow:
+      - key: config/features.json
+        json: {new_checkout: true, max_items: 50}
+      - key: site/                 # a whole local folder
+        from: ./site
+
+queues:
+  - name: orders-dlq
+  - name: orders
+    dlq: orders-dlq
+    max_receive: 3
+    visibility_timeout: 30
+  - name: invoices.fifo
+    fifo: true
+    content_dedup: true
+
+tables:
+  - name: customers
+    pk: id
+    items_from: ./data/customers.json
+  - name: orders
+    pk: customer_id
+    sk: created_at:N
+    items:
+      - {customer_id: c1, created_at: 1731600000, total: 42.5, status: paid}
+      - {customer_id: c1, created_at: 1731686400, total: 120, status: pending}
+
+topics:
+  - name: order-events
+    subscriptions:
+      - sqs: orders
+        raw: true
+        filter: {type: [created, updated]}
+
+secrets:
+  - name: shop/db
+    description: Database credentials for local development
+    value: {host: localhost, port: 5432, user: shop, password: local-only}
+  - name: shop/stripe-key
+    value: sk_test_local_only
+
+parameters:
+  - {name: /shop/env, value: local}
+  - {name: /shop/allowed-origins, value: ["http://localhost:3000", "http://127.0.0.1:3000"]}
+  - {name: /shop/signing-key, value: local-signing-key, type: SecureString}

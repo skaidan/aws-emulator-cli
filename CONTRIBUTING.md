@@ -15,7 +15,7 @@ pytest
 
 | Tipo | Dónde | Cómo se ejecuta |
 | --- | --- | --- |
-| Unitarios | `tests/test_units.py` | `pytest` |
+| Unitarios | `tests/test_units.py`, `tests/test_seed.py` | `pytest` |
 | Ciclo de vida con el emulador falso | `tests/test_lifecycle.py` | `pytest` (Linux, macOS y Windows) |
 | Servicios con cliente simulado | `tests/test_services.py`, `tests/test_sns_lambda.py`, `tests/test_more_services.py` | `pytest` |
 | Contra el emulador real | `tests/test_real.py` | `AWSEMU_REAL_TESTS=1 pytest -m real -v` |
@@ -41,7 +41,8 @@ Variables para provocar casos raros: `FAKE_EMULATOR_CRASH=1` (sale con código 1
 2. Regístralo en `cli.py` (`cli.add_command(...)`).
 3. Si tiene recursos que listar, añádelo a `SERVICES` en `commands/overview.py`.
 4. Tests con `FakeClient` (ver `tests/test_services.py`) y, si puedes, un test en `tests/test_real.py`.
-5. Documenta: sección en `docs/services.md`, línea en el README, y regenera la referencia (abajo).
+5. Si tiene sentido en un seed, añade la sección en `seed.py` (campos y validación), su `_apply_*` y su exportación en `commands/seed.py`, y amplía `examples/seed.yaml`.
+6. Documenta: sección en `docs/services.md` (y `docs/seeds.md` si aplica), línea en el README, y regenera la referencia (abajo).
 
 ## Documentación
 

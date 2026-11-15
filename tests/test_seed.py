@@ -156,3 +156,12 @@ def test_start_with_invalid_seed_starts_nothing(runner, fake_binary, free_port, 
     result = runner.invoke(cli, ["--port", str(free_port), "start", "--native", "--seed", str(bad)])
     assert result.exit_code == 2 and "'pk' is required" in result.output
     assert runtime.State.load(free_port) is None
+
+
+def test_example_seed_is_valid():
+    """examples/seed.yaml is documentation: keep it valid."""
+    example = Path(__file__).resolve().parents[1] / "examples" / "seed.yaml"
+    s = seed.load_file(example)
+    assert s.warnings == []
+    assert s.count() == {"buckets": 1, "queues": 3, "tables": 2, "topics": 1, "secrets": 2,
+                         "parameters": 3}

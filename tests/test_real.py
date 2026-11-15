@@ -418,3 +418,12 @@ def test_seed_export_roundtrip_and_reset(emu, tmp_path):
 
     no_secrets = run(emu, "seed", "export", "--no-secrets").output
     assert "seed/db" not in no_secrets and "/seed/key" not in no_secrets and "/seed/host" in no_secrets
+
+
+def test_example_seed_applies(emu):
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parents[1] / "examples" / "seed.yaml"
+    results = _results(run(emu, "seed", "apply", str(example)).output)
+    assert len(results) == 12 and "failed" not in results.values(), results
+    assert "invoices.fifo" in run(emu, "sqs", "ls").output

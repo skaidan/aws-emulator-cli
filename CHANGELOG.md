@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 — 2026-11-15
+
+Seeds: el mismo estado de partida después de cada arranque o reinicio.
+
+- `awsemu seed apply FILE`: crea buckets (con objetos en texto, JSON o desde carpetas locales), colas con DLQ, tablas con items, temas con suscripciones a SQS/Lambda (con filtros y entrega raw), secretos y parámetros. Se puede repetir: informa de lo creado, actualizado o sin cambios, y nunca borra.
+- `awsemu start --seed FILE` y `awsemu reset --seed FILE`, que validan el seed antes de arrancar o parar.
+- `awsemu seed validate FILE`: errores con línea y campo, y sugerencias para campos mal escritos.
+- `awsemu seed export`: el estado actual como seed (`--no-secrets`, `--objects-dir`, `-s SECCIÓN`).
+- `examples/seed.yaml` y la guía `docs/seeds.md`.
+- Nueva dependencia: PyYAML.
+
 ## 0.3.0 — 2026-11-15
 
 Más servicios, todos probados contra el emulador real.

@@ -38,10 +38,12 @@ src/awsemu/
   clients.py      clientes boto3 explícitos por puerto; pistas de error (hint_for)
   logs.py         parseo del log JSON del emulador
   settings.py     edición de config.toml conservando comentarios
+  seed.py         formato de seed: parseo YAML con mapa de líneas y validación (sin llamadas a AWS)
   paths.py        rutas y constantes (puerto, región, cuenta 000000000000)
   ui.py           salida con Rich, o texto plano si no está o con --plain
   commands/       un módulo por servicio: overview, s3, sqs, dynamodb, sns, lambda_,
-                  secrets (secrets + ssm), events, kinesis, sfn, describe
+                  secrets (secrets + ssm), events, kinesis, sfn, describe,
+                  seed (apply idempotente, export)
   commands/_common.py  roles de servicio, políticas de cola, permisos de Lambda, códigos de error
 ```
 
@@ -56,6 +58,8 @@ src/awsemu/
 **Rich opcional en tiempo de ejecución.** Si falta, la salida es texto plano. Útil en imágenes mínimas y en CI.
 
 **Errores esperados sin traceback.** `handle_errors` convierte `RuntimeErrorWithHint` y cualquier error de botocore (incluidas las subclases que genera por código, como `NoSuchBucket`) en una línea de error y una pista. Lo demás sí se muestra con traceback: es un bug.
+
+**Seeds idempotentes y que nunca borran.** `seed apply` compara antes de escribir (secretos, parámetros, atributos de colas y suscripciones) para que repetirlo no genere versiones ni cambios innecesarios, y no elimina nada que no esté en el seed: para partir de cero está `reset --seed`. La validación es una capa aparte (`seed.py`) que se ejecuta entera antes de tocar el emulador.
 
 **No escribir en la carpeta del emulador.** El estado propio va en `~/.aws/emulator-cli/`. La única excepción es borrar, tras comprobar que el puerto está libre, los ficheros documentados que el emulador dejó al no poder pararse limpiamente.
 

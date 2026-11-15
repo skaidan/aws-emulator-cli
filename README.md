@@ -8,6 +8,7 @@ El emulador en sí es un único binario sin subcomandos: se ejecuta en primer pl
 - **Conectar tu shell** con un solo comando (`eval "$(awsemu env)"`), sin tocar tus credenciales reales.
 - **Ver qué hay dentro**: buckets, colas, tablas, funciones, secretos… en una sola pantalla.
 - **Trabajar con S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis y Step Functions** con comandos cortos y tablas legibles: DynamoDB con JSON normal, `lambda deploy` desde una carpeta, reglas de EventBridge con su destino y permisos en un paso, y `describe` para cualquier ARN.
+- **Arrancar siempre con los mismos datos** con un *seed* en YAML: `awsemu start --seed seed.yaml`, `awsemu reset --seed seed.yaml`, y `seed export` para guardar el estado actual.
 - **Diagnosticar** problemas típicos (`awsemu doctor`).
 
 ```
@@ -31,6 +32,7 @@ DynamoDB tables  1      usuarios
 ## Documentación
 
 - [Primeros pasos](docs/getting-started.md): instalar, arrancar y conectar tus herramientas.
+- [Seeds](docs/seeds.md): datos de partida reproducibles (formato, validación, `apply` y `export`).
 - [Guía de servicios](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions y `describe`, con ejemplos.
 - [Tests y CI](docs/testing.md): pytest, scripts y GitHub Actions.
 - [Solución de problemas](docs/troubleshooting.md): qué significa cada error.
@@ -47,7 +49,7 @@ Requisitos: Python 3.10+ y **una** de estas dos opciones para ejecutar el emulad
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
 # o una versión concreta, desde las releases:
-pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.3.0/aws_emulator_cli-0.3.0-py3-none-any.whl
+pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.4.0/aws_emulator_cli-0.4.0-py3-none-any.whl
 ```
 
 Todas las versiones: [Releases](https://github.com/skaidan/aws-emulator-cli/releases).
@@ -161,6 +163,18 @@ Y además `awsemu secrets`, `ssm`, `events`, `kinesis`, `sfn` y `describe ARN`: 
 
 Para cualquier otro servicio u operación: `awsemu aws <servicio> <operación> ...`.
 
+### Seeds
+
+```bash
+awsemu seed validate seed.yaml     # errores con línea y campo
+awsemu start --seed seed.yaml      # arrancar + aplicar
+awsemu seed apply seed.yaml        # se puede repetir: crea, actualiza o deja igual
+awsemu reset --seed seed.yaml      # estado vacío + seed
+awsemu seed export -o seed.yaml    # el estado actual, como seed
+```
+
+Formato y detalles en [docs/seeds.md](docs/seeds.md); ejemplo completo en [examples/seed.yaml](examples/seed.yaml).
+
 ### Configuración del emulador
 
 ```bash
@@ -187,12 +201,12 @@ awsemu start --no-telemetry        # solo para esta ejecución
 
 - `--port 0` solo funciona en modo nativo: Docker no puede redirigir un puerto que se elige al arrancar.
 - En Windows, la parada limpia usa Ctrl+Break. Si el emulador no la atiende, `awsemu` borra igualmente sus ficheros, pero el emulador no llega a enviar su último lote de telemetría.
-- El emulador no persiste datos: al parar o reiniciar se pierde todo. Es así por diseño del emulador.
+- El emulador no persiste datos: al parar o reiniciar se pierde todo. Es así por diseño del emulador; los [seeds](docs/seeds.md) lo resuelven.
 - S3 Control no funciona contra el emulador (el SDK siempre mete el ID de cuenta en el host). Es una limitación del emulador.
 
 ## Roadmap
 
-Hecho: ciclo de vida nativo y Docker, validación contra el emulador real en Linux, macOS y Windows (v0.2), y 10 servicios con comandos propios más `describe` (v0.3). Lo que viene: seeds para arrancar con datos reproducibles (v0.4), plugin de pytest, GitHub Action y `awsemu.toml` por proyecto (v0.5), y autocompletado y una TUI (v0.6). Detalles en [ROADMAP.md](ROADMAP.md) y cambios por versión en [CHANGELOG.md](CHANGELOG.md).
+Hecho: ciclo de vida nativo y Docker, validación contra el emulador real en Linux, macOS y Windows (v0.2), y 10 servicios con comandos propios más `describe` (v0.3), y seeds para arrancar con datos reproducibles (v0.4). Lo que viene: plugin de pytest, GitHub Action y `awsemu.toml` por proyecto (v0.5), y autocompletado y una TUI (v0.6). Detalles en [ROADMAP.md](ROADMAP.md) y cambios por versión en [CHANGELOG.md](CHANGELOG.md).
 
 ## Desarrollo
 

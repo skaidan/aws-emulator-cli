@@ -45,14 +45,17 @@ Objetivo: cubrir los servicios que más se usan en tests de aplicaciones. Todo p
 
 Aprendido en CI: el emulador no envía la salida de Lambda a CloudWatch Logs; `lambda invoke` muestra el log de cada invocación.
 
-## v0.4 — Estado reproducible (seeds)
+## v0.4 — Estado reproducible (seeds) ✅
 
-Objetivo: arrancar siempre con los mismos datos. El emulador lo guarda todo en memoria y no tiene ruta de reset, así que esto tiene que resolverlo el CLI.
+Objetivo: arrancar siempre con los mismos datos. El emulador lo guarda todo en memoria y no tiene ruta de reset, así que esto lo resuelve el CLI.
 
-- ⬜ **`awsemu seed apply seed.yaml`**: fichero declarativo con buckets (y objetos desde carpetas locales), colas con sus DLQ, tablas con items, secretos y parámetros. Debe ser idempotente.
-- ⬜ **`awsemu start --seed seed.yaml`** y **`awsemu reset --seed`**: reiniciar y volver a cargar los datos en un solo paso.
-- ⬜ **`awsemu snapshot export > seed.yaml`**: volcar el estado actual a un seed, para capturar un escenario creado a mano.
-- ⬜ Validación del fichero con mensajes claros (línea y campo exactos).
+- ✅ **`awsemu seed apply seed.yaml`**: fichero declarativo con buckets (y objetos en línea, JSON o desde carpetas locales), colas con sus DLQ, tablas con items (en línea o desde fichero), temas con suscripciones, secretos y parámetros. Idempotente: crea, actualiza o deja igual, y nunca borra.
+- ✅ **`awsemu start --seed`** y **`awsemu reset --seed`**: el seed se valida antes de arrancar o parar nada.
+- ✅ **`awsemu seed export`**: vuelca el estado actual a un seed (secretos opcionales, binarios a una carpeta).
+- ✅ **Validación** con línea y campo exactos, sugerencias para campos mal escritos y `awsemu seed validate`.
+- ✅ Ejemplo completo en `examples/seed.yaml`, validado en los tests y aplicado contra el emulador real en CI.
+
+Fuera de esta versión: funciones Lambda, reglas de EventBridge, streams de Kinesis y máquinas de Step Functions en el seed.
 
 ## v0.5 — Integración con proyectos y CI
 
