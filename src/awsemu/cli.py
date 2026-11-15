@@ -91,6 +91,8 @@ _start_params = [
                  help="How long to wait for the health check."),
     click.option("-f", "--foreground", is_flag=True,
                  help="Run attached to this terminal instead of in the background."),
+    click.option("--seed", "seed_file", type=click.Path(dir_okay=False), metavar="FILE",
+                 help="Apply this seed file once the emulator is healthy."),
 ]
 
 
@@ -101,9 +103,15 @@ def start_params(fn):
 
 
 def _do_start(port, docker, native, auth, telemetry, idle_timeout, image, memory, wait,
-              foreground, extra):
+              foreground, extra, seed_file=None, seed=None):
     if docker and native:
         raise click.UsageError("--docker and --native are mutually exclusive.")
+    if seed_file and foreground:
+        raise click.UsageError("--seed can't be used with --foreground.")
+    if seed_file and seed is None:
+        from .commands.seed import load_or_fail
+
+        seed = load_or_fail(seed_file)  # fail before starting anything
     opts = _start_options(port, docker, native, auth, telemetry, idle_timeout, image, memory, extra)
     if foreground:
         ui.info(f"Starting AWS Emulator on https://127.0.0.1:{port} (Ctrl+C to stop)…")
@@ -129,6 +137,11 @@ def _do_start(port, docker, native, auth, telemetry, idle_timeout, image, memory
         ("auth", "on" if files.auth_enabled() else "off"),
         ("files", str(files.dir)),
     ])
+    if seed is not None:
+        from .commands.seed import run_apply
+
+        ui.echo()
+        run_apply(seed, port)
     ui.echo()
     flag = "" if port == default_port() else f" --port {port}"
     ui.echo("Next steps:", "muted")
@@ -176,8 +189,12 @@ def stop(c: Ctx, all_: bool, force: bool, timeout: float):
 def restart(c: Ctx, **kwargs):
     """Restart the emulator. The emulator keeps state in memory, so this also resets it.
 
-    Alias: 'awsemu reset'.
+    Alias: 'awsemu reset'. With --seed, the seed is applied to the fresh emulator.
     """
+    if kwargs.get("seed_file"):
+        from .commands.seed import load_or_fail
+
+        kwargs["seed"] = load_or_fail(kwargs["seed_file"])  # validate before stopping anything
     state = runtime.State.load(c.port)
     if state and not (kwargs["docker"] or kwargs["native"]):
         kwargs["docker"] = state.mode == "docker"
@@ -579,6 +596,7 @@ from .commands import overview as _overview  # noqa: E402
 from .commands import lambda_ as _lambda  # noqa: E402
 from .commands import s3 as _s3  # noqa: E402
 from .commands import secrets as _secrets  # noqa: E402
+from .commands import seed as _seed  # noqa: E402
 from .commands import sfn as _sfn  # noqa: E402
 from .commands import sns as _sns  # noqa: E402
 from .commands import sqs as _sqs  # noqa: E402
@@ -595,6 +613,7 @@ cli.add_command(_events.events)
 cli.add_command(_kinesis.kinesis)
 cli.add_command(_sfn.sfn)
 cli.add_command(_describe.describe)
+cli.add_command(_seed.seed)
 
 
 def main() -> None:

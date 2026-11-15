@@ -317,3 +317,104 @@ def test_lambda_invoke_log_async_and_sns_subscription(emu, tmp_path):
 
     run(emu, "sns", "rm", "awsemu-to-lambda", "--yes")
     run(emu, "lambda", "rm", "awsemu-echo", "--yes")
+
+
+SEED = """\
+version: 1
+buckets:
+  - name: seed-fotos
+    objects:
+      - {key: hola.txt, content: "hola seed"}
+      - {key: web/, from: ./site}
+queues:
+  - {name: seed-dlq}
+  - {name: seed-jobs, dlq: seed-dlq, max_receive: 3, visibility_timeout: 10}
+tables:
+  - name: seed-users
+    pk: id
+    sk: created:N
+    items:
+      - {id: u1, created: 1, name: Ana, tags: [admin]}
+    items_from: users.json
+topics:
+  - name: seed-orders
+    subscriptions:
+      - {sqs: seed-jobs, raw: true, filter: {kind: [created]}}
+secrets:
+  - {name: seed/db, value: {user: app, pass: x}, description: database}
+parameters:
+  - {name: /seed/host, value: localhost}
+  - {name: /seed/key, value: abc, type: SecureString}
+  - {name: /seed/hosts, value: [a, b]}
+"""
+
+
+def _write_seed(tmp_path, text=SEED):
+    (tmp_path / "site").mkdir(exist_ok=True)
+    (tmp_path / "site" / "index.html").write_text("<h1>hola</h1>")
+    (tmp_path / "users.json").write_text(json.dumps([{"id": "u2", "created": 2, "score": 9.5}]))
+    path = tmp_path / "seed.yaml"
+    path.write_text(text)
+    return path
+
+
+def _results(output):
+    """{(kind, name): result} from the plain-text report table."""
+    out = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[0] in ("bucket", "queue", "table", "topic", "secret", "parameter"):
+            out[(parts[0], parts[1])] = parts[2]
+    return out
+
+
+def test_seed_apply_is_idempotent_and_works(emu, tmp_path):
+    path = _write_seed(tmp_path)
+    first = _results(run(emu, "seed", "apply", str(path)).output)
+    assert len(first) == 10 and set(first.values()) == {"created"}, first
+
+    # The wiring works: SNS -> SQS with the filter and raw delivery the seed asked for.
+    run(emu, "sns", "publish", "seed-orders", '{"n": 1}', "-a", "kind=created")
+    run(emu, "sns", "publish", "seed-orders", '{"n": 2}', "-a", "kind=deleted")
+    msgs = json.loads(run(emu, "sqs", "receive", "seed-jobs", "--wait", "5", "--delete", "--json").output)
+    assert [json.loads(m["Body"]) for m in msgs] == [{"n": 1}]
+    assert run(emu, "s3", "cat", "seed-fotos/web/index.html").output == "<h1>hola</h1>"
+    assert len(json.loads(run(emu, "ddb", "scan", "seed-users", "--json").output)) == 2
+    assert json.loads(run(emu, "secrets", "get", "seed/db", "--raw").output) == {"user": "app", "pass": "x"}
+    assert run(emu, "ssm", "get", "/seed/key").output.strip() == "abc"
+    assert "RedrivePolicy" in run(emu, "sqs", "info", "seed-jobs").output
+
+    # Second run: nothing to create. Buckets/tables rewrite their content ("updated").
+    second = _results(run(emu, "seed", "apply", str(path)).output)
+    assert {k: v for k, v in second.items() if k[0] not in ("bucket", "table")} == \
+        {k: "unchanged" for k in first if k[0] not in ("bucket", "table")}, second
+
+    # A changed value is updated, the rest left alone.
+    changed = _write_seed(tmp_path, SEED.replace("value: localhost", "value: db.local"))
+    third = _results(run(emu, "seed", "apply", str(changed)).output)
+    assert third[("parameter", "/seed/host")] == "updated"
+    assert third[("parameter", "/seed/key")] == "unchanged"
+    assert run(emu, "ssm", "get", "/seed/host").output.strip() == "db.local"
+
+
+def test_seed_export_roundtrip_and_reset(emu, tmp_path):
+    path = _write_seed(tmp_path)
+    run(emu, "seed", "apply", str(path))
+    exported = tmp_path / "exported.yaml"
+    out = run(emu, "seed", "export", "-o", str(exported)).output
+    assert "contains secret values" in out
+    text = exported.read_text()
+    for needle in ("seed-fotos", "hola seed", "seed-dlq", "max_receive: 3", "sk: created:N",
+                   "score: 9.5", "kind:", "seed/db", "/seed/hosts"):
+        assert needle in text, (needle, text)
+    run(emu, "seed", "validate", str(exported))
+
+    # reset --seed: empty emulator, then the exported seed brings everything back.
+    run(emu, "reset", "--native", "--no-telemetry", "--idle-timeout", "900", "--wait", "60",
+        "--seed", str(exported))
+    assert "seed-users" in run(emu, "ddb", "ls").output
+    assert run(emu, "s3", "cat", "seed-fotos/web/index.html").output == "<h1>hola</h1>"
+    assert json.loads(run(emu, "secrets", "get", "seed/db", "--raw").output)["user"] == "app"
+
+    no_secrets = run(emu, "seed", "export", "--no-secrets").output
+    assert "seed/db" not in no_secrets and "/seed/key" not in no_secrets and "/seed/host" in no_secrets

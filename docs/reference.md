@@ -23,6 +23,7 @@ Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 
 - [`restart`](#awsemu-restart) — Restart the emulator.
 - [`s3`](#awsemu-s3) — Buckets and objects.
 - [`secrets`](#awsemu-secrets) — Secrets Manager: store and read secrets.
+- [`seed`](#awsemu-seed) — Seed files: the same starting data after every start or reset.
 - [`sfn`](#awsemu-sfn) — Step Functions: state machines and executions.
 - [`shell`](#awsemu-shell) — Open a sub-shell already pointed at the emulator ('exit' to leave).
 - [`sns`](#awsemu-sns) — Topics, publishing and subscriptions.
@@ -507,7 +508,7 @@ awsemu overview [OPTIONS]
 
 Restart the emulator. The emulator keeps state in memory, so this also resets it.
 
-Alias: 'awsemu reset'.
+Alias: 'awsemu reset'. With --seed, the seed is applied to the fresh emulator.
 
 ```
 awsemu restart [OPTIONS] [EXTRA]...
@@ -524,6 +525,7 @@ awsemu restart [OPTIONS] [EXTRA]...
 | `--memory TEXT` | Docker memory limit.  [default: 2g] |
 | `--wait SECONDS` | How long to wait for the health check.  [default: 30] |
 | `-f, --foreground` | Run attached to this terminal instead of in the background. |
+| `--seed FILE` | Apply this seed file once the emulator is healthy. |
 
 ## `awsemu s3`
 
@@ -687,6 +689,50 @@ awsemu secrets rm [OPTIONS] NAME
 | --- | --- |
 | `--now` | Delete immediately, without a recovery window. |
 | `-y, --yes` |  |
+
+## `awsemu seed`
+
+Seed files: the same starting data after every start or reset.
+
+### `awsemu seed apply`
+
+Create what FILE describes. Safe to run again: existing things are updated or left alone.
+
+```bash
+awsemu seed apply seed.yaml
+awsemu start --seed seed.yaml     # start and apply in one step
+awsemu reset --seed seed.yaml     # empty state + seed
+```
+
+```
+awsemu seed apply [OPTIONS] FILE
+```
+
+### `awsemu seed export`
+
+Write what's in the emulator now as a seed file.
+
+Secret values and SecureString parameters are exported in plain text
+unless --no-secrets.
+
+```
+awsemu seed export [OPTIONS]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `-o, --output FILE` | Write to this file (default: stdout). |
+| `--objects-dir DIRECTORY` | Save binary or large S3 objects here and reference them with 'from'. |
+| `--no-secrets` | Leave out secrets and SecureString parameters. |
+| `-s, --section [buckets|queues|tables|topics|secrets|parameters]` | Only these sections. Repeatable. |
+
+### `awsemu seed validate`
+
+Check FILE without touching the emulator (errors show line and field).
+
+```
+awsemu seed validate [OPTIONS] FILE
+```
 
 ## `awsemu sfn`
 
@@ -1033,6 +1079,7 @@ awsemu start [OPTIONS] [EXTRA]...
 | `--memory TEXT` | Docker memory limit.  [default: 2g] |
 | `--wait SECONDS` | How long to wait for the health check.  [default: 30] |
 | `-f, --foreground` | Run attached to this terminal instead of in the background. |
+| `--seed FILE` | Apply this seed file once the emulator is healthy. |
 
 ## `awsemu status`
 
