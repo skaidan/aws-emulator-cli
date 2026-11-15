@@ -46,9 +46,11 @@ Requisitos: Python 3.10+ y **una** de estas dos opciones para ejecutar el emulad
 
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
-# o bien
-pip install git+https://github.com/skaidan/aws-emulator-cli
+# o una versión concreta, desde las releases:
+pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.3.0/aws_emulator_cli-0.3.0-py3-none-any.whl
 ```
+
+Todas las versiones: [Releases](https://github.com/skaidan/aws-emulator-cli/releases).
 
 Después:
 
@@ -190,7 +192,7 @@ awsemu start --no-telemetry        # solo para esta ejecución
 
 ## Roadmap
 
-Lo que viene: validación contra el emulador real, más servicios (SNS, Lambda, Secrets…), seeds para arrancar con datos reproducibles, plugin de pytest, GitHub Action y una TUI. Detalles en [ROADMAP.md](ROADMAP.md).
+Hecho: ciclo de vida nativo y Docker, validación contra el emulador real en Linux, macOS y Windows (v0.2), y 10 servicios con comandos propios más `describe` (v0.3). Lo que viene: seeds para arrancar con datos reproducibles (v0.4), plugin de pytest, GitHub Action y `awsemu.toml` por proyecto (v0.5), y autocompletado y una TUI (v0.6). Detalles en [ROADMAP.md](ROADMAP.md) y cambios por versión en [CHANGELOG.md](CHANGELOG.md).
 
 ## Desarrollo
 
