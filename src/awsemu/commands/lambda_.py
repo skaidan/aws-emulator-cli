@@ -13,6 +13,7 @@ import click
 
 from .. import ui
 from ..clients import client
+from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx
 from ._common import ensure_service_role, is_error, parse_kv
 
@@ -131,7 +132,7 @@ def ls(c: Ctx):
 
 
 @lambda_.command(name="deploy")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("function"))
 @click.argument("source", type=click.Path(exists=True, path_type=Path))
 @click.option("--handler", help="e.g. app.handler (guessed from the code if omitted).")
 @click.option("--runtime", help="e.g. python3.12, nodejs20.x (guessed if omitted).")
@@ -189,7 +190,7 @@ def deploy(c: Ctx, name: str, source: Path, handler, runtime, role, env_pairs, t
 
 
 @lambda_.command(name="invoke")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("function"))
 @click.argument("payload", required=False)
 @click.option("--file", "file_", type=click.File("r"), help="Payload from a file ('-' = stdin).")
 @click.option("--async", "is_async", is_flag=True, help="Event invocation (don't wait for the result).")
@@ -244,7 +245,7 @@ def invoke(c: Ctx, name: str, payload: str | None, file_, is_async: bool, show_l
 
 
 @lambda_.command(name="logs")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("function"))
 @click.option("-f", "--follow", is_flag=True)
 @click.option("--since", type=int, default=60, show_default=True, metavar="MINUTES")
 @pass_ctx
@@ -288,7 +289,7 @@ def logs_cmd(c: Ctx, name: str, follow: bool, since: int):
 
 
 @lambda_.command(name="info")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("function"))
 @pass_ctx
 @handle_errors
 def info(c: Ctx, name: str):
@@ -304,7 +305,7 @@ def info(c: Ctx, name: str):
 
 
 @lambda_.command(name="rm")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("function"))
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx
 @handle_errors

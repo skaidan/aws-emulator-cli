@@ -8,6 +8,7 @@ Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 
 
 
 - [`aws`](#awsemu-aws) — Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
+- [`completion`](#awsemu-completion) — Print the shell completion script (commands, options and resource names).
 - [`compose`](#awsemu-compose) — Print a Docker Compose service for the emulator (same setup as 'start --docker').
 - [`config`](#awsemu-config) — Read or change the emulator's settings file (config.toml).
 - [`describe`](#awsemu-describe) — Show any supported resource from its ARN.
@@ -17,6 +18,7 @@ Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 
 - [`env`](#awsemu-env) — Print shell commands that point the AWS CLI and SDKs at the emulator.
 - [`events`](#awsemu-events) — EventBridge: buses, rules and events.
 - [`exec`](#awsemu-exec) — Run COMMAND with the environment pointed at the emulator.
+- [`fidelity`](#awsemu-fidelity) — Fidelity scores published with each emulator release: tests passed per service.
 - [`image`](#awsemu-image) — Build the Docker image (AWS doesn't publish a prebuilt one).
 - [`init`](#awsemu-init) — Create awsemu.toml in this folder.
 - [`kinesis`](#awsemu-kinesis) — Kinesis Data Streams.
@@ -35,7 +37,9 @@ Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 
 - [`start`](#awsemu-start) — Start an emulator in the background and wait until it's healthy.
 - [`status`](#awsemu-status) — Show whether the emulator is running and healthy.
 - [`stop`](#awsemu-stop) — Stop the emulator (clean stop: it deletes its files and in-memory state).
+- [`ui`](#awsemu-ui) — Browse the emulator in the terminal: services, resources and their details.
 - [`up`](#awsemu-up) — Make sure this project's emulator is running and seeded.
+- [`watch`](#awsemu-watch) — Show resources being created, deleted or changed, live (Ctrl+C to stop).
 - [`whoami`](#awsemu-whoami) — Check that requests reach the emulator (STS GetCallerIdentity).
 
 ## `awsemu aws`
@@ -44,6 +48,22 @@ Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
 
 ```
 awsemu aws [OPTIONS] [ARGS]...
+```
+
+## `awsemu completion`
+
+Print the shell completion script (commands, options and resource names).
+
+```bash
+bash:  echo 'eval "$(awsemu completion bash)"' >> ~/.bashrc
+zsh:   echo 'eval "$(awsemu completion zsh)"' >> ~/.zshrc
+fish:  awsemu completion fish > ~/.config/fish/completions/awsemu.fish
+```
+Bucket, queue, table, topic, function, secret, parameter, stream, state
+machine and rule names are completed from the running emulator.
+
+```
+awsemu completion [OPTIONS] [bash|zsh|fish]
 ```
 
 ## `awsemu compose`
@@ -334,6 +354,31 @@ awsemu exec [OPTIONS] COMMAND...
 | Opción | Descripción |
 | --- | --- |
 | `--sdk [node|java|rust|dotnet]` |  |
+
+## `awsemu fidelity`
+
+Fidelity scores published with each emulator release: tests passed per service.
+
+```bash
+awsemu fidelity                     # every service
+awsemu fidelity s3 sqs dynamodb     # just these
+awsemu fidelity lambda --failures   # which tests fail, and how
+awsemu fidelity --release latest    # a newer release than yours?
+```
+A score counts the tests that call only that service ("k of n", as AWS
+publishes it). Data from https://github.com/aws/aws-emulator/releases.
+
+```
+awsemu fidelity [OPTIONS] [SERVICES]...
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--release VERSION` | Emulator release: 1.0.385, v1.0.385 or latest (default: your installed version). |
+| `--failures` | List the failing tests of the given services. |
+| `--sort [name|score]` | [default: name] |
+| `--refresh` | Download again instead of using the cache. |
+| `--json` |  |
 
 ## `awsemu image`
 
@@ -1162,6 +1207,17 @@ awsemu stop [OPTIONS]
 | `--force` | SIGKILL / docker kill (loses the clean shutdown). |
 | `--timeout SECONDS` | [default: 15] |
 
+## `awsemu ui`
+
+Browse the emulator in the terminal: services, resources and their details.
+
+Keys: arrows/enter to navigate, r refresh, w auto-refresh, q quit.
+Needs the 'ui' extra:  pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'
+
+```
+awsemu ui [OPTIONS]
+```
+
 ## `awsemu up`
 
 Make sure this project's emulator is running and seeded.
@@ -1179,6 +1235,27 @@ awsemu up [OPTIONS]
 | `--seed FILE` | Seed to apply (default: 'seed' from awsemu.toml). |
 | `--no-seed` | Don't apply any seed. |
 | `--wait SECONDS` | [default: 30] |
+
+## `awsemu watch`
+
+Show resources being created, deleted or changed, live (Ctrl+C to stop).
+
+Buckets show their object count, queues their visible messages and tables
+their items, so you can see your app working.
+```bash
+awsemu watch
+awsemu watch -s sqs -s dynamodb -i 1
+```
+
+```
+awsemu watch [OPTIONS]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `-s, --service [dynamodb|events|kinesis|lambda|s3|secrets|sfn|sns|sqs|ssm]` | Only these services. Repeatable (default: all). |
+| `-i, --interval SECONDS` | Time between looks.  [default: 2; 0.5<=x<=3600] |
+| `--once` | Print the current state and exit. |
 
 ## `awsemu whoami`
 

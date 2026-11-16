@@ -10,6 +10,7 @@ import click
 
 from .. import ui
 from ..clients import client
+from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx
 
 
@@ -62,7 +63,7 @@ def create(c: Ctx, name: str, shards: int):
 
 
 @kinesis.command(name="put")
-@click.argument("stream")
+@click.argument("stream", shell_complete=complete("stream"))
 @click.argument("data", required=False)
 @click.option("--file", "file_", type=click.File("rb"), help="Record data from a file ('-' = stdin).")
 @click.option("-k", "--key", help="Partition key (default: random).")
@@ -82,7 +83,7 @@ def put(c: Ctx, stream: str, data: str | None, file_, key: str | None):
 
 
 @kinesis.command(name="read")
-@click.argument("stream")
+@click.argument("stream", shell_complete=complete("stream"))
 @click.option("--from", "start", type=click.Choice(["start", "latest"]), default="start",
               show_default=True, help="Read from the oldest record or only new ones.")
 @click.option("-n", "--limit", type=int, default=100, show_default=True, help="Max records (0 = no limit).")
@@ -145,7 +146,7 @@ def read(c: Ctx, stream: str, start: str, limit: int, follow: bool, as_json: boo
 
 
 @kinesis.command(name="rm")
-@click.argument("stream")
+@click.argument("stream", shell_complete=complete("stream"))
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx
 @handle_errors

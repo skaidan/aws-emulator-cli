@@ -9,6 +9,7 @@ import click
 
 from .. import ui
 from ..clients import client
+from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx
 
 
@@ -32,7 +33,7 @@ def s3():
 
 
 @s3.command(name="ls")
-@click.argument("target", required=False)
+@click.argument("target", required=False, shell_complete=complete("s3path"))
 @click.option("-r", "--recursive", is_flag=True, help="List every key, not just one level.")
 @click.option("--json", "as_json", is_flag=True)
 @pass_ctx
@@ -84,7 +85,7 @@ def mb(c: Ctx, buckets):
 
 
 @s3.command(name="rb")
-@click.argument("bucket")
+@click.argument("bucket", shell_complete=complete("s3path"))
 @click.option("--force", is_flag=True, help="Delete all objects first.")
 @click.option("-y", "--yes", is_flag=True, help="Don't ask for confirmation.")
 @pass_ctx
@@ -115,7 +116,7 @@ def _delete_prefix(s3c, bucket: str, prefix: str) -> int:
 
 @s3.command(name="put")
 @click.argument("source", type=click.Path(exists=True, dir_okay=True, path_type=Path))
-@click.argument("target")
+@click.argument("target", shell_complete=complete("s3path"))
 @click.option("--content-type", help="Content-Type for the object(s).")
 @pass_ctx
 @handle_errors
@@ -143,7 +144,7 @@ def put(c: Ctx, source: Path, target: str, content_type: str | None):
 
 
 @s3.command(name="get")
-@click.argument("source")
+@click.argument("source", shell_complete=complete("s3path"))
 @click.argument("dest", required=False, type=click.Path(path_type=Path))
 @pass_ctx
 @handle_errors
@@ -160,7 +161,7 @@ def get(c: Ctx, source: str, dest: Path | None):
 
 
 @s3.command(name="cat")
-@click.argument("source")
+@click.argument("source", shell_complete=complete("s3path"))
 @pass_ctx
 @handle_errors
 def cat(c: Ctx, source: str):
@@ -173,7 +174,7 @@ def cat(c: Ctx, source: str):
 
 
 @s3.command(name="rm")
-@click.argument("target")
+@click.argument("target", shell_complete=complete("s3path"))
 @click.option("-r", "--recursive", is_flag=True, help="Delete every key under the prefix.")
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx
@@ -195,7 +196,7 @@ def rm(c: Ctx, target: str, recursive: bool, yes: bool):
 
 
 @s3.command(name="presign")
-@click.argument("target")
+@click.argument("target", shell_complete=complete("s3path"))
 @click.option("--expires", type=int, default=3600, show_default=True, metavar="SECONDS")
 @click.option("--put", "for_put", is_flag=True, help="URL for uploading instead of downloading.")
 @pass_ctx

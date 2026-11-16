@@ -8,6 +8,7 @@ import click
 
 from .. import ui
 from ..clients import client
+from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx
 from ._common import is_error
 
@@ -60,7 +61,7 @@ def secrets_ls(c: Ctx, as_json: bool):
 
 
 @secrets.command(name="get")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("secret"))
 @click.option("--stage", default="AWSCURRENT", show_default=True, help="Version stage.")
 @click.option("--raw", is_flag=True, help="Print the value untouched (no JSON formatting).")
 @pass_ctx
@@ -75,7 +76,7 @@ def secrets_get(c: Ctx, name: str, stage: str, raw: bool):
 
 
 @secrets.command(name="put")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("secret"))
 @click.argument("value", required=False)
 @click.option("--file", "file_", type=click.File("r"), help="Read the value from a file ('-' = stdin).")
 @click.option("--description")
@@ -107,7 +108,7 @@ def secrets_put(c: Ctx, name: str, value: str | None, file_, description: str | 
 
 
 @secrets.command(name="rm")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("secret"))
 @click.option("--now", is_flag=True, help="Delete immediately, without a recovery window.")
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx
@@ -126,7 +127,7 @@ def secrets_rm(c: Ctx, name: str, now: bool, yes: bool):
 
 
 @secrets.command(name="info")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("secret"))
 @pass_ctx
 @handle_errors
 def secrets_info(c: Ctx, name: str):
@@ -186,7 +187,7 @@ def ssm_ls(c: Ctx, path: str | None, values: bool, as_json: bool):
 
 
 @ssm.command(name="get")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("parameter"))
 @click.option("--no-decrypt", is_flag=True, help="Don't decrypt SecureString values.")
 @pass_ctx
 @handle_errors
@@ -197,7 +198,7 @@ def ssm_get(c: Ctx, name: str, no_decrypt: bool):
 
 
 @ssm.command(name="put")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("parameter"))
 @click.argument("value", required=False)
 @click.option("--file", "file_", type=click.File("r"), help="Read the value from a file ('-' = stdin).")
 @click.option("--secure", is_flag=True, help="Store as SecureString.")
@@ -220,7 +221,7 @@ def ssm_put(c: Ctx, name: str, value: str | None, file_, secure: bool, as_list: 
 
 
 @ssm.command(name="rm")
-@click.argument("names", nargs=-1, required=True)
+@click.argument("names", nargs=-1, required=True, shell_complete=complete("parameter"))
 @pass_ctx
 @handle_errors
 def ssm_rm(c: Ctx, names):

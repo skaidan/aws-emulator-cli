@@ -454,3 +454,78 @@ def test_pytest_plugin_with_real_emulator(emu, pytester):
     plugin = [] if any(ep.value == "awsemu.pytest_plugin" for ep in group) else ["-p", "awsemu.pytest_plugin"]
     result = pytester.runpytest_subprocess(*plugin, "-p", "no:cacheprovider", "--awsemu-seed", "seed.yaml", "-v")
     result.assert_outcomes(passed=2)
+
+
+def test_fidelity_for_installed_version(emu):
+    import subprocess
+
+    version = subprocess.run(["aws-emulator", "-v"], capture_output=True, text=True).stdout
+    data = json.loads(run(emu, "fidelity", "s3", "sqs", "dynamodb", "--json").output)
+    assert f"Version: {data['release'].lstrip('v')}" in version, (data["release"], version)
+    for service in ("s3", "sqs", "dynamodb"):
+        s = data["services"][service]
+        assert s["total"] > 0 and 0 <= s["passed"] <= s["total"], (service, s)
+    out = run(emu, "fidelity", "dynamodb", "--failures").output
+    assert "failing of" in out
+
+
+def test_watch_sees_changes(emu):
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    proc = subprocess.Popen([sys.executable, "-m", "awsemu", "--plain", "--port", str(emu), "watch",
+                             "-s", "sqs", "-i", "1"],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                            env={**os.environ, "AWSEMU_PLAIN": "1"})
+    try:
+        time.sleep(4)
+        run(emu, "sqs", "create", "awsemu-watched")
+        time.sleep(3)
+        run(emu, "sqs", "send", "awsemu-watched", "hola")
+        time.sleep(3)
+    finally:
+        proc.send_signal(signal.SIGINT)
+        out = proc.communicate(timeout=15)[0]
+    assert "+ queue         awsemu-watched" in out, out
+    assert "~ queue         awsemu-watched  0 → 1 message(s) (+1)" in out, out
+    run(emu, "sqs", "rm", "awsemu-watched", "--yes")
+
+
+def test_shell_completion_with_real_names(emu):
+    import subprocess
+    import sys
+
+    run(emu, "sqs", "create", "awsemu-complete-me")
+    words = f"awsemu --port {emu} sqs send awsemu-comp"
+    env = {**os.environ, "_AWSEMU_COMPLETE": "bash_complete", "COMP_WORDS": words, "COMP_CWORD": "5"}
+    out = subprocess.run([sys.executable, "-c", "from awsemu.cli import main; main()"],
+                         capture_output=True, text=True, env=env).stdout
+    assert "awsemu-complete-me" in out, out
+    run(emu, "sqs", "rm", "awsemu-complete-me", "--yes")
+
+
+def test_tui_against_real_emulator(emu):
+    pytest.importorskip("textual")
+    import asyncio
+
+    from textual.widgets import Tree
+
+    from awsemu import tui
+
+    run(emu, "ddb", "create", "awsemu-tui", "--pk", "id")
+    run(emu, "ddb", "put", "awsemu-tui", '{"id": "x", "n": 1}')
+
+    async def scenario():
+        app = tui.EmulatorApp(port=emu)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            labels = [str(n.label) for n in app.query_one(Tree).root.children]
+            assert any(label.startswith("DynamoDB tables") for label in labels), labels
+            app.show_details("dynamodb", "awsemu-tui")
+            assert app.current_details["Items (first 20)"] == [{"id": "x", "n": 1}]
+            await pilot.press("q")
+
+    asyncio.run(scenario())
+    run(emu, "ddb", "drop", "awsemu-tui", "--yes")

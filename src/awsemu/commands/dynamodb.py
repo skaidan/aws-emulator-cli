@@ -15,6 +15,7 @@ import click
 
 from .. import ui
 from ..clients import client
+from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx
 
 TYPES = {"S": "S", "N": "N", "B": "B", "STRING": "S", "NUMBER": "N", "BINARY": "B"}
@@ -131,7 +132,7 @@ def ls(c: Ctx):
 
 
 @dynamodb.command(name="describe")
-@click.argument("table")
+@click.argument("table", shell_complete=complete("table"))
 @pass_ctx
 @handle_errors
 def describe(c: Ctx, table: str):
@@ -140,7 +141,7 @@ def describe(c: Ctx, table: str):
 
 
 @dynamodb.command(name="create")
-@click.argument("table")
+@click.argument("table", shell_complete=complete("table"))
 @click.option("--pk", required=True, metavar="NAME[:S|N|B]", help="Partition key (default type S).")
 @click.option("--sk", metavar="NAME[:S|N|B]", help="Sort key.")
 @pass_ctx
@@ -162,7 +163,7 @@ def create(c: Ctx, table: str, pk: str, sk: str | None):
 
 
 @dynamodb.command(name="scan")
-@click.argument("table")
+@click.argument("table", shell_complete=complete("table"))
 @click.option("-n", "--limit", type=int, default=50, show_default=True, help="Max items (0 = all).")
 @click.option("--json", "as_json", is_flag=True, help="Print items as JSON.")
 @pass_ctx
@@ -198,7 +199,7 @@ def scan(c: Ctx, table: str, limit: int, as_json: bool):
 
 
 @dynamodb.command(name="get")
-@click.argument("table")
+@click.argument("table", shell_complete=complete("table"))
 @click.argument("key_json")
 @pass_ctx
 @handle_errors
@@ -212,7 +213,7 @@ def get(c: Ctx, table: str, key_json: str):
 
 
 @dynamodb.command(name="put")
-@click.argument("table")
+@click.argument("table", shell_complete=complete("table"))
 @click.argument("item_json", required=False)
 @click.option("--file", "file_", type=click.File("r"),
               help="JSON object, or a JSON array of objects ('-' = stdin).")
@@ -238,7 +239,7 @@ def put(c: Ctx, table: str, item_json: str | None, file_):
 
 
 @dynamodb.command(name="delete")
-@click.argument("table")
+@click.argument("table", shell_complete=complete("table"))
 @click.argument("key_json")
 @pass_ctx
 @handle_errors
@@ -249,7 +250,7 @@ def delete(c: Ctx, table: str, key_json: str):
 
 
 @dynamodb.command(name="drop")
-@click.argument("table")
+@click.argument("table", shell_complete=complete("table"))
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx
 @handle_errors

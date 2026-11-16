@@ -8,6 +8,7 @@ import click
 
 from .. import ui
 from ..clients import client
+from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx
 from ._common import allow_lambda, allow_queue, is_error, load_json_arg
 
@@ -65,14 +66,17 @@ def rules(c: Ctx, bus: str, as_json: bool):
 
 
 @events.command(name="rule")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("rule"))
 @click.option("--pattern", metavar="JSON", help='Event pattern, e.g. \'{"source": ["app.orders"]}\'.')
 @click.option("--source", "sources", multiple=True,
               help="Shortcut for a pattern matching these sources. Repeatable.")
 @click.option("--schedule", metavar="EXPR", help="e.g. 'rate(5 minutes)' (instead of a pattern).")
-@click.option("--to-sqs", "queue", metavar="QUEUE", help="Send matches to this queue (sets its policy).")
-@click.option("--to-lambda", "function", metavar="FUNCTION", help="Invoke this function (adds permission).")
-@click.option("--to-sns", "topic", metavar="TOPIC", help="Publish to this SNS topic.")
+@click.option("--to-sqs", "queue", metavar="QUEUE", help="Send matches to this queue (sets its policy).",
+              shell_complete=complete("queue"))
+@click.option("--to-lambda", "function", metavar="FUNCTION", help="Invoke this function (adds permission).",
+              shell_complete=complete("function"))
+@click.option("--to-sns", "topic", metavar="TOPIC", help="Publish to this SNS topic.",
+              shell_complete=complete("topic"))
 @bus_option
 @pass_ctx
 @handle_errors
@@ -136,7 +140,7 @@ def put(c: Ctx, source: str, detail_type: str, detail: str, bus: str):
 
 
 @events.command(name="rm")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("rule"))
 @bus_option
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx

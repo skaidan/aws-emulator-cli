@@ -8,6 +8,7 @@ import click
 
 from .. import ui
 from ..clients import client
+from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx
 
 COUNT_ATTRS = ["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible",
@@ -55,7 +56,7 @@ def ls(c: Ctx, prefix: str, as_json: bool):
 @click.option("--fifo", is_flag=True, help="FIFO queue ('.fifo' is added if missing).")
 @click.option("--dedup", is_flag=True, help="Content-based deduplication (FIFO only).")
 @click.option("--visibility-timeout", type=int, metavar="SECONDS")
-@click.option("--dlq", metavar="QUEUE", help="Dead-letter queue (name or URL).")
+@click.option("--dlq", metavar="QUEUE", help="Dead-letter queue (name or URL).", shell_complete=complete("queue"))
 @click.option("--max-receive", type=int, default=5, show_default=True,
               help="Receives before a message goes to the DLQ.")
 @pass_ctx
@@ -84,7 +85,7 @@ def create(c: Ctx, name: str, fifo: bool, dedup: bool, visibility_timeout: int |
 
 
 @sqs.command(name="send")
-@click.argument("queue")
+@click.argument("queue", shell_complete=complete("queue"))
 @click.argument("body", required=False)
 @click.option("--file", "file_", type=click.File("r"), help="Read the body from a file ('-' = stdin).")
 @click.option("--group", help="MessageGroupId (FIFO).")
@@ -121,7 +122,7 @@ def send(c: Ctx, queue: str, body: str | None, file_, group, dedup_id, delay, at
 
 
 @sqs.command(name="receive")
-@click.argument("queue")
+@click.argument("queue", shell_complete=complete("queue"))
 @click.option("-n", "--max", "max_", type=click.IntRange(1, 10), default=10, show_default=True)
 @click.option("--wait", type=click.IntRange(0, 20), default=1, show_default=True, metavar="SECONDS",
               help="Long-poll time.")
@@ -158,7 +159,7 @@ def receive(c: Ctx, queue: str, max_: int, wait: int, delete: bool, as_json: boo
 
 
 @sqs.command(name="purge")
-@click.argument("queue")
+@click.argument("queue", shell_complete=complete("queue"))
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx
 @handle_errors
@@ -172,7 +173,7 @@ def purge(c: Ctx, queue: str, yes: bool):
 
 
 @sqs.command(name="rm")
-@click.argument("queue")
+@click.argument("queue", shell_complete=complete("queue"))
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx
 @handle_errors
@@ -186,7 +187,7 @@ def rm(c: Ctx, queue: str, yes: bool):
 
 
 @sqs.command(name="info")
-@click.argument("queue")
+@click.argument("queue", shell_complete=complete("queue"))
 @pass_ctx
 @handle_errors
 def info(c: Ctx, queue: str):

@@ -27,6 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "cryptography>=42"]
+ui = ["textual>=0.80"]
 
 [project.scripts]
 awsemu = "awsemu.cli:main"

@@ -11,6 +11,7 @@ import click
 
 from .. import ui
 from ..clients import client
+from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx
 from ._common import arn, ensure_service_role, is_error, load_json_arg
 
@@ -54,7 +55,7 @@ def ls(c: Ctx):
 
 
 @sfn.command(name="deploy")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("statemachine"))
 @click.argument("definition")
 @click.option("--express", is_flag=True, help="EXPRESS type (default STANDARD).")
 @click.option("--role", metavar="ARN", help=f"Execution role (default: creates '{DEFAULT_ROLE_NAME}').")
@@ -108,7 +109,7 @@ def _history_error(s, execution_arn: str) -> str | None:
 
 
 @sfn.command(name="start")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("statemachine"))
 @click.argument("input_json", required=False, default="{}")
 @click.option("--file", "file_", type=click.File("r"), help="Input from a file ('-' = stdin).")
 @click.option("--no-wait", is_flag=True, help="Start and return without waiting for the result.")
@@ -155,7 +156,7 @@ def start(c: Ctx, name: str, input_json: str, file_, no_wait: bool, timeout: flo
 
 
 @sfn.command(name="executions")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("statemachine"))
 @click.option("-n", "--limit", type=int, default=20, show_default=True)
 @pass_ctx
 @handle_errors
@@ -170,7 +171,7 @@ def executions(c: Ctx, name: str, limit: int):
 
 
 @sfn.command(name="rm")
-@click.argument("name")
+@click.argument("name", shell_complete=complete("statemachine"))
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx
 @handle_errors

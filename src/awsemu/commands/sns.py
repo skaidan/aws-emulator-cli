@@ -8,6 +8,7 @@ import click
 
 from .. import ui
 from ..clients import client
+from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx
 from ..paths import ACCOUNT_ID, REGION
 from ._common import allow_lambda, allow_queue, parse_kv, queue_policy_allowing
@@ -95,7 +96,7 @@ def create(c: Ctx, name: str, fifo: bool):
 
 
 @sns.command(name="publish")
-@click.argument("topic")
+@click.argument("topic", shell_complete=complete("topic"))
 @click.argument("message", required=False)
 @click.option("--file", "file_", type=click.File("r"), help="Read the message from a file ('-' = stdin).")
 @click.option("--subject")
@@ -125,10 +126,11 @@ def publish(c: Ctx, topic: str, message: str | None, file_, subject, attrs, grou
 
 
 @sns.command(name="subscribe")
-@click.argument("topic")
-@click.option("--to-sqs", "queue", metavar="QUEUE",
+@click.argument("topic", shell_complete=complete("topic"))
+@click.option("--to-sqs", "queue", metavar="QUEUE", shell_complete=complete("queue"),
               help="Deliver to this SQS queue (name or URL). Sets the queue policy for you.")
-@click.option("--to-lambda", "function", metavar="FUNCTION", help="Invoke this Lambda function.")
+@click.option("--to-lambda", "function", metavar="FUNCTION", help="Invoke this Lambda function.",
+              shell_complete=complete("function"))
 @click.option("--endpoint", metavar="PROTOCOL:ENDPOINT",
               help="Any other target, e.g. 'https:https://example.test/hook'.")
 @click.option("--raw", is_flag=True, help="Raw message delivery (no SNS JSON envelope).")
@@ -170,7 +172,7 @@ def subscribe(c: Ctx, topic: str, queue, function, endpoint, raw: bool, filter_p
 
 
 @sns.command(name="subs")
-@click.argument("topic", required=False)
+@click.argument("topic", required=False, shell_complete=complete("topic"))
 @pass_ctx
 @handle_errors
 def subs(c: Ctx, topic: str | None):
@@ -191,7 +193,7 @@ def unsubscribe(c: Ctx, subscription_arn: str):
 
 
 @sns.command(name="rm")
-@click.argument("topic")
+@click.argument("topic", shell_complete=complete("topic"))
 @click.option("-y", "--yes", is_flag=True)
 @pass_ctx
 @handle_errors

@@ -705,6 +705,7 @@ from .commands import compose as _compose  # noqa: E402
 from .commands import describe as _describe  # noqa: E402
 from .commands import dynamodb as _dynamodb  # noqa: E402
 from .commands import events as _events  # noqa: E402
+from .commands import fidelity as _fidelity  # noqa: E402
 from .commands import kinesis as _kinesis  # noqa: E402
 from .commands import overview as _overview  # noqa: E402
 from .commands import lambda_ as _lambda  # noqa: E402
@@ -714,6 +715,7 @@ from .commands import seed as _seed  # noqa: E402
 from .commands import sfn as _sfn  # noqa: E402
 from .commands import sns as _sns  # noqa: E402
 from .commands import sqs as _sqs  # noqa: E402
+from .commands import watch as _watch  # noqa: E402
 
 cli.add_command(_overview.overview)
 cli.add_command(_s3.s3)
@@ -729,6 +731,48 @@ cli.add_command(_sfn.sfn)
 cli.add_command(_describe.describe)
 cli.add_command(_seed.seed)
 cli.add_command(_compose.compose)
+cli.add_command(_fidelity.fidelity)
+cli.add_command(_watch.watch)
+
+
+@cli.command(name="ui")
+@pass_ctx
+@handle_errors
+def ui_cmd(c: Ctx):
+    """Browse the emulator in the terminal: services, resources and their details.
+
+    Keys: arrows/enter to navigate, r refresh, w auto-refresh, q quit.
+    Needs the 'ui' extra:  pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'
+    """
+    try:
+        from . import tui
+    except ImportError as exc:
+        raise runtime.RuntimeErrorWithHint(
+            "The terminal UI needs Textual, which isn't installed.",
+            "pip install 'aws-emulator-cli[ui]'  (or: pip install textual)") from exc
+    _require_healthy(c.port)
+    tui.run(c.port)
+
+
+@cli.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), required=False)
+def completion(shell: str | None):
+    """Print the shell completion script (commands, options and resource names).
+
+    \b
+      bash:  echo 'eval "$(awsemu completion bash)"' >> ~/.bashrc
+      zsh:   echo 'eval "$(awsemu completion zsh)"' >> ~/.zshrc
+      fish:  awsemu completion fish > ~/.config/fish/completions/awsemu.fish
+
+    Bucket, queue, table, topic, function, secret, parameter, stream, state
+    machine and rule names are completed from the running emulator.
+    """
+    from .completion import script
+
+    shell = shell or envvars.detect_shell()
+    if shell not in ("bash", "zsh", "fish"):
+        raise click.UsageError(f"completion isn't available for {shell}; use bash, zsh or fish")
+    click.echo(script(cli, shell))
 
 
 def main() -> None:
