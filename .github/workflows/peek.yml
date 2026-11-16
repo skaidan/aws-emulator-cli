@@ -1,0 +1,19 @@
+name: Peek at emulator release notes (temporary)
+on:
+  push:
+    branches: [tmp-release-notes]
+jobs:
+  peek:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for t in latest; do
+            gh api repos/aws/aws-emulator/releases/$t --jq '.tag_name, .published_at, .body'
+          done
+          echo ----
+          gh api "repos/aws/aws-emulator/releases?per_page=5" --jq '.[] | .tag_name + "  " + (.body | split("\n") | map(select(test("(?i)fidelity|suite|evaluation"))) | join(" || "))'
+          echo ----
+          gh api repos/aws/aws-emulator-evaluation-suite/tags --jq '.[].name'
+          curl -fsSL https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/versions.json | head -c 600
