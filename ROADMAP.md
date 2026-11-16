@@ -80,6 +80,47 @@ Objetivo: explorar el emulador sin recordar comandos.
 
 Aprendido en CI: el emulador no registra las llamadas a la API (ni con `RUST_LOG=debug`), así que `watch` muestra el efecto en los recursos en lugar de las llamadas. Las puntuaciones están en un `scores.json.gz` adjunto a cada release, con el resultado de cada prueba y los servicios que llama.
 
+## v0.7 — Preparar la publicación
+
+Objetivo: decidir lo que es difícil de cambiar una vez que otros instalan y usan `awsemu`.
+
+- ⬜ **Nombre definitivo.** "aws-emulator-cli" usa la marca AWS; para un proyecto no oficial publicado en PyPI y Homebrew puede causar problemas o confundirse con algo oficial. Elegir nombre de paquete (y, si cambia, de comando), comprobar que está libre en PyPI, Homebrew y GitHub, y renombrar con un periodo de transición.
+- ⬜ **Documentación en inglés.** README y guías principales en inglés, con la versión en español enlazada (o al revés), para llegar a más gente. Los mensajes del CLI ya están en inglés.
+- ⬜ **Salida estable.** Fijar y documentar el formato de `--json` de cada comando y los códigos de salida (0, 1, 2, 3), con tests que detecten cambios accidentales; después de publicar, cambiarlos rompería scripts ajenos.
+- ⬜ Revisión general de mensajes, ayudas y valores por defecto antes de congelarlos.
+
+## v0.8 — ¿Funcionará mi proyecto con el emulador?
+
+Objetivo: responder antes de empezar, y actualizar el emulador sin sustos.
+
+- ⬜ **`awsemu check`**: busca en tu código e infraestructura (boto3, SDK de Node/Java/Go, Terraform, CloudFormation/CDK) las operaciones de AWS que usas y las cruza con las pruebas de fidelidad que fallan, usando el fichero de puntuaciones y el `manifest.jsonl` del repositorio de pruebas, que relaciona cada prueba con sus operaciones. Resultado del estilo: "usas `dynamodb:TransactWriteItems`: 2 diferencias conocidas, estas".
+- ⬜ **`awsemu fidelity --compare vX`**: qué ha mejorado y qué ha empeorado entre dos releases, solo en los servicios que usas.
+- ⬜ **`awsemu install [--version]`**: instalar o fijar una versión concreta del emulador (paquete en Linux, imagen en Docker), y `emulator_version` en `awsemu.toml` para que el equipo y la CI usen la misma. La GitHub Action también aceptará la versión.
+
+## v0.9 — Proxy: ver las llamadas e inyectar fallos
+
+Objetivo: lo que el emulador no da. No registra las llamadas a la API (comprobado en CI, v0.6) y, según los analistas, no simula throttling ni caídas.
+
+- ⬜ **`awsemu proxy`**: un proxy local entre tu aplicación y el emulador, con su propio certificado, que registra cada llamada (servicio, operación, recurso, latencia, código de error).
+- ⬜ **`awsemu watch --calls`** y una vista de llamadas en `awsemu ui`, alimentadas por el proxy.
+- ⬜ **Inyección de fallos**: reglas como "`ThrottlingException` en el 10 % de las llamadas a DynamoDB" o "500 ms de latencia en S3", configurables por comando y en `awsemu.toml`, para probar reintentos y resiliencia.
+- ⬜ Integración con el plugin de pytest (fixture para activar fallos en un test concreto).
+
+## v0.10 — Completar lo que ya existe
+
+Objetivo: cerrar los huecos conocidos de lo ya hecho.
+
+- ⬜ **Seeds con más servicios**: funciones Lambda (desde código local), reglas de EventBridge, streams de Kinesis y máquinas de Step Functions, también en `seed export`.
+- ⬜ **`awsemu snapshot save/restore`**: guardar y recuperar un escenario completo (el emulador no tiene snapshots), sobre la base de `seed export` y `reset --seed`.
+- ⬜ **Herramientas de infraestructura y otros lenguajes, probados en CI**: Terraform, CDK, y los SDK de Node, Java y Go contra el emulador, con guías y ejemplos. Hoy solo está probado Python.
+
+## v0.11 — Agentes de IA
+
+Objetivo: que un agente de programación pruebe su código contra el emulador sin tocar AWS.
+
+- ⬜ **Servidor MCP de `awsemu`**: herramientas para arrancar y parar el emulador, aplicar seeds, consultar recursos, ver la fidelidad de un servicio y leer las llamadas del proxy.
+- ⬜ Guía para usarlo con agentes, junto al *skill* `aws-emulator` que menciona la documentación de AWS.
+
 ## v1.0 — Distribución estable
 
 Objetivo: instalar y actualizar en cualquier sitio con un comando.
@@ -87,7 +128,7 @@ Objetivo: instalar y actualizar en cualquier sitio con un comando.
 - ✅ Releases automáticas en GitHub desde `CHANGELOG.md` (wheel y sdist adjuntos).
 - ⬜ Publicación en **PyPI** (`pipx install aws-emulator-cli`).
 - ⬜ **Homebrew tap** y binarios autónomos (PyInstaller) para quien no tenga Python.
-- ⬜ `CHANGELOG.md`, versionado semántico y promesa de estabilidad para la salida `--json`.
+- ⬜ Versionado semántico y promesa de estabilidad (la salida se fija en v0.7).
 - ✅ Documentación en `docs/`: primeros pasos, servicios, tests y CI, solución de problemas, arquitectura y referencia generada desde el código.
 - ⬜ Web de documentación (MkDocs) con guías: "tests de integración con pytest", "CI con GitHub Actions" y "Node y Java contra el emulador".
 
