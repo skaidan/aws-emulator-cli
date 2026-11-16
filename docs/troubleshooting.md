@@ -1,95 +1,95 @@
-# Solución de problemas
+# Troubleshooting
 
-Primer paso siempre:
+Always start with:
 
 ```bash
 awsemu doctor
 ```
 
-Revisa Python, el binario, Docker y la imagen, el AWS CLI, boto3, el estado del emulador, si tienes credenciales reales en la shell, si `AWS_ENDPOINT_URL` usa `localhost`, y la telemetría. Cada problema viene con su solución.
+It checks Python, the binary, Docker and the image, the AWS CLI, boto3, the emulator's state, whether you have real credentials in your shell, whether `AWS_ENDPOINT_URL` uses `localhost`, and telemetry. Every problem comes with its fix.
 
-## Errores al arrancar
+## Errors when starting
 
-| Mensaje | Causa | Solución |
+| Message | Cause | Fix |
 | --- | --- | --- |
-| `Neither the 'aws-emulator' binary nor Docker was found` | No hay forma de ejecutar el emulador. | Instala el paquete (Linux), define `AWSEMU_BINARY`, o instala Docker y ejecuta `awsemu image build`. |
-| `Docker image 'aws-emulator' not found` | AWS no publica imagen. | `awsemu image build` |
-| `Something is already listening on 127.0.0.1:9297` | Ya hay un emulador (u otra cosa) en ese puerto. | `awsemu status --all`, o usa `--port`. |
-| `The emulator did not become healthy: emulator exited with code N` | El emulador se cerró al arrancar. `awsemu` muestra el final de su log. | Lee esas líneas. Código 137 en Docker = sin memoria: sube `--memory`. |
-| `Port 0 doesn't work with Docker` | Docker no puede redirigir un puerto elegido al arrancar. | Usa un puerto fijo o `--native`. |
-| `An emulator is listening on port N but wasn't started by awsemu` | Lo arrancaste a mano. | Páralo donde corre (Ctrl+C o SIGTERM). |
-| `pid N is still running after 15s` | El emulador no responde a la parada limpia. | `awsemu stop --force` (borra también los ficheros que deje). |
+| `Neither the 'aws-emulator' binary nor Docker was found` | There's no way to run the emulator. | Install the package (Linux), set `AWSEMU_BINARY`, or install Docker and run `awsemu image build`. |
+| `Docker image 'aws-emulator' not found` | AWS doesn't publish an image. | `awsemu image build` |
+| `Something is already listening on 127.0.0.1:9297` | There's already an emulator (or something else) on that port. | `awsemu status --all`, or use `--port`. |
+| `The emulator did not become healthy: emulator exited with code N` | The emulator closed while starting. `awsemu` shows the end of its log. | Read those lines. Code 137 in Docker = out of memory: raise `--memory`. |
+| `Port 0 doesn't work with Docker` | Docker can't forward a port chosen at startup. | Use a fixed port or `--native`. |
+| `An emulator is listening on port N but wasn't started by awsemu` | You started it by hand. | Stop it where it runs (Ctrl+C or SIGTERM). |
+| `pid N is still running after 15s` | The emulator doesn't respond to the clean stop. | `awsemu stop --force` (it also deletes the files left behind). |
 
-## Errores al hablar con el emulador
+## Errors when talking to the emulator
 
-`awsemu` añade una pista concreta a estos errores; aquí está el porqué.
+`awsemu` adds a specific hint to these errors; here's why they happen.
 
-| Error | Causa | Solución |
+| Error | Cause | Fix |
 | --- | --- | --- |
-| `AccessDenied: Sign the request with the emulator credentials` | La petición se firmó con claves que el emulador no acepta: tus claves reales de AWS, o las de una ejecución anterior (cambian en cada arranque). | `eval "$(awsemu env)"` otra vez, o usa `awsemu exec` / `awsemu aws`. Asegúrate de que `AWS_ACCESS_KEY_ID` no está definida. |
-| `SignatureDoesNotMatch` | La clave secreta no es la de esta ejecución. | El emulador se reinició: recarga el entorno. |
-| `InvalidClientTokenId`, `MissingAuthenticationToken` | Petición sin firmar. | Configura las credenciales del emulador, o arráncalo con `--no-auth`. |
-| `UnknownService` (HTTP 404) | El emulador no sabe a qué servicio va la petición: casi siempre porque no está firmada; si no, el servicio no está emulado. | Firma la petición; consulta [los issues del emulador](https://github.com/aws/aws-emulator/issues). |
-| `RequestTimeTooSkewed`, `Signature expired` | Tu reloj se desvía más de 15 minutos. | Sincroniza la hora (NTP). |
-| `UnknownOperationException`, `NotImplemented` | Esa operación aún no está emulada. | Mira las notas de fidelidad de la release del emulador. |
-| `CERTIFICATE_VERIFY_FAILED` | El emulador crea un `ca.pem` nuevo en cada arranque. | `AWS_CA_BUNDLE` debe apuntar a `~/.aws/emulator/<puerto>/ca.pem` (la ruta, no una copia). Comprueba que el puerto es del emulador. |
-| `Could not connect to the endpoint URL` | No hay nada escuchando. | `awsemu status`, `awsemu start`. |
+| `AccessDenied: Sign the request with the emulator credentials` | The request was signed with keys the emulator doesn't accept: your real AWS keys, or those of an earlier run (they change on every start). | `eval "$(awsemu env)"` again, or use `awsemu exec` / `awsemu aws`. Make sure `AWS_ACCESS_KEY_ID` isn't set. |
+| `SignatureDoesNotMatch` | The secret key isn't this run's. | The emulator restarted: reload the environment. |
+| `InvalidClientTokenId`, `MissingAuthenticationToken` | Unsigned request. | Configure the emulator's credentials, or start it with `--no-auth`. |
+| `UnknownService` (HTTP 404) | The emulator can't tell which service the request is for: almost always because it isn't signed; otherwise the service isn't emulated. | Sign the request; check [the emulator's issues](https://github.com/aws/aws-emulator/issues). |
+| `RequestTimeTooSkewed`, `Signature expired` | Your clock is more than 15 minutes off. | Sync the time (NTP). |
+| `UnknownOperationException`, `NotImplemented` | That operation isn't emulated yet. | `awsemu fidelity SERVICE --failures`, and the emulator's release notes. |
+| `CERTIFICATE_VERIFY_FAILED` | The emulator creates a new `ca.pem` on every start. | `AWS_CA_BUNDLE` must point to `~/.aws/emulator/<port>/ca.pem` (the path, not a copy). Check the port belongs to the emulator. |
+| `Could not connect to the endpoint URL` | Nothing is listening. | `awsemu status`, `awsemu start`. |
 
-## Configuración del proyecto y tests
+## Project settings and tests
 
-| Mensaje | Causa | Solución |
+| Message | Cause | Fix |
 | --- | --- | --- |
-| `…/awsemu.toml: unknown setting 'X'` o `'port' must be int` | Error en `awsemu.toml` o `[tool.awsemu]`; afecta a todos los comandos de esa carpeta. | Corrígelo (el mensaje sugiere el nombre correcto) o usa `AWSEMU_CONFIG` para apuntar a otro. |
-| `awsemu: --awsemu-reuse but no healthy emulator on port N` | El plugin de pytest debía usar un emulador ya arrancado. | `awsemu up` antes de `pytest`, o quita `--awsemu-reuse`. |
-| `awsemu: invalid seed` en pytest | El seed del plugin tiene errores; no se arranca nada. | `awsemu seed validate` con el mismo fichero. |
-| `This action needs a Linux runner` | La GitHub Action solo funciona en Linux. | `runs-on: ubuntu-latest`. |
-| Los comandos usan otro puerto del que esperas | `awsemu.toml` en esta carpeta o en una superior, o `AWSEMU_PORT`. | `awsemu config show` dice qué fichero se usa; `--port` siempre gana. |
+| `…/awsemu.toml: unknown setting 'X'` or `'port' must be int` | Error in `awsemu.toml` or `[tool.awsemu]`; it affects every command in that folder. | Fix it (the message suggests the right name) or use `AWSEMU_CONFIG` to point to another file. |
+| `awsemu: --awsemu-reuse but no healthy emulator on port N` | The pytest plugin was told to use an emulator that's already running. | `awsemu up` before `pytest`, or drop `--awsemu-reuse`. |
+| `awsemu: invalid seed` in pytest | The plugin's seed has errors; nothing is started. | `awsemu seed validate` with the same file. |
+| `This action needs a Linux runner` | The GitHub Action only works on Linux. | `runs-on: ubuntu-latest`. |
+| Commands use a different port than you expect | An `awsemu.toml` in this folder or a parent, or `AWSEMU_PORT`. | `awsemu config show` tells you which file is used; `--port` always wins. |
 
-## Exploración
+## Exploring
 
-| Mensaje / síntoma | Causa | Solución |
+| Message / symptom | Cause | Fix |
 | --- | --- | --- |
-| `The terminal UI needs Textual` | Falta el extra `ui`. | `pipx install --force 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'` |
-| `couldn't reach GitHub` / `rate limit?` en `fidelity` | Sin conexión, o límite de peticiones anónimas de GitHub. | Reintenta, o define `GITHUB_TOKEN`. Lo ya descargado queda en caché. |
-| `these scores are for vX, your emulator is vY` | Has pedido otra release, o no hay binario instalado y se usó la última. | `--release` con tu versión (`aws-emulator -v`). |
-| `watch` no muestra las llamadas a la API | El emulador no las registra; `watch` muestra su efecto sobre los recursos. | Es así por diseño; ver [Explorar el emulador](explore.md#awsemu-watch-cambios-en-directo). |
-| El autocompletado no sugiere nombres | El emulador no está en marcha en ese puerto, o el script no se ha cargado. | `awsemu status`; abre una shell nueva tras añadir `awsemu completion` a tu `~/.bashrc`/`~/.zshrc`. |
+| `The terminal UI needs Textual` | The `ui` extra is missing. | `pipx install --force 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'` |
+| `couldn't reach GitHub` / `rate limit?` in `fidelity` | No connection, or GitHub's limit on anonymous requests. | Retry, or set `GITHUB_TOKEN`. What was already downloaded stays cached. |
+| `these scores are for vX, your emulator is vY` | You asked for another release, or there's no binary installed and the latest was used. | `--release` with your version (`aws-emulator -v`). |
+| `watch` doesn't show the API calls | The emulator doesn't log them; `watch` shows their effect on resources. | That's by design; see [Exploring the emulator](explore.md#awsemu-watch-live-changes). |
+| Completion doesn't suggest names | The emulator isn't running on that port, or the script isn't loaded. | `awsemu status`; open a new shell after adding `awsemu completion` to your `~/.bashrc`/`~/.zshrc`. |
 
-## Problemas típicos
+## Common problems
 
-**Mis tests llegan a AWS real.** `AWS_ENDPOINT_URL` no estaba definida en la shell que ejecuta los tests. Usa `awsemu exec -- <comando>`, o ejecuta `awsemu whoami` al principio del script: falla si la cuenta no es `000000000000`.
+**My tests reach real AWS.** `AWS_ENDPOINT_URL` wasn't set in the shell running the tests. Use `awsemu exec -- <command>`, or run `awsemu whoami` at the start of the script: it fails if the account isn't `000000000000`.
 
-**S3 falla con `localhost`.** Con `localhost`, los SDK de JavaScript, Java y Go ponen el nombre del bucket en el host (`fotos.localhost`) y el emulador no lo acepta. Usa `127.0.0.1`, que es lo que exporta `awsemu env`.
+**S3 fails with `localhost`.** With `localhost`, the JavaScript, Java and Go SDKs put the bucket name in the host (`photos.localhost`) and the emulator doesn't accept it. Use `127.0.0.1`, which is what `awsemu env` exports.
 
-**Operaciones que van a `data-127.0.0.1`.** Algunos SDK añaden un prefijo al host (Cloud Map, Step Functions síncrono, CloudWatch Logs Live Tail). `awsemu env` exporta `AWS_DISABLE_HOST_PREFIX_INJECTION=true` (AWS CLI y boto3); en otros SDK hay que desactivarlo en el cliente.
+**Operations going to `data-127.0.0.1`.** Some SDKs add a prefix to the host (Cloud Map, synchronous Step Functions, CloudWatch Logs Live Tail). `awsemu env` exports `AWS_DISABLE_HOST_PREFIX_INJECTION=true` (AWS CLI and boto3); in other SDKs you have to turn it off in the client.
 
-**S3 Control no funciona.** El SDK siempre pone el ID de cuenta en el host. Es una limitación conocida del emulador.
+**S3 Control doesn't work.** The SDK always puts the account ID in the host. It's a known emulator limitation.
 
-**Node, Java, Rust o .NET no confían en el certificado.** No leen `AWS_CA_BUNDLE`: `eval "$(awsemu env --sdk node)"` (o `java`, `rust`, `dotnet`).
+**Node, Java, Rust or .NET don't trust the certificate.** They don't read `AWS_CA_BUNDLE`: `eval "$(awsemu env --sdk node)"` (or `java`, `rust`, `dotnet`).
 
-**Mi proceso tiene que hablar con el emulador y con AWS real a la vez.** `AWS_CA_BUNDLE` sustituye los certificados de confianza. Crea un bundle con los certificados del sistema más `ca.pem`, y regenéralo tras cada arranque. `NODE_EXTRA_CA_CERTS` es la excepción: añade en vez de sustituir.
+**My process has to talk to the emulator and to real AWS at the same time.** `AWS_CA_BUNDLE` replaces the trusted certificates. Build a bundle with the system certificates plus `ca.pem`, and rebuild it after every start. `NODE_EXTRA_CA_CERTS` is the exception: it adds instead of replacing.
 
-**`lambda logs` no encuentra nada.** El emulador no envía la salida de las funciones a CloudWatch Logs. Usa `awsemu lambda invoke`, que muestra el log de esa invocación.
+**`lambda logs` finds nothing.** The emulator doesn't send function output to CloudWatch Logs. Use `awsemu lambda invoke`, which shows the log of that invocation.
 
-**`ParameterPatternMismatchException` en SSM.** Los nombres de parámetro no pueden empezar por `aws` ni `ssm` (tampoco `/awsapp/...`), igual que en AWS.
+**`ParameterPatternMismatchException` in SSM.** Parameter names can't start with `aws` or `ssm` (`/awsapp/...` included), just like in AWS.
 
-**Los recursos desaparecen.** Es por diseño: el emulador guarda todo en memoria. Al parar o reiniciar, se pierde. Usa un [seed](seeds.md): `awsemu start --seed seed.yaml`.
+**Resources disappear.** That's by design: the emulator keeps everything in memory. Stopping or restarting loses it. Use a [seed](seeds.md): `awsemu start --seed seed.yaml`.
 
-**`seed apply`: "exists with a different key".** La tabla ya existe con otra clave de partición u ordenación. `apply` nunca borra: usa `awsemu reset --seed seed.yaml` para partir de cero.
+**`seed apply`: "exists with a different key".** The table already exists with another partition or sort key. `apply` never deletes: use `awsemu reset --seed seed.yaml` to start from scratch.
 
-**`seed apply` termina con código 1.** Algún recurso falló (fila `failed` con el motivo); el resto se aplicó. Corrige y vuelve a aplicar: lo ya creado aparecerá como `unchanged`.
+**`seed apply` exits with code 1.** Some resource failed (a `failed` row with the reason); the rest was applied. Fix it and apply again: what was already created will show as `unchanged`.
 
-**El seed tiene errores.** `awsemu seed validate seed.yaml` muestra todos con su línea y campo, sin tocar el emulador.
+**The seed has errors.** `awsemu seed validate seed.yaml` shows all of them with their line and field, without touching the emulator.
 
-**Windows: tras parar, quedan ficheros en `~/.aws/emulator/<puerto>/`.** `awsemu` intenta una parada limpia con Ctrl+Break y, si el emulador no la atiende, borra él mismo esos ficheros. `awsemu stop` en un puerto sin emulador también los limpia.
+**Windows: files are left in `~/.aws/emulator/<port>/` after stopping.** `awsemu` tries a clean stop with Ctrl+Break and, if the emulator doesn't handle it, deletes those files itself. `awsemu stop` on a port with no emulator cleans them up too.
 
-**Docker en Linux: los ficheros son de root.** Pasa si `~/.aws/emulator` no existía antes de montar el volumen. `awsemu` lo crea y ejecuta el contenedor con tu UID; si ya está mal, `sudo chown -R $USER ~/.aws/emulator`.
+**Docker on Linux: the files belong to root.** It happens if `~/.aws/emulator` didn't exist before mounting the volume. `awsemu` creates it and runs the container with your UID; if it's already wrong, `sudo chown -R $USER ~/.aws/emulator`.
 
-## Información para un issue
+## Information for an issue
 
 ```bash
 awsemu --version
-awsemu doctor --plain
+awsemu --plain doctor
 awsemu status --json
 awsemu logs -n 100 --raw
 ```

@@ -93,17 +93,17 @@ def test_whoami(emu):
 
 
 def test_s3_roundtrip(emu, tmp_path):
-    src = tmp_path / "hola.txt"
-    src.write_text("hola desde el emulador\n")
+    src = tmp_path / "hello.txt"
+    src.write_text("hello from the emulator\n")
     run(emu, "s3", "mb", "awsemu-real")
     run(emu, "s3", "put", str(src), "awsemu-real/docs/")
-    assert "docs/hola.txt" in run(emu, "s3", "ls", "awsemu-real", "-r").output
-    assert run(emu, "s3", "cat", "awsemu-real/docs/hola.txt").output == "hola desde el emulador\n"
+    assert "docs/hello.txt" in run(emu, "s3", "ls", "awsemu-real", "-r").output
+    assert run(emu, "s3", "cat", "awsemu-real/docs/hello.txt").output == "hello from the emulator\n"
     dest = tmp_path / "copia.txt"
-    run(emu, "s3", "get", "awsemu-real/docs/hola.txt", str(dest))
+    run(emu, "s3", "get", "awsemu-real/docs/hello.txt", str(dest))
     assert dest.read_text() == src.read_text()
-    assert run(emu, "s3", "presign", "awsemu-real/docs/hola.txt").output.startswith(
-        f"https://127.0.0.1:{emu}/awsemu-real/docs/hola.txt?")
+    assert run(emu, "s3", "presign", "awsemu-real/docs/hello.txt").output.startswith(
+        f"https://127.0.0.1:{emu}/awsemu-real/docs/hello.txt?")
     run(emu, "s3", "rb", "awsemu-real", "--force", "--yes")
     assert "awsemu-real" not in run(emu, "s3", "ls").output
 
@@ -197,14 +197,14 @@ def test_lambda_deploy_invoke(emu, tmp_path):
         "import os\n"
         "def handler(event, context):\n"
         "    print('hello from the emulator')\n"
-        "    return {'greeting': f\"hola {event.get('name', 'nadie')}\", 'stage': os.environ.get('STAGE')}\n")
+        "    return {'greeting': f\"hello {event.get('name', 'nobody')}\", 'stage': os.environ.get('STAGE')}\n")
     out = run(emu, "lambda", "deploy", "awsemu-hello", str(src), "-e", "STAGE=local").output
     assert "created awsemu-hello" in out and "app.handler" in out
     assert "awsemu-hello" in run(emu, "lambda", "ls").output
     assert "STAGE=local" in run(emu, "lambda", "info", "awsemu-hello").output
 
     result = run(emu, "lambda", "invoke", "awsemu-hello", '{"name": "Ana"}', "--raw")
-    assert json.loads(result.output) == {"greeting": "hola Ana", "stage": "local"}
+    assert json.loads(result.output) == {"greeting": "hello Ana", "stage": "local"}
 
     # Redeploy updates in place.
     (src / "app.py").write_text("def handler(event, context):\n    return {'v': 2}\n")
@@ -262,13 +262,13 @@ def test_step_functions(emu, tmp_path):
     flow.write_text(json.dumps({
         "StartAt": "Greet",
         "States": {
-            "Greet": {"Type": "Pass", "Parameters": {"greeting.$": "States.Format('hola {}', $.name)"},
+            "Greet": {"Type": "Pass", "Parameters": {"greeting.$": "States.Format('hello {}', $.name)"},
                       "Next": "Done"},
             "Done": {"Type": "Succeed"},
         }}))
     run(emu, "sfn", "deploy", "awsemu-flow", str(flow))
     out = run(emu, "sfn", "start", "awsemu-flow", '{"name": "Ana"}', "--raw").output
-    assert json.loads(out) == {"greeting": "hola Ana"}
+    assert json.loads(out) == {"greeting": "hello Ana"}
 
     run(emu, "sfn", "deploy", "awsemu-flow",
         '{"StartAt": "X", "States": {"X": {"Type": "Fail", "Error": "Nope", "Cause": "on purpose"}}}')
@@ -322,9 +322,9 @@ def test_lambda_invoke_log_async_and_sns_subscription(emu, tmp_path):
 SEED = """\
 version: 1
 buckets:
-  - name: seed-fotos
+  - name: seed-photos
     objects:
-      - {key: hola.txt, content: "hola seed"}
+      - {key: hello.txt, content: "hello seed"}
       - {key: web/, from: ./site}
 queues:
   - {name: seed-dlq}
@@ -351,7 +351,7 @@ parameters:
 
 def _write_seed(tmp_path, text=SEED):
     (tmp_path / "site").mkdir(exist_ok=True)
-    (tmp_path / "site" / "index.html").write_text("<h1>hola</h1>")
+    (tmp_path / "site" / "index.html").write_text("<h1>hello</h1>")
     (tmp_path / "users.json").write_text(json.dumps([{"id": "u2", "created": 2, "score": 9.5}]))
     path = tmp_path / "seed.yaml"
     path.write_text(text)
@@ -378,7 +378,7 @@ def test_seed_apply_is_idempotent_and_works(emu, tmp_path):
     run(emu, "sns", "publish", "seed-orders", '{"n": 2}', "-a", "kind=deleted")
     msgs = json.loads(run(emu, "sqs", "receive", "seed-jobs", "--wait", "5", "--delete", "--json").output)
     assert [json.loads(m["Body"]) for m in msgs] == [{"n": 1}]
-    assert run(emu, "s3", "cat", "seed-fotos/web/index.html").output == "<h1>hola</h1>"
+    assert run(emu, "s3", "cat", "seed-photos/web/index.html").output == "<h1>hello</h1>"
     assert len(json.loads(run(emu, "ddb", "scan", "seed-users", "--json").output)) == 2
     assert json.loads(run(emu, "secrets", "get", "seed/db", "--raw").output) == {"user": "app", "pass": "x"}
     assert run(emu, "ssm", "get", "/seed/key").output.strip() == "abc"
@@ -404,7 +404,7 @@ def test_seed_export_roundtrip_and_reset(emu, tmp_path):
     out = run(emu, "seed", "export", "-o", str(exported)).output
     assert "contains secret values" in out
     text = exported.read_text()
-    for needle in ("seed-fotos", "hola seed", "seed-dlq", "max_receive: 3", "sk: created:N",
+    for needle in ("seed-photos", "hello seed", "seed-dlq", "max_receive: 3", "sk: created:N",
                    "score: 9.5", "kind:", "seed/db", "/seed/hosts"):
         assert needle in text, (needle, text)
     run(emu, "seed", "validate", str(exported))
@@ -413,7 +413,7 @@ def test_seed_export_roundtrip_and_reset(emu, tmp_path):
     run(emu, "reset", "--native", "--no-telemetry", "--idle-timeout", "900", "--wait", "60",
         "--seed", str(exported))
     assert "seed-users" in run(emu, "ddb", "ls").output
-    assert run(emu, "s3", "cat", "seed-fotos/web/index.html").output == "<h1>hola</h1>"
+    assert run(emu, "s3", "cat", "seed-photos/web/index.html").output == "<h1>hello</h1>"
     assert json.loads(run(emu, "secrets", "get", "seed/db", "--raw").output)["user"] == "app"
 
     no_secrets = run(emu, "seed", "export", "--no-secrets").output
@@ -434,14 +434,14 @@ def test_pytest_plugin_with_real_emulator(emu, pytester):
     import importlib.metadata
 
     pytester.makefile(".yaml", seed="version: 1\nbuckets:\n  - name: plugin-bucket\n"
-                                    "    objects: [{key: a.txt, content: hola}]\n")
+                                    "    objects: [{key: a.txt, content: hello}]\n")
     pytester.makepyfile(test_inner="""
         import boto3
 
         def test_seeded(aws_emulator):
             s3 = boto3.client("s3")                     # plain boto3: env points at the emulator
             body = s3.get_object(Bucket="plugin-bucket", Key="a.txt")["Body"].read()
-            assert body == b"hola"
+            assert body == b"hello"
             s3.create_bucket(Bucket="made-in-test")
             assert boto3.client("sts").get_caller_identity()["Account"] == "000000000000"
 
@@ -483,7 +483,7 @@ def test_watch_sees_changes(emu):
         time.sleep(4)
         run(emu, "sqs", "create", "awsemu-watched")
         time.sleep(3)
-        run(emu, "sqs", "send", "awsemu-watched", "hola")
+        run(emu, "sqs", "send", "awsemu-watched", "hello")
         time.sleep(3)
     finally:
         proc.send_signal(signal.SIGINT)

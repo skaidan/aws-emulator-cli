@@ -1,86 +1,86 @@
-# Explorar el emulador
+# Exploring the emulator
 
-Herramientas para ver qué hay dentro del emulador, qué está pasando y hasta qué punto puedes fiarte de él para un servicio concreto.
+Tools to see what's inside the emulator, what's happening, and how far you can trust it for a given service.
 
-| Quiero… | Comando |
+| I want to… | Command |
 | --- | --- |
-| Una foto de lo que hay | `awsemu overview` |
-| Navegar por servicios y recursos | `awsemu ui` |
-| Ver cambios en directo mientras mi app trabaja | `awsemu watch` |
-| Saber cómo de bien emula un servicio | `awsemu fidelity` |
-| Ver un recurso concreto | `awsemu describe ARN` |
-| Escribir menos | `awsemu completion` |
+| Get a snapshot of what's there | `awsemu overview` |
+| Browse services and resources | `awsemu ui` |
+| See live changes while my app works | `awsemu watch` |
+| Know how well a service is emulated | `awsemu fidelity` |
+| See one specific resource | `awsemu describe ARN` |
+| Type less | `awsemu completion` |
 
-## `awsemu ui`: interfaz en la terminal
+## `awsemu ui`: terminal UI
 
-Una interfaz para navegar el emulador sin recordar comandos: a la izquierda los servicios con sus recursos, a la derecha el detalle del que selecciones.
+An interface to browse the emulator without remembering commands: services and their resources on the left, details of the one you select on the right.
 
 ```bash
 pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'
 awsemu ui
 ```
 
-| Tecla | Acción |
+| Key | Action |
 | --- | --- |
-| Flechas, Intro | Moverse, abrir un servicio, ver un recurso |
-| `r` | Refrescar |
-| `w` | Activar o desactivar el refresco automático (cada 5 s) |
-| `q` | Salir |
+| Arrows, Enter | Move, open a service, show a resource |
+| `r` | Refresh |
+| `w` | Turn auto-refresh on or off (every 5 s) |
+| `q` | Quit |
 
-Qué muestra cada recurso:
+What each resource shows:
 
-| Servicio | Detalle |
+| Service | Details |
 | --- | --- |
-| S3 | Los primeros 50 objetos (clave, tamaño, fecha) |
-| SQS | Todos los atributos (mensajes visibles, en vuelo, DLQ…) |
-| DynamoDB | Descripción de la tabla y los primeros 20 items en JSON normal |
-| SNS | Atributos y suscripciones |
-| Lambda | Configuración de la función |
-| Secrets Manager | Metadatos y versiones; **nunca el valor** |
-| SSM | El parámetro; los `SecureString` se muestran como `****` |
-| Kinesis | Resumen del stream |
-| EventBridge | El bus y sus reglas |
-| Step Functions | La máquina de estados y sus últimas ejecuciones |
-| CloudWatch Logs, IAM | El grupo de logs, el rol |
+| S3 | The first 50 objects (key, size, date) |
+| SQS | Every attribute (visible and in-flight messages, DLQ…) |
+| DynamoDB | The table description and the first 20 items as plain JSON |
+| SNS | Attributes and subscriptions |
+| Lambda | The function's configuration |
+| Secrets Manager | Metadata and versions; **never the value** |
+| SSM | The parameter; `SecureString` values show as `****` |
+| Kinesis | Stream summary |
+| EventBridge | The bus and its rules |
+| Step Functions | The state machine and its latest executions |
+| CloudWatch Logs, IAM | The log group, the role |
 
-La interfaz usa [Textual](https://textual.textualize.io/), que se instala aparte con el extra `ui` para no añadir peso a quien no la use. Sin él, `awsemu ui` explica cómo instalarlo.
+The UI uses [Textual](https://textual.textualize.io/), installed separately through the `ui` extra so it doesn't add weight for those who don't use it. Without it, `awsemu ui` explains how to install it.
 
-## `awsemu watch`: cambios en directo
+## `awsemu watch`: live changes
 
-Muestra lo que se crea, se borra o cambia mientras tu aplicación o tus tests trabajan. Por ejemplo:
+Shows what gets created, deleted or changed while your application or your tests work. For example:
 
 ```
 $ awsemu watch -s sqs -s dynamodb
-kind   name      count
-queue  pedidos   0 message(s)
-table  usuarios  2 item(s)
+kind   name    count
+queue  orders  0 message(s)
+table  users   2 item(s)
 Watching dynamodb, sqs every 2s. Ctrl+C to stop.
-10:42:03  + queue         pedidos-dlq
-10:42:05  ~ queue         pedidos  0 → 3 message(s) (+3)
-10:42:07  ~ table         usuarios  2 → 5 item(s) (+3)
-10:42:09  - queue         temporal
+10:42:03  + queue         orders-dlq
+10:42:05  ~ queue         orders  0 → 3 message(s) (+3)
+10:42:07  ~ table         users  2 → 5 item(s) (+3)
+10:42:09  - queue         temporary
 ```
 
-- `+` creado, `-` borrado, `~` cambiado. Los buckets muestran su número de objetos (hasta 1000), las colas sus mensajes visibles y las tablas sus items (hasta 10 000).
-- Vigila S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, Kinesis, EventBridge (reglas) y Step Functions. Con `-s` eliges cuáles; con `-i` el intervalo (por defecto 2 s); con `--once`, solo la foto inicial.
-- Si un servicio falla en una consulta, se mantiene su último estado: un fallo puntual no aparece como "todo borrado".
+- `+` created, `-` deleted, `~` changed. Buckets show their object count (up to 1000), queues their visible messages and tables their items (up to 10,000).
+- It watches S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, Kinesis, EventBridge (rules) and Step Functions. Choose which with `-s`, the interval with `-i` (default 2 s), and just the initial snapshot with `--once`.
+- If a service fails during one look, its last state is kept: a one-off failure doesn't show up as "everything deleted".
 
-**Por qué consulta en lugar de mostrar las llamadas:** el emulador no registra las peticiones que recibe. Lo comprobamos en CI: ni con `RUST_LOG=debug` aparece en su log nada más que el arranque, la parada y el *handshake* TLS. Así que `watch` compara el estado cada pocos segundos: verás el efecto de las llamadas, no las llamadas.
+**Why it polls instead of showing the calls:** the emulator doesn't log the requests it receives. We checked in CI: even with `RUST_LOG=debug`, its log only shows startup, shutdown and the TLS handshake. So `watch` compares the state every few seconds: you see the effect of the calls, not the calls.
 
-## `awsemu fidelity`: cuánto puedes fiarte de cada servicio
+## `awsemu fidelity`: how far you can trust each service
 
-AWS publica con cada versión del emulador sus *fidelity scores*: cuántas pruebas de fidelidad pasa cada servicio (pruebas que comparan el comportamiento del emulador con el de AWS real: resultados, estado y errores exactos). `awsemu` las descarga **para la versión que tienes instalada** y te las enseña:
+With each emulator version, AWS publishes its *fidelity scores*: how many fidelity tests each service passes (tests that compare the emulator's behaviour with real AWS: results, state and exact errors). `awsemu` downloads them **for the version you have installed** and shows them to you:
 
 ```bash
-awsemu fidelity                       # todos los servicios
-awsemu fidelity s3 sqs dynamodb       # los que usas
-awsemu fidelity --sort score          # de peor a mejor
-awsemu fidelity lambda --failures     # qué pruebas fallan y cómo
-awsemu fidelity --release latest      # ¿mejora la última versión?
+awsemu fidelity                       # every service
+awsemu fidelity s3 sqs dynamodb       # the ones you use
+awsemu fidelity --sort score          # worst to best
+awsemu fidelity lambda --failures     # which tests fail and how
+awsemu fidelity --release latest      # is the latest version better?
 awsemu fidelity s3 --json
 ```
 
-Salida de ejemplo (formato real; los números son ilustrativos, consulta los tuyos con el comando):
+Sample output (real format; the numbers are illustrative, check yours with the command):
 
 ```
 release          v1.0.385
@@ -93,15 +93,15 @@ dynamodb  412/431  96%    37/41
 s3        603/688  88%    55/63
 ```
 
-- **passed / score:** pruebas que llaman solo a ese servicio, el mismo "k de n" que publica AWS. Las que combinan varios servicios aparecen aparte en **multi-service**.
-- **`--failures`:** para cada prueba que falla, la operación, qué difiere (`status`, `errorCode`…), lo que esperaba AWS y lo que devolvió el emulador. Las pruebas están en el repositorio [aws-emulator-evaluation-suite](https://github.com/aws/aws-emulator-evaluation-suite), en `behavioral/<servicio>/`.
-- La versión instalada sale de `aws-emulator -v`. Si no tienes el binario (por ejemplo, usas Docker), se usa la última release; con `--release` eliges otra.
-- Los datos se descargan de las [releases del emulador en GitHub](https://github.com/aws/aws-emulator/releases) (`scores.json.gz`, ~1 MB) y se guardan en `~/.aws/emulator-cli/fidelity/`; `--refresh` los vuelve a bajar. Si GitHub limita las peticiones, define `GITHUB_TOKEN`.
-- Compara puntuaciones solo entre releases medidas con la misma versión de las pruebas: AWS añade pruebas nuevas y el total crece.
+- **passed / score:** tests that call only that service, the same "k of n" AWS publishes. Tests combining several services are shown separately under **multi-service**.
+- **`--failures`:** for each failing test, the operation, what differs (`status`, `errorCode`…), what AWS returned and what the emulator returned. The tests live in the [aws-emulator-evaluation-suite](https://github.com/aws/aws-emulator-evaluation-suite) repository, under `behavioral/<service>/`.
+- The installed version comes from `aws-emulator -v`. If you don't have the binary (for example, you use Docker), the latest release is used; pick another with `--release`.
+- The data is downloaded from the [emulator's GitHub releases](https://github.com/aws/aws-emulator/releases) (`scores.json.gz`, ~1 MB) and cached in `~/.aws/emulator-cli/fidelity/`; `--refresh` downloads it again. If GitHub rate-limits you, set `GITHUB_TOKEN`.
+- Compare scores only between releases measured with the same version of the tests: AWS adds new tests and the total grows.
 
-Útil antes de empezar a usar un servicio con el emulador, y para saber si un fallo de tus tests puede deberse a una diferencia ya conocida.
+Useful before you start using a service with the emulator, and to know whether a failing test of yours may be due to a known difference.
 
-## Autocompletado
+## Shell completion
 
 ```bash
 # bash
@@ -112,13 +112,13 @@ echo 'eval "$(awsemu completion zsh)"' >> ~/.zshrc
 awsemu completion fish > ~/.config/fish/completions/awsemu.fish
 ```
 
-Completa comandos y opciones y, además, **los nombres de lo que hay en el emulador**:
+It completes commands and options and, on top of that, **the names of what's in the emulator**:
 
 ```bash
-awsemu sqs send <TAB>            # tus colas
-awsemu s3 cat fotos/<TAB>        # carpetas y objetos del bucket
-awsemu ddb scan <TAB>            # tus tablas
-awsemu sns subscribe pedidos --to-sqs <TAB>
+awsemu sqs send <TAB>            # your queues
+awsemu s3 cat photos/<TAB>       # folders and objects in the bucket
+awsemu ddb scan <TAB>            # your tables
+awsemu sns subscribe orders --to-sqs <TAB>
 ```
 
-Funciona con buckets (y rutas dentro de ellos), colas, tablas, temas, funciones, secretos, parámetros, streams, máquinas de estados y reglas, y respeta `--port` y `awsemu.toml`. Si el emulador no está en marcha, simplemente no sugiere nombres. PowerShell no está soportado.
+It works with buckets (and paths inside them), queues, tables, topics, functions, secrets, parameters, streams, state machines and rules, and honours `--port` and `awsemu.toml`. If the emulator isn't running, it simply doesn't suggest names. PowerShell isn't supported.

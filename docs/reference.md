@@ -1,10 +1,10 @@
-# Referencia de comandos
+# Command reference
 
-> Generado automáticamente desde el código con `python scripts/gen_reference.py`.
-> No lo edites a mano: cambia la ayuda del comando y vuelve a generarlo.
+> Generated from the code with `python scripts/gen_reference.py`.
+> Don't edit it by hand: change the command's help text and regenerate it.
 
-Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 o
-`$AWSEMU_PORT`), `--plain` (texto plano), `--version/-V`, `--help/-h`.
+Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, else
+`awsemu.toml`, else 9297), `--plain` (plain text), `--version/-V`, `--help/-h`.
 
 
 - [`aws`](#awsemu-aws) — Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
@@ -79,7 +79,7 @@ docker compose -f compose.emulator.yaml up -d
 awsemu compose [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-o, --output FILE` | Write to this file (default: stdout). |
 | `--name TEXT` | Service name.  [default: aws-emulator] |
@@ -143,7 +143,7 @@ Stop this project's emulator (same as 'awsemu stop').
 awsemu down [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--all` | Stop every instance awsemu knows about. |
 
@@ -159,7 +159,7 @@ Create an on-demand table: 'awsemu ddb create users --pk id --sk created:N'.
 awsemu dynamodb create [OPTIONS] TABLE
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--pk NAME[:S|N|B]` | Partition key (default type S).  [required] |
 | `--sk NAME[:S|N|B]` | Sort key. |
@@ -188,7 +188,7 @@ Delete a table.
 awsemu dynamodb drop [OPTIONS] TABLE
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-y, --yes` |  |
 
@@ -216,7 +216,7 @@ Write item(s): 'awsemu ddb put users '{"id": "u1", "age": 30}''.
 awsemu dynamodb put [OPTIONS] TABLE [ITEM_JSON]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--file FILENAME` | JSON object, or a JSON array of objects ('-' = stdin). |
 
@@ -228,7 +228,7 @@ Show items in a table.
 awsemu dynamodb scan [OPTIONS] TABLE
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-n, --limit INTEGER` | Max items (0 = all).  [default: 50] |
 | `--json` | Print items as JSON. |
@@ -249,7 +249,7 @@ eval "$(awsemu env --unset)"              # back to real AWS
 awsemu env [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--shell [bash|zsh|fish|powershell|dotenv|sh|pwsh]` | Syntax to print (default: detected from $SHELL). |
 | `--sdk [node|java|rust|dotnet]` | Also trust the certificate for SDKs that ignore AWS_CA_BUNDLE. Repeatable. |
@@ -284,7 +284,7 @@ Send an event: 'awsemu events put app.orders OrderCreated '{"id": 42}''.
 awsemu events put [OPTIONS] SOURCE DETAIL_TYPE [DETAIL]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--bus TEXT` | Event bus name.  [default: default] |
 
@@ -296,7 +296,7 @@ Delete a rule (its targets are removed first).
 awsemu events rm [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--bus TEXT` | Event bus name.  [default: default] |
 | `-y, --yes` |  |
@@ -314,7 +314,7 @@ awsemu events rule big-orders --pattern '{"detail": {"total": [{"numeric": [">",
 awsemu events rule [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--pattern JSON` | Event pattern, e.g. '{"source": ["app.orders"]}'. |
 | `--source TEXT` | Shortcut for a pattern matching these sources. Repeatable. |
@@ -332,7 +332,7 @@ List rules on a bus with their pattern and targets.
 awsemu events rules [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--bus TEXT` | Event bus name.  [default: default] |
 | `--json` |  |
@@ -351,7 +351,7 @@ awsemu exec --sdk node -- npm test
 awsemu exec [OPTIONS] COMMAND...
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--sdk [node|java|rust|dotnet]` |  |
 
@@ -372,7 +372,7 @@ publishes it). Data from https://github.com/aws/aws-emulator/releases.
 awsemu fidelity [OPTIONS] [SERVICES]...
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--release VERSION` | Emulator release: 1.0.385, v1.0.385 or latest (default: your installed version). |
 | `--failures` | List the failing tests of the given services. |
@@ -392,7 +392,7 @@ Build the image from the official Dockerfile recipe.
 awsemu image build [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--tag TEXT` | [default: aws-emulator] |
 | `--arch [x86_64|aarch64]` | Package architecture (default: this machine's). |
@@ -405,7 +405,7 @@ Print the Dockerfile awsemu builds from.
 awsemu image dockerfile [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--arch [x86_64|aarch64]` |  |
 
@@ -420,7 +420,7 @@ several projects can run their emulators side by side.
 awsemu init [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--seed PATH` | Seed file to reference (default: auto-detect). |
 | `--force` | Overwrite an existing awsemu.toml. |
@@ -437,7 +437,7 @@ Create a stream and wait until it's active.
 awsemu kinesis create [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--shards INTEGER RANGE` | [default: 1; 1<=x<=64] |
 
@@ -457,7 +457,7 @@ Put one record: 'awsemu kinesis put clicks '{"page": "/"}''.
 awsemu kinesis put [OPTIONS] STREAM [DATA]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--file FILENAME` | Record data from a file ('-' = stdin). |
 | `-k, --key TEXT` | Partition key (default: random). |
@@ -470,7 +470,7 @@ Read records from every shard.
 awsemu kinesis read [OPTIONS] STREAM
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--from [start|latest]` | Read from the oldest record or only new ones.  [default: start] |
 | `-n, --limit INTEGER` | Max records (0 = no limit).  [default: 100] |
@@ -485,7 +485,7 @@ Delete a stream.
 awsemu kinesis rm [OPTIONS] STREAM
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-y, --yes` |  |
 
@@ -506,7 +506,7 @@ awsemu lambda deploy api ./src --handler app.handler -e STAGE=local
 awsemu lambda deploy [OPTIONS] NAME SOURCE
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--handler TEXT` | e.g. app.handler (guessed from the code if omitted). |
 | `--runtime TEXT` | e.g. python3.12, nodejs20.x (guessed if omitted). |
@@ -531,7 +531,7 @@ Invoke a function with a JSON payload: 'awsemu lambda invoke hello '{"name": "An
 awsemu lambda invoke [OPTIONS] NAME [PAYLOAD]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--file FILENAME` | Payload from a file ('-' = stdin). |
 | `--async` | Event invocation (don't wait for the result). |
@@ -549,7 +549,7 @@ Note: AWS Emulator doesn't write Lambda output to CloudWatch Logs; use
 awsemu lambda logs [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-f, --follow` |  |
 | `--since MINUTES` | [default: 60] |
@@ -570,7 +570,7 @@ Delete a function.
 awsemu lambda rm [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-y, --yes` |  |
 
@@ -582,7 +582,7 @@ Show the emulator's log, prettified (also after it stopped).
 awsemu logs [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-f, --follow` | Keep printing new lines. |
 | `-n, --lines INTEGER` | Lines to show first.  [default: 50] |
@@ -597,7 +597,7 @@ What's inside the emulator, across common services. Alias: 'awsemu ls'.
 awsemu overview [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-s, --service [s3|sqs|dynamodb|sns|lambda|secretsmanager|ssm|kinesis|events|stepfunctions|logs|iam]` | Only these services. Repeatable. |
 | `--all` | Also list services with nothing in them. |
@@ -613,7 +613,7 @@ Alias: 'awsemu reset'. With --seed, the seed is applied to the fresh emulator.
 awsemu restart [OPTIONS] [EXTRA]...
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--docker` | Run in Docker even if the binary is installed. |
 | `--native` | Run the installed 'aws-emulator' binary. |
@@ -654,7 +654,7 @@ List buckets, or objects in BUCKET[/PREFIX].
 awsemu s3 ls [OPTIONS] [TARGET]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-r, --recursive` | List every key, not just one level. |
 | `--json` |  |
@@ -675,7 +675,7 @@ Print a presigned URL for BUCKET/KEY.
 awsemu s3 presign [OPTIONS] TARGET
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--expires SECONDS` | [default: 3600] |
 | `--put` | URL for uploading instead of downloading. |
@@ -690,7 +690,7 @@ If KEY is empty or ends with '/', the file name is appended.
 awsemu s3 put [OPTIONS] SOURCE TARGET
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--content-type TEXT` | Content-Type for the object(s). |
 
@@ -702,7 +702,7 @@ Delete a bucket.
 awsemu s3 rb [OPTIONS] BUCKET
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--force` | Delete all objects first. |
 | `-y, --yes` | Don't ask for confirmation. |
@@ -715,7 +715,7 @@ Delete an object (or a whole prefix with -r).
 awsemu s3 rm [OPTIONS] TARGET
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-r, --recursive` | Delete every key under the prefix. |
 | `-y, --yes` |  |
@@ -732,7 +732,7 @@ Print a secret's value (JSON values are pretty-printed).
 awsemu secrets get [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--stage TEXT` | Version stage.  [default: AWSCURRENT] |
 | `--raw` | Print the value untouched (no JSON formatting). |
@@ -753,7 +753,7 @@ List secrets (names only, never values).
 awsemu secrets ls [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--json` |  |
 
@@ -771,7 +771,7 @@ awsemu secrets put tls/key --file key.pem
 awsemu secrets put [OPTIONS] NAME [VALUE]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--file FILENAME` | Read the value from a file ('-' = stdin). |
 | `--description TEXT` |  |
@@ -784,7 +784,7 @@ Delete a secret (with a 7-day recovery window unless --now).
 awsemu secrets rm [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--now` | Delete immediately, without a recovery window. |
 | `-y, --yes` |  |
@@ -818,7 +818,7 @@ unless --no-secrets.
 awsemu seed export [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-o, --output FILE` | Write to this file (default: stdout). |
 | `--objects-dir DIRECTORY` | Save binary or large S3 objects here and reference them with 'from'. |
@@ -850,7 +850,7 @@ awsemu sfn deploy hello '{"StartAt": "Hi", "States": {"Hi": {"Type": "Pass", "En
 awsemu sfn deploy [OPTIONS] NAME DEFINITION
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--express` | EXPRESS type (default STANDARD). |
 | `--role ARN` | Execution role (default: creates 'awsemu-sfn-role'). |
@@ -863,7 +863,7 @@ Recent executions of a state machine.
 awsemu sfn executions [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-n, --limit INTEGER` | [default: 20] |
 
@@ -883,7 +883,7 @@ Delete a state machine.
 awsemu sfn rm [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-y, --yes` |  |
 
@@ -895,7 +895,7 @@ Start an execution and (by default) wait for its result.
 awsemu sfn start [OPTIONS] NAME [INPUT_JSON]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--file FILENAME` | Input from a file ('-' = stdin). |
 | `--no-wait` | Start and return without waiting for the result. |
@@ -910,7 +910,7 @@ Open a sub-shell already pointed at the emulator ('exit' to leave).
 awsemu shell [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--sdk [node|java|rust|dotnet]` |  |
 
@@ -926,7 +926,7 @@ Create a topic.
 awsemu sns create [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--fifo` | FIFO topic ('.fifo' is added if missing). |
 
@@ -938,7 +938,7 @@ List topics with their subscriptions.
 awsemu sns ls [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--json` |  |
 
@@ -950,7 +950,7 @@ Publish a message to a topic.
 awsemu sns publish [OPTIONS] TOPIC [MESSAGE]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--file FILENAME` | Read the message from a file ('-' = stdin). |
 | `--subject TEXT` |  |
@@ -966,7 +966,7 @@ Delete a topic (and its subscriptions).
 awsemu sns rm [OPTIONS] TOPIC
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-y, --yes` |  |
 
@@ -991,7 +991,7 @@ awsemu sns subscribe orders --to-lambda handle-order
 awsemu sns subscribe [OPTIONS] TOPIC
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--to-sqs QUEUE` | Deliver to this SQS queue (name or URL). Sets the queue policy for you. |
 | `--to-lambda FUNCTION` | Invoke this Lambda function. |
@@ -1019,7 +1019,7 @@ Create a queue.
 awsemu sqs create [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--fifo` | FIFO queue ('.fifo' is added if missing). |
 | `--dedup` | Content-based deduplication (FIFO only). |
@@ -1043,7 +1043,7 @@ List queues with their message counts.
 awsemu sqs ls [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--prefix TEXT` | Only queues whose name starts with this. |
 | `--json` |  |
@@ -1056,7 +1056,7 @@ Delete every message in a queue.
 awsemu sqs purge [OPTIONS] QUEUE
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-y, --yes` |  |
 
@@ -1068,7 +1068,7 @@ Receive messages (they stay in the queue unless --delete).
 awsemu sqs receive [OPTIONS] QUEUE
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-n, --max INTEGER RANGE` | [default: 10; 1<=x<=10] |
 | `--wait SECONDS` | Long-poll time.  [default: 1; 0<=x<=20] |
@@ -1083,7 +1083,7 @@ Delete a queue.
 awsemu sqs rm [OPTIONS] QUEUE
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-y, --yes` |  |
 
@@ -1095,7 +1095,7 @@ Send a message. BODY can also come from --file or stdin.
 awsemu sqs send [OPTIONS] QUEUE [BODY]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--file FILENAME` | Read the body from a file ('-' = stdin). |
 | `--group TEXT` | MessageGroupId (FIFO). |
@@ -1115,7 +1115,7 @@ Print a parameter's value.
 awsemu ssm get [OPTIONS] NAME
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--no-decrypt` | Don't decrypt SecureString values. |
 
@@ -1127,7 +1127,7 @@ List parameters, optionally under a PATH like /app/prod.
 awsemu ssm ls [OPTIONS] [PATH]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--values` | Also show values (SecureString shown as ****). |
 | `--json` |  |
@@ -1140,7 +1140,7 @@ Create or overwrite a parameter: 'awsemu ssm put /app/db/host localhost'.
 awsemu ssm put [OPTIONS] NAME [VALUE]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--file FILENAME` | Read the value from a file ('-' = stdin). |
 | `--secure` | Store as SecureString. |
@@ -1167,7 +1167,7 @@ Anything after '--' is passed to the emulator as-is.
 awsemu start [OPTIONS] [EXTRA]...
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--docker` | Run in Docker even if the binary is installed. |
 | `--native` | Run the installed 'aws-emulator' binary. |
@@ -1188,7 +1188,7 @@ Show whether the emulator is running and healthy.
 awsemu status [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--all` | Show every known port, not just the selected one. |
 | `--json` | Machine-readable output. |
@@ -1201,7 +1201,7 @@ Stop the emulator (clean stop: it deletes its files and in-memory state).
 awsemu stop [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--all` | Stop every instance awsemu knows about. |
 | `--force` | SIGKILL / docker kill (loses the clean shutdown). |
@@ -1230,7 +1230,7 @@ which is safe to repeat.
 awsemu up [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `--seed FILE` | Seed to apply (default: 'seed' from awsemu.toml). |
 | `--no-seed` | Don't apply any seed. |
@@ -1251,7 +1251,7 @@ awsemu watch -s sqs -s dynamodb -i 1
 awsemu watch [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 | --- | --- |
 | `-s, --service [dynamodb|events|kinesis|lambda|s3|secrets|sfn|sns|sqs|ssm]` | Only these services. Repeatable (default: all). |
 | `-i, --interval SECONDS` | Time between looks.  [default: 2; 0.5<=x<=3600] |

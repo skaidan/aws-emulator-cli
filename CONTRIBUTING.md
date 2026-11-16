@@ -1,6 +1,10 @@
-# Contribuir
+# Contributing
 
-## Entorno
+## Language
+
+English is the project's official language. Everything is written in English: code, comments, docstrings, command help and messages, documentation, the ROADMAP and CHANGELOG, examples and test data, commit messages, pull requests and issues.
+
+## Setup
 
 ```bash
 git clone https://github.com/skaidan/aws-emulator-cli && cd aws-emulator-cli
@@ -9,68 +13,68 @@ pip install -e ".[dev,ui]"
 pytest
 ```
 
-`[dev]` instala pytest y `cryptography` (la usa el emulador falso para generar su certificado); `[ui]` instala Textual para probar `awsemu ui` (sin él, esos tests se saltan).
+`[dev]` installs pytest and `cryptography` (the fake emulator uses it to generate its certificate); `[ui]` installs Textual to test `awsemu ui` (without it, those tests are skipped).
 
 ## Tests
 
-| Tipo | Dónde | Cómo se ejecuta |
+| Kind | Where | How to run |
 | --- | --- | --- |
-| Unitarios | `tests/test_units.py`, `tests/test_seed.py`, `tests/test_project.py` | `pytest` |
-| Plugin de pytest | `tests/test_pytest_plugin.py` (sesiones reales con `pytester`) | `pytest` |
-| Exploración | `tests/test_fidelity.py`, `tests/test_watch.py`, `tests/test_completion.py`, `tests/test_browse_ui.py` (con Textual: pilot de la app) | `pytest` |
-| Ciclo de vida con el emulador falso | `tests/test_lifecycle.py` | `pytest` (Linux, macOS y Windows) |
-| Servicios con cliente simulado | `tests/test_services.py`, `tests/test_sns_lambda.py`, `tests/test_more_services.py` | `pytest` |
-| Contra el emulador real | `tests/test_real.py` | `AWSEMU_REAL_TESTS=1 pytest -m real -v` |
+| Unit | `tests/test_units.py`, `tests/test_seed.py`, `tests/test_project.py` | `pytest` |
+| pytest plugin | `tests/test_pytest_plugin.py` (real sessions with `pytester`) | `pytest` |
+| Exploring | `tests/test_fidelity.py`, `tests/test_watch.py`, `tests/test_completion.py`, `tests/test_browse_ui.py` (with Textual: the app driven by its pilot) | `pytest` |
+| Lifecycle with the fake emulator | `tests/test_lifecycle.py` | `pytest` (Linux, macOS and Windows) |
+| Services with a fake client | `tests/test_services.py`, `tests/test_sns_lambda.py`, `tests/test_more_services.py` | `pytest` |
+| Against the real emulator | `tests/test_real.py` | `AWSEMU_REAL_TESTS=1 pytest -m real -v` |
 
-Los tests reales necesitan el binario `aws-emulator` en el `PATH` (o `AWSEMU_BINARY`) y boto3. En la CI los ejecuta el job `real-emulator`, que instala el `.deb` oficial y verifica su firma.
+Real tests need the `aws-emulator` binary on your `PATH` (or `AWSEMU_BINARY`) and boto3. In CI they run in the `real-emulator` job, which installs the official `.deb` and verifies its signature.
 
-Jobs de la CI: `tests` (Linux, macOS y Windows; Python 3.10 y 3.13), `real-emulator`, `docker` (modo Docker y `compose` con el emulador real) y `action` (la GitHub Action de `action.yml`).
+CI jobs: `tests` (Linux, macOS and Windows; Python 3.10 and 3.13), `real-emulator`, `docker` (Docker mode and `compose` with the real emulator) and `action` (the GitHub Action in `action.yml`).
 
-No pongas `[tool.awsemu]` en el `pyproject.toml` de este repositorio: los tests lo encontrarían como configuración de proyecto.
+Don't put `[tool.awsemu]` in this repository's `pyproject.toml`: the tests would pick it up as project settings.
 
-Cada test corre con un `HOME` temporal propio, así que nunca toca tu `~/.aws`.
+Every test runs with its own temporary `HOME`, so it never touches your `~/.aws`.
 
-### El emulador falso
+### The fake emulator
 
-`tests/fake_emulator.py` imita lo que `awsemu` usa del binario real. Si descubres que el emulador real se comporta distinto (como pasó con el formato del log), cambia primero el falso para que lo reproduzca, añade un test que falle, y luego arregla `awsemu`.
+`tests/fake_emulator.py` mimics what `awsemu` uses from the real binary. If you find the real emulator behaves differently (as happened with the log format), first change the fake one to reproduce it, add a failing test, and then fix `awsemu`.
 
-Variables para provocar casos raros: `FAKE_EMULATOR_CRASH=1` (sale con código 1) y `FAKE_EMULATOR_IGNORE_STOP=1` (ignora la parada limpia).
+Variables to trigger odd cases: `FAKE_EMULATOR_CRASH=1` (exits with code 1) and `FAKE_EMULATOR_IGNORE_STOP=1` (ignores the clean stop).
 
-## Añadir un servicio
+## Adding a service
 
-1. Crea `src/awsemu/commands/<servicio>.py` con un `click.group()`. Copia la estructura de `sns.py` o `sqs.py`:
-   - obtén el cliente con `client("<servicio>", c.port)`;
-   - decora cada comando con `@pass_ctx` y `@handle_errors`;
-   - usa `ui.table`, `ui.kv`, `ui.success` y `ui.print_json` para la salida;
-   - ofrece `--json` en los listados y `--yes` en lo que borre;
-   - para roles, políticas de cola, permisos de Lambda o errores esperados (`is_error(exc, "ResourceNotFound")`), usa `commands/_common.py`.
-2. Regístralo en `cli.py` (`cli.add_command(...)`).
-3. Si tiene recursos que listar, añádelo a `SERVICES` en `commands/overview.py`.
-4. Tests con `FakeClient` (ver `tests/test_services.py`) y, si puedes, un test en `tests/test_real.py`.
-5. Si tiene sentido en un seed, añade la sección en `seed.py` (campos y validación), su `_apply_*` y su exportación en `commands/seed.py`, y amplía `examples/seed.yaml`.
-6. Documenta: sección en `docs/services.md` (y `docs/seeds.md` si aplica), línea en el README, y regenera la referencia (abajo).
+1. Create `src/awsemu/commands/<service>.py` with a `click.group()`. Follow the structure of `sns.py` or `sqs.py`:
+   - get the client with `client("<service>", c.port)`;
+   - decorate each command with `@pass_ctx` and `@handle_errors`;
+   - use `ui.table`, `ui.kv`, `ui.success` and `ui.print_json` for output;
+   - offer `--json` on listings and `--yes` on anything that deletes;
+   - add `shell_complete=complete("<kind>")` to arguments that take resource names (see `completion.py`);
+   - for roles, queue policies, Lambda permissions or expected errors (`is_error(exc, "ResourceNotFound")`), use `commands/_common.py`.
+2. Register it in `cli.py` (`cli.add_command(...)`).
+3. If it has resources to list, add it to `SERVICES` in `commands/overview.py`, to `DETAILS` in `browse.py` and, if useful, to `COLLECTORS` in `commands/watch.py`.
+4. Tests with `FakeClient` (see `tests/test_services.py`) and, if you can, a test in `tests/test_real.py`.
+5. If it makes sense in a seed, add the section in `seed.py` (fields and validation), its `_apply_*` and its export in `commands/seed.py`, and extend `examples/seed.yaml`.
+6. Document it: a section in `docs/services.md` (and `docs/seeds.md` if relevant), a line in the README, and regenerate the reference (below).
 
-## Documentación
+## Documentation
 
-- `docs/reference.md` se genera desde la ayuda de los comandos. Después de cambiar un comando u opción:
+- `docs/reference.md` is generated from the commands' help. After changing a command or option:
 
   ```bash
   python scripts/gen_reference.py
   ```
 
-  La CI falla si está desactualizada (`python scripts/gen_reference.py --check`).
-- Las guías (`docs/*.md`), el README, el ROADMAP y el CHANGELOG se escriben a mano, en español.
-- La ayuda de los comandos (`--help`) está en inglés.
+  CI fails if it's out of date (`python scripts/gen_reference.py --check`).
+- The guides (`docs/*.md`), README, ROADMAP and CHANGELOG are written by hand.
 
-## Publicar una versión
+## Releasing a version
 
-1. Mueve las entradas de `## Unreleased` de `CHANGELOG.md` a `## X.Y.Z — AAAA-MM-DD`.
-2. Sube la versión en `pyproject.toml` y en `src/awsemu/__init__.py`.
-3. Actualiza el ROADMAP.
-4. Haz push a `main`. Cuando la CI pasa (incluidos los tests contra el emulador real), el workflow `Release` crea el tag `vX.Y.Z` y la release de GitHub con el wheel y el sdist, usando la sección del CHANGELOG como notas. Si la CI falla, no se publica nada.
+1. Move the `## Unreleased` entries in `CHANGELOG.md` to `## X.Y.Z — YYYY-MM-DD`.
+2. Bump the version in `pyproject.toml` and `src/awsemu/__init__.py`.
+3. Update the ROADMAP.
+4. Push to `main`. When CI passes (including the tests against the real emulator), the `Release` workflow creates the `vX.Y.Z` tag and the GitHub release with the wheel and sdist, using the CHANGELOG section as notes. If CI fails, nothing is published.
 
-## Estilo
+## Style
 
-- Mensajes de error con una pista concreta (`RuntimeErrorWithHint(mensaje, pista)`).
-- Nada de llamadas a AWS real: los clientes se crean siempre contra el puerto del emulador.
-- No escribir en `~/.aws/emulator/`, que es del emulador.
+- Error messages come with a specific hint (`RuntimeErrorWithHint(message, hint)`).
+- No calls to real AWS: clients are always created against the emulator's port.
+- Don't write in `~/.aws/emulator/`, which belongs to the emulator.

@@ -11,9 +11,9 @@ from awsemu.cli import cli
 GOOD = """\
 version: 1
 buckets:
-  - name: fotos
+  - name: photos
     objects:
-      - {key: hola.txt, content: "hola"}
+      - {key: hello.txt, content: "hello"}
       - {key: config.json, json: {debug: true}}
       - {key: assets/, from: ./assets}
 queues:
@@ -115,7 +115,7 @@ def test_references_outside_the_seed_are_warnings():
 def test_object_payloads(seed_dir):
     s = seed.load_file(seed_dir / "seed.yaml")
     objs = s.section("buckets")[0]["objects"]
-    assert seed.object_payloads(objs[0], seed_dir) == [("hola.txt", b"hola")]
+    assert seed.object_payloads(objs[0], seed_dir) == [("hello.txt", b"hello")]
     assert json.loads(seed.object_payloads(objs[1], seed_dir)[0][1]) == {"debug": True}
     folder = seed.object_payloads(objs[2], seed_dir)
     assert [k for k, _ in folder] == ["assets/a.css", "assets/img/x.svg"]
@@ -134,9 +134,9 @@ def test_items_and_values(seed_dir):
 
 def test_dump_roundtrip():
     data = {"version": 1, "secrets": [{"name": "s", "value": "multi\nline"}],
-            "tables": [{"name": "t", "pk": "id", "items": [{"id": "á", "n": 1.5}]}]}
+            "tables": [{"name": "t", "pk": "id", "items": [{"id": "café", "n": 1.5}]}]}
     text = seed.dump(data)
-    assert "value: |" in text and "á" in text
+    assert "value: |" in text and "café" in text
     assert seed.load_text(text).data == data
 
 

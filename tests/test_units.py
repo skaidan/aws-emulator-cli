@@ -58,8 +58,8 @@ def test_render_unsets_real_credentials():
 
 
 def test_render_quotes_paths_with_spaces():
-    out = envvars.render({"AWS_CA_BUNDLE": "/Users/Ana María/x y/ca.pem"}, "bash", unset_real=False)
-    assert out.strip() == "export AWS_CA_BUNDLE='/Users/Ana María/x y/ca.pem'"
+    out = envvars.render({"AWS_CA_BUNDLE": "/Users/Zoë Smith/x y/ca.pem"}, "bash", unset_real=False)
+    assert out.strip() == "export AWS_CA_BUNDLE='/Users/Zoë Smith/x y/ca.pem'"
 
 
 def test_child_env_drops_real_credentials():

@@ -14,7 +14,7 @@ from tests.test_services import FakeClient
 @pytest.fixture
 def fake_emulator(monkeypatch):
     fakes = {
-        "s3": FakeClient(list_buckets={"Buckets": [{"Name": "fotos"}]},
+        "s3": FakeClient(list_buckets={"Buckets": [{"Name": "photos"}]},
                          list_objects_v2={"Contents": [{"Key": "a.txt", "Size": 4,
                                                         "LastModified": datetime(2026, 11, 16)}]}),
         "sqs": FakeClient(list_queues={"QueueUrls": ["https://x/000000000000/jobs"]},
@@ -40,7 +40,7 @@ def fake_emulator(monkeypatch):
 
 
 def test_details(fake_emulator):
-    s3 = browse.details(9297, "s3", "fotos")
+    s3 = browse.details(9297, "s3", "photos")
     assert s3["Objects (first 50)"][0]["Key"] == "a.txt"
     assert browse.details(9297, "sqs", "jobs")["ApproximateNumberOfMessages"] == "3"
     assert "ResponseMetadata" not in browse.details(9297, "secretsmanager", "db")
@@ -81,12 +81,12 @@ def test_textual_app(fake_emulator, monkeypatch):
             assert "S3 buckets (1)" in labels and "SQS queues (1)" in labels
             s3_node = next(n for n in tree.root.children if str(n.label).startswith("S3"))
             leaf = s3_node.children[0]
-            assert leaf.data == ("s3", "fotos")
-            app.show_details("s3", "fotos")
-            assert app.current_details["Bucket"] == "fotos"
+            assert leaf.data == ("s3", "photos")
+            app.show_details("s3", "photos")
+            assert app.current_details["Bucket"] == "photos"
             await pilot.press("r")
             await pilot.pause()
-            assert app.selected == ("s3", "fotos") and app.current_details["Bucket"] == "fotos"
+            assert app.selected == ("s3", "photos") and app.current_details["Bucket"] == "photos"
             await pilot.press("w")
             assert app.auto is True
             await pilot.press("q")

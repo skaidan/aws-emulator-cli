@@ -7,7 +7,7 @@ how you get the same starting data after every start or reset::
     buckets:
       - name: photos
         objects:
-          - {key: hello.txt, content: "hola"}
+          - {key: hello.txt, content: "hello"}
           - {key: assets/, from: ./assets}        # a local folder or file
     queues:
       - {name: jobs-dlq}

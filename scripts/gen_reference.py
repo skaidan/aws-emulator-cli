@@ -20,13 +20,13 @@ from awsemu.cli import cli  # noqa: E402
 
 OUT = ROOT / "docs" / "reference.md"
 
-HEADER = """# Referencia de comandos
+HEADER = """# Command reference
 
-> Generado automáticamente desde el código con `python scripts/gen_reference.py`.
-> No lo edites a mano: cambia la ayuda del comando y vuelve a generarlo.
+> Generated from the code with `python scripts/gen_reference.py`.
+> Don't edit it by hand: change the command's help text and regenerate it.
 
-Opciones globales (van antes del comando): `--port/-p PUERTO` (por defecto 9297 o
-`$AWSEMU_PORT`), `--plain` (texto plano), `--version/-V`, `--help/-h`.
+Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, else
+`awsemu.toml`, else 9297), `--plain` (plain text), `--version/-V`, `--help/-h`.
 
 """
 
@@ -85,7 +85,7 @@ def _section(cmd: click.Command, path: list[str], parent: click.Context, out: li
         out.append(f"```\n{' '.join(['awsemu', *path[1:]])} {usage}\n```\n")
         rows = _option_rows(cmd, ctx)
         if rows:
-            out.append("| Opción | Descripción |\n| --- | --- |")
+            out.append("| Option | Description |\n| --- | --- |")
             for opt, desc in rows:
                 desc = desc.replace("|", "\\|").replace("\n", " ")
                 out.append(f"| `{opt}` | {desc} |")

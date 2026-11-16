@@ -1,4 +1,4 @@
 [
-  {"id": "c1", "name": "Ana García", "email": "ana@example.com", "vip": true},
-  {"id": "c2", "name": "Luis Pérez", "email": "luis@example.com", "vip": false}
+  {"id": "c1", "name": "Alice Smith", "email": "alice@example.com", "vip": true},
+  {"id": "c2", "name": "Bob Jones", "email": "bob@example.com", "vip": false}
 ]

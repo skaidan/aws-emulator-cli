@@ -1,45 +1,45 @@
-# Configuración por proyecto (`awsemu.toml`)
+# Project settings (`awsemu.toml`)
 
-Un fichero `awsemu.toml` en tu proyecto guarda cómo quieres el emulador: puerto, modo, seed, etc. Cualquier comando de `awsemu` ejecutado en esa carpeta (o en una subcarpeta) lo usa, igual que el [plugin de pytest](testing.md#plugin-de-pytest).
+An `awsemu.toml` file in your project records how you want the emulator: port, mode, seed and so on. Every `awsemu` command run in that folder (or a subfolder) uses it, and so does the [pytest plugin](testing.md#pytest-plugin).
 
 ```bash
-awsemu init     # crea awsemu.toml
-awsemu up       # arranca el emulador del proyecto (si no lo está) y aplica su seed
-awsemu down     # lo para
+awsemu init     # creates awsemu.toml
+awsemu up       # starts the project's emulator (if it isn't running) and applies its seed
+awsemu down     # stops it
 ```
 
-## El fichero
+## The file
 
 ```toml
 # awsemu.toml
-port = 9343                # cada proyecto en su puerto: varios a la vez sin chocar
+port = 9343                # each project on its own port: several at once without clashing
 mode = "auto"              # auto | native | docker
-auth = true                # false = acepta peticiones sin firmar
+auth = true                # false = accept unsigned requests
 telemetry = false
-idle_timeout = 3600        # se para solo tras una hora sin llamadas
-seed = "tests/seed.yaml"   # relativo a este fichero
-sdk = ["node"]             # node | java | rust | dotnet: confiar en el certificado en esos SDK
-image = "aws-emulator"     # imagen de Docker
-memory = "2g"              # límite de memoria en Docker
+idle_timeout = 3600        # stops by itself after an hour without calls
+seed = "tests/seed.yaml"   # relative to this file
+sdk = ["node"]             # node | java | rust | dotnet: trust the certificate in those SDKs
+image = "aws-emulator"     # Docker image
+memory = "2g"              # Docker memory limit
 ```
 
-Todas las claves son opcionales.
+Every key is optional.
 
-| Clave | Tipo | Para qué | Por defecto |
+| Key | Type | What for | Default |
 | --- | --- | --- | --- |
-| `port` | entero | Puerto de la instancia; lo usan todos los comandos | 9297 |
-| `mode` | `auto` / `native` / `docker` | Cómo arrancarla | `auto` (binario si está, si no Docker) |
-| `auth` | booleano | Exigir peticiones firmadas | `true` |
-| `telemetry` | booleano | Telemetría del emulador para esta instancia | lo que diga `config.toml` del emulador |
-| `idle_timeout` | entero (segundos) | Parada automática por inactividad | sin límite |
-| `seed` | ruta | Seed que aplican `awsemu up` y el plugin de pytest | ninguno |
-| `sdk` | lista | Extras de certificado en `env`, `exec` y `shell` | ninguno |
-| `image` | texto | Imagen de Docker | `aws-emulator` |
-| `memory` | texto | Límite de memoria en Docker | `2g` |
+| `port` | integer | The instance's port; every command uses it | 9297 |
+| `mode` | `auto` / `native` / `docker` | How to start it | `auto` (the binary if installed, otherwise Docker) |
+| `auth` | boolean | Require signed requests | `true` |
+| `telemetry` | boolean | The emulator's telemetry for this instance | whatever the emulator's `config.toml` says |
+| `idle_timeout` | integer (seconds) | Automatic stop when idle | no limit |
+| `seed` | path | Seed applied by `awsemu up` and the pytest plugin | none |
+| `sdk` | list | Certificate extras in `env`, `exec` and `shell` | none |
+| `image` | text | Docker image | `aws-emulator` |
+| `memory` | text | Docker memory limit | `2g` |
 
-### En `pyproject.toml`
+### In `pyproject.toml`
 
-En proyectos Python puedes usar una tabla `[tool.awsemu]` en lugar de un fichero aparte:
+In Python projects you can use a `[tool.awsemu]` table instead of a separate file:
 
 ```toml
 [tool.awsemu]
@@ -48,59 +48,59 @@ seed = "tests/seed.yaml"
 telemetry = false
 ```
 
-## Dónde lo busca
+## Where it's looked up
 
-Desde la carpeta actual hacia arriba, `awsemu` usa el primer `awsemu.toml` que encuentre, o el primer `pyproject.toml` que tenga una tabla `[tool.awsemu]`. Para usar otro fichero: `AWSEMU_CONFIG=/ruta/al/fichero.toml`.
+From the current folder upwards, `awsemu` uses the first `awsemu.toml` it finds, or the first `pyproject.toml` with a `[tool.awsemu]` table. To use another file: `AWSEMU_CONFIG=/path/to/file.toml`.
 
 ```bash
-awsemu config show      # qué fichero se está usando y con qué valores
-awsemu doctor           # incluye una fila "project"
+awsemu config show      # which file is in use and with which values
+awsemu doctor           # includes a "project" row
 ```
 
-## Precedencia
+## Precedence
 
-De más a menos prioridad:
+From highest to lowest:
 
-1. Lo que pongas en el comando (`--port 9400`, `--no-auth`, `--docker`, `--seed …`, `--sdk …`).
-2. Variables de entorno (`AWSEMU_PORT`).
+1. What you pass on the command line (`--port 9400`, `--no-auth`, `--docker`, `--seed …`, `--sdk …`).
+2. Environment variables (`AWSEMU_PORT`).
 3. `awsemu.toml` / `[tool.awsemu]`.
-4. Valores por defecto.
+4. Defaults.
 
 ## `awsemu init`
 
-Crea `awsemu.toml` en la carpeta actual con valores razonables (`telemetry = false`, `idle_timeout = 3600`) y comentarios para el resto.
+Creates `awsemu.toml` in the current folder with sensible values (`telemetry = false`, `idle_timeout = 3600`) and comments for the rest.
 
-- **Puerto:** si no pasas `--port`, elige uno entre 9300 y 9399 a partir del nombre de la carpeta, así varios proyectos pueden tener su emulador encendido a la vez. Con `awsemu --port 9400 init` usa ese.
-- **Seed:** si existe `tests/seed.yaml`, `seed.yaml` o `awsemu-seed.yaml`, lo referencia. También con `--seed RUTA`.
-- No sobrescribe un fichero existente salvo con `--force`.
+- **Port:** without `--port`, it picks one between 9300 and 9399 from the folder name, so several projects can have their emulators running at once. With `awsemu --port 9400 init` it uses that one.
+- **Seed:** if `tests/seed.yaml`, `seed.yaml` or `awsemu-seed.yaml` exists, it references it. Also with `--seed PATH`.
+- It doesn't overwrite an existing file unless you pass `--force`.
 
-## `awsemu up` y `awsemu down`
+## `awsemu up` and `awsemu down`
 
-`up` deja el emulador del proyecto listo:
+`up` gets the project's emulator ready:
 
-- Si no está en marcha, lo arranca con la configuración del proyecto.
-- Aplica el seed (el del proyecto, el de `--seed`, o ninguno con `--no-seed`). Como [`seed apply`](seeds.md#qué-hace-apply) se puede repetir, ejecutar `up` con el emulador ya encendido solo añade o actualiza lo que falte.
+- If it isn't running, it starts it with the project's settings.
+- It applies the seed (the project's, the one from `--seed`, or none with `--no-seed`). Since [`seed apply`](seeds.md#what-apply-does) is repeatable, running `up` with the emulator already running only adds or updates what's missing.
 
-`down` lo para (como `awsemu stop`; `--all` para todas las instancias).
+`down` stops it (like `awsemu stop`; `--all` for every instance).
 
-Un flujo típico de trabajo:
+A typical workflow:
 
 ```bash
-cd mi-proyecto
+cd my-project
 awsemu up
 eval "$(awsemu env)"
-npm run dev                  # o lo que sea: ya habla con el emulador
-awsemu reset --seed tests/seed.yaml   # volver al estado inicial cuando quieras
+npm run dev                  # or whatever: it already talks to the emulator
+awsemu reset --seed tests/seed.yaml   # back to the initial state whenever you like
 awsemu down
 ```
 
-## Errores
+## Errors
 
-Un `awsemu.toml` con errores detiene cualquier comando (código 2) con un mensaje concreto:
+An `awsemu.toml` with errors stops every command (exit code 2) with a specific message:
 
 ```
-✗ /home/ana/mi-proyecto/awsemu.toml: 'port' must be int; unknown setting 'mdoe' (did you mean 'mode'?)
+✗ /home/ana/my-project/awsemu.toml: 'port' must be int; unknown setting 'mdoe' (did you mean 'mode'?)
   Fix the file, or set AWSEMU_CONFIG to another one.
 ```
 
-Hay un ejemplo en [`examples/awsemu.toml`](../examples/awsemu.toml).
+There's an example in [`examples/awsemu.toml`](../examples/awsemu.toml).

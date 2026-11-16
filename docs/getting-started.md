@@ -1,35 +1,35 @@
-# Primeros pasos
+# Getting started
 
-## 1. Instalar `awsemu`
+## 1. Install `awsemu`
 
-Necesitas Python 3.10 o superior.
+You need Python 3.10 or later.
 
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
-# o, desde una release concreta:
+# or, from a specific release:
 pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.6.0/aws_emulator_cli-0.6.0-py3-none-any.whl
 ```
 
-Opcional: autocompletado (también de los nombres de tus buckets, colas, tablas…) y la interfaz en la terminal:
+Optional: shell completion (including the names of your buckets, queues, tables…) and the terminal UI:
 
 ```bash
-echo 'eval "$(awsemu completion bash)"' >> ~/.bashrc    # zsh: completion zsh; fish: ver docs/explore.md
+echo 'eval "$(awsemu completion bash)"' >> ~/.bashrc    # zsh: completion zsh; fish: see docs/explore.md
 pipx install --force 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'
 ```
 
-Comprueba qué tienes y qué falta:
+Check what you have and what's missing:
 
 ```bash
 awsemu doctor
 ```
 
-## 2. Elegir cómo ejecutar el emulador
+## 2. Choose how to run the emulator
 
-`awsemu` no incluye el emulador: lo ejecuta. Hay dos formas, y `awsemu start` elige sola (primero el binario nativo, si no, Docker).
+`awsemu` doesn't include the emulator: it runs it. There are two ways, and `awsemu start` picks one by itself (the native binary first, otherwise Docker).
 
-### Nativo (Linux)
+### Native (Linux)
 
-Instala el paquete oficial. Ejemplo para Debian/Ubuntu en x86_64:
+Install the official package. For example, on Debian/Ubuntu x86_64:
 
 ```bash
 curl -fsSLo aws-emulator.deb https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest/aws-emulator_amd64.deb
@@ -37,112 +37,112 @@ sudo apt-get install -y ./aws-emulator.deb
 aws-emulator -v
 ```
 
-Para RPM o ARM, y para verificar la firma del paquete, mira la [guía oficial de instalación en Linux](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-linux.html).
+For RPM or ARM, and to verify the package signature, see the [official Linux installation guide](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-linux.html).
 
-Si el binario no está en el `PATH`, díselo a `awsemu`:
+If the binary isn't on your `PATH`, tell `awsemu` where it is:
 
 ```bash
-export AWSEMU_BINARY=/ruta/a/aws-emulator
+export AWSEMU_BINARY=/path/to/aws-emulator
 ```
 
-### Docker (macOS, Windows o Linux)
+### Docker (macOS, Windows or Linux)
 
-AWS no publica una imagen; `awsemu` la construye con la receta oficial (detecta si tu máquina es x86_64 o ARM):
+AWS doesn't publish an image; `awsemu` builds one with the official recipe (it detects whether your machine is x86_64 or ARM):
 
 ```bash
 awsemu image build
-awsemu image dockerfile   # para ver el Dockerfile que usa
+awsemu image dockerfile   # to see the Dockerfile it uses
 ```
 
-¿Prefieres Docker Compose? `awsemu compose -o compose.emulator.yaml` genera el servicio con la misma configuración (ver [Tests y CI](testing.md#docker-compose)).
+Prefer Docker Compose? `awsemu compose -o compose.emulator.yaml` generates the service with the same setup (see [Testing and CI](testing.md#docker-compose)).
 
-## 3. Arrancar
+## 3. Start it
 
 ```bash
 awsemu start
 ```
 
-`awsemu` lanza el emulador en segundo plano, espera a que responda en `https://127.0.0.1:9297/__admin/health` y te dice cómo seguir. Opciones útiles:
+`awsemu` launches the emulator in the background, waits until it answers on `https://127.0.0.1:9297/__admin/health` and tells you what to do next. Useful options:
 
-| Quiero… | Comando |
+| I want to… | Command |
 | --- | --- |
-| Forzar Docker o nativo | `awsemu start --docker` / `--native` |
-| Otro puerto | `awsemu --port 9300 start` |
-| Que el sistema elija el puerto | `awsemu --port 0 start` (solo nativo) |
-| Que se pare solo si no se usa | `awsemu start --idle-timeout 600` |
-| Aceptar peticiones sin firmar | `awsemu start --no-auth` |
-| Sin telemetría | `awsemu start --no-telemetry` o `awsemu config telemetry off` |
-| Verlo en primer plano | `awsemu start -f` |
-| Arrancar con datos | `awsemu start --seed seed.yaml` (ver [Seeds](seeds.md)) |
+| Force Docker or native | `awsemu start --docker` / `--native` |
+| Use another port | `awsemu --port 9300 start` |
+| Let the OS pick the port | `awsemu --port 0 start` (native only) |
+| Stop it automatically when idle | `awsemu start --idle-timeout 600` |
+| Accept unsigned requests | `awsemu start --no-auth` |
+| Turn telemetry off | `awsemu start --no-telemetry` or `awsemu config telemetry off` |
+| See it in the foreground | `awsemu start -f` |
+| Start with data | `awsemu start --seed seed.yaml` (see [Seeds](seeds.md)) |
 
 ```bash
-awsemu status          # ¿está sano?
-awsemu logs -f         # su log, legible
-awsemu stop            # parada limpia
-awsemu reset           # reinicio = estado vacío (el emulador guarda todo en memoria)
-awsemu reset --seed seed.yaml   # estado vacío + tus datos de partida
+awsemu status          # is it healthy?
+awsemu logs -f         # its log, readable
+awsemu stop            # clean stop
+awsemu reset           # restart = empty state (the emulator keeps everything in memory)
+awsemu reset --seed seed.yaml   # empty state + your starting data
 ```
 
-## 4. Conectar tus herramientas
+## 4. Connect your tools
 
-El emulador genera claves y un certificado nuevos en cada arranque, en `~/.aws/emulator/<puerto>/`. `awsemu env` exporta las variables que apuntan a esos ficheros:
+The emulator creates new keys and a new certificate on every start, in `~/.aws/emulator/<port>/`. `awsemu env` exports the variables that point to those files:
 
 ```bash
 eval "$(awsemu env)"
-aws sts get-caller-identity   # Account: 000000000000 → estás en el emulador
+aws sts get-caller-identity   # Account: 000000000000 → you're on the emulator
 ```
 
-| Shell | Comando |
+| Shell | Command |
 | --- | --- |
 | bash / zsh | `eval "$(awsemu env)"` |
 | fish | `awsemu env --shell fish \| source` |
 | PowerShell | `awsemu env --shell powershell \| iex` |
-| fichero `.env` | `awsemu env --shell dotenv > .env.emulator` |
-| deshacer | `eval "$(awsemu env --unset)"` |
+| `.env` file | `awsemu env --shell dotenv > .env.emulator` |
+| undo | `eval "$(awsemu env --unset)"` |
 
-`awsemu env` también quita `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` y `AWS_PROFILE`: si se quedaran, tendrían prioridad y el emulador rechazaría las peticiones.
+`awsemu env` also removes `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `AWS_PROFILE`: if they stayed, they'd take precedence and the emulator would reject the requests.
 
-Algunos SDK no leen `AWS_CA_BUNDLE`. Añade lo que necesiten con `--sdk`:
+Some SDKs don't read `AWS_CA_BUNDLE`. Add what they need with `--sdk`:
 
 ```bash
 eval "$(awsemu env --sdk node)"   # NODE_EXTRA_CA_CERTS
-eval "$(awsemu env --sdk java)"   # JAVA_TOOL_OPTIONS con truststore.p12
-eval "$(awsemu env --sdk rust)"   # SSL_CERT_FILE (también para .NET: --sdk dotnet)
+eval "$(awsemu env --sdk java)"   # JAVA_TOOL_OPTIONS with truststore.p12
+eval "$(awsemu env --sdk rust)"   # SSL_CERT_FILE (also for .NET: --sdk dotnet)
 ```
 
-Sin tocar tu shell:
+Without touching your shell:
 
 ```bash
-awsemu exec -- npm test          # un comando con el entorno ya configurado
-awsemu aws s3 ls                 # el AWS CLI apuntando al emulador
-awsemu shell                     # una sub-shell conectada
+awsemu exec -- npm test          # a command with the environment already set
+awsemu aws s3 ls                 # the AWS CLI pointed at the emulator
+awsemu shell                     # a connected sub-shell
 ```
 
-## 5. Explorar
+## 5. Explore
 
 ```bash
-awsemu overview        # qué hay en S3, SQS, DynamoDB, SNS, Lambda, Secrets, SSM…
-awsemu s3 mb fotos
-awsemu sqs create trabajos
+awsemu overview        # what's in S3, SQS, DynamoDB, SNS, Lambda, Secrets, SSM…
+awsemu s3 mb photos
+awsemu sqs create jobs
 ```
 
-Sigue con la [guía de servicios](services.md), o explora con `awsemu ui`, `awsemu watch` y `awsemu fidelity` ([Explorar el emulador](explore.md)).
+Continue with the [services guide](services.md), or explore with `awsemu ui`, `awsemu watch` and `awsemu fidelity` ([Exploring the emulator](explore.md)).
 
-## En un proyecto
+## In a project
 
-Si trabajas siempre con la misma configuración, guárdala en el proyecto:
+If you always work with the same setup, save it in the project:
 
 ```bash
-awsemu init      # crea awsemu.toml con un puerto propio y tu seed
-awsemu up        # arranca (si hace falta) y aplica el seed
+awsemu init      # creates awsemu.toml with a port of its own and your seed
+awsemu up        # starts it (if needed) and applies the seed
 awsemu down
 ```
 
-Ver [Configuración por proyecto](project-config.md).
+See [Project settings](project-config.md).
 
-## Varias instancias
+## Several instances
 
-Cada instancia vive en su puerto, con sus propios ficheros y recursos. Usa `--port` (o `AWSEMU_PORT`) en cualquier comando:
+Each instance lives on its own port, with its own files and resources. Use `--port` (or `AWSEMU_PORT`) with any command:
 
 ```bash
 awsemu --port 9300 start

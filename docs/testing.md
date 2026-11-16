@@ -1,31 +1,31 @@
-# Tests y CI
+# Testing and CI
 
-El emulador es ideal para tests de integración: no hace falta cuenta de AWS, arranca en un momento y cada reinicio empieza vacío. `awsemu` trae tres formas de usarlo según dónde corran tus tests:
+The emulator is ideal for integration tests: no AWS account needed, it starts in moments and every restart begins empty. `awsemu` offers three ways to use it, depending on where your tests run:
 
-| Dónde | Cómo |
+| Where | How |
 | --- | --- |
-| pytest | [Plugin](#plugin-de-pytest): fixture `aws_emulator`, sin configuración |
-| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.5.0` |
-| Cualquier otro sitio | [Scripts](#scripts) con `awsemu start`/`exec`/`stop`, o [Docker Compose](#docker-compose) |
+| pytest | [Plugin](#pytest-plugin): `aws_emulator` fixture, no setup |
+| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.6.0` |
+| Anywhere else | [Scripts](#scripts) with `awsemu start`/`exec`/`stop`, or [Docker Compose](#docker-compose) |
 
-En todos los casos, los datos de partida van en un [seed](seeds.md).
+In every case, starting data goes in a [seed](seeds.md).
 
-## Plugin de pytest
+## pytest plugin
 
-Se instala con `awsemu` y no hace nada hasta que un test pide uno de sus fixtures.
+It's installed with `awsemu` and does nothing until a test asks for one of its fixtures.
 
 ```python
 import boto3
 
 
 def test_upload(aws_emulator):
-    s3 = boto3.client("s3")                      # ya apunta al emulador
+    s3 = boto3.client("s3")                      # already points at the emulator
     s3.create_bucket(Bucket="demo")
     assert "demo" in [b["Name"] for b in s3.list_buckets()["Buckets"]]
 
 
 def test_with_clean_state(aws_emulator_fresh):
-    # reiniciado y con el seed aplicado de nuevo: lo que hiciera otro test ya no está
+    # restarted and re-seeded: whatever another test did is gone
     names = [b["Name"] for b in aws_emulator_fresh.client("s3").list_buckets()["Buckets"]]
     assert "demo" not in names
 ```
@@ -34,40 +34,40 @@ def test_with_clean_state(aws_emulator_fresh):
 pytest --awsemu-seed tests/seed.yaml
 ```
 
-### Qué hace `aws_emulator`
+### What `aws_emulator` does
 
-Una vez por sesión de pytest:
+Once per pytest session:
 
-1. Valida el seed (si lo hay) **antes** de arrancar nada.
-2. Arranca un emulador en un **puerto libre** (así no choca con el que tengas abierto ni con otros procesos de pytest, por ejemplo con `pytest-xdist`), con `idle_timeout` de 30 minutos como red de seguridad.
-3. Aplica el seed.
-4. Apunta `os.environ` al emulador (las mismas variables que `awsemu env`) y quita tus credenciales reales: boto3, el AWS CLI o tu propio código lo usan sin configurar nada.
-5. Al terminar la sesión restaura el entorno y para el emulador.
+1. Validates the seed (if any) **before** starting anything.
+2. Starts an emulator on a **free port** (so it doesn't clash with the one you have open or with other pytest processes, e.g. with `pytest-xdist`), with a 30-minute `idle_timeout` as a safety net.
+3. Applies the seed.
+4. Points `os.environ` at the emulator (the same variables as `awsemu env`) and removes your real credentials: boto3, the AWS CLI or your own code use it with no setup.
+5. At the end of the session it restores the environment and stops the emulator.
 
-El fixture devuelve un objeto con:
+The fixture returns an object with:
 
-| Atributo / método | Para qué |
+| Attribute / method | What for |
 | --- | --- |
-| `port`, `endpoint_url` | Dónde escucha |
-| `env` | Las variables que ha puesto en el entorno |
-| `client("s3")` | Un cliente de boto3 conectado a este emulador |
-| `apply_seed(ruta=None)` | Aplicar otro seed (o el mismo otra vez) |
-| `reset()` | Reiniciar (estado vacío) y volver a aplicar el seed |
+| `port`, `endpoint_url` | Where it listens |
+| `env` | The variables it put in the environment |
+| `client("s3")` | A boto3 client connected to this emulator |
+| `apply_seed(path=None)` | Apply another seed (or the same one again) |
+| `reset()` | Restart (empty state) and re-apply the seed |
 
-`aws_emulator_fresh` es el mismo emulador, reiniciado antes de cada test que lo pida. Es más lento (unos segundos por test), así que úsalo solo donde necesites partir de cero.
+`aws_emulator_fresh` is the same emulator, restarted before each test that asks for it. It's slower (a few seconds per test), so use it only where you need to start from scratch.
 
-### Opciones
+### Options
 
-| Línea de comandos | `pytest.ini` / `[tool.pytest.ini_options]` | Para qué |
+| Command line | `pytest.ini` / `[tool.pytest.ini_options]` | What for |
 | --- | --- | --- |
-| `--awsemu-seed FILE` | `awsemu_seed = tests/seed.yaml` | Seed (relativo a la raíz de pytest) |
-| `--awsemu-port N` | `awsemu_port = 9350` | Puerto fijo en vez de uno libre |
-| `--awsemu-reuse` | `awsemu_reuse = true` | Usar un emulador ya arrancado (`awsemu up`) en vez de arrancar otro; no se para al final |
-| `--awsemu-docker` | `awsemu_mode = docker` | Arrancarlo en Docker |
+| `--awsemu-seed FILE` | `awsemu_seed = tests/seed.yaml` | Seed (relative to the pytest root) |
+| `--awsemu-port N` | `awsemu_port = 9350` | A fixed port instead of a free one |
+| `--awsemu-reuse` | `awsemu_reuse = true` | Use an emulator that's already running (`awsemu up`) instead of starting one; it isn't stopped at the end |
+| `--awsemu-docker` | `awsemu_mode = docker` | Run it in Docker |
 
-Si no indicas nada, se usa lo que haya en [`awsemu.toml`](project-config.md) (`seed`, `mode`, `auth`, `telemetry`, `sdk`…).
+If you don't set anything, whatever is in [`awsemu.toml`](project-config.md) is used (`seed`, `mode`, `auth`, `telemetry`, `sdk`…).
 
-`--awsemu-reuse` es cómodo mientras desarrollas: deja el emulador encendido con `awsemu up` y tus tests arrancan al instante.
+`--awsemu-reuse` is handy while developing: keep the emulator running with `awsemu up` and your tests start instantly.
 
 ## GitHub Actions
 
@@ -77,72 +77,72 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: skaidan/aws-emulator-cli@v0.5.0
+      - uses: skaidan/aws-emulator-cli@v0.6.0
         with:
           seed: tests/seed.yaml
-      - run: pytest tests/integration      # AWS_ENDPOINT_URL & co. ya están puestas
+      - run: pytest tests/integration      # AWS_ENDPOINT_URL & co. are already set
 ```
 
-La Action:
+The Action:
 
-1. Descarga el paquete oficial del emulador, **verifica su firma GPG** (y la huella de la clave) y lo instala.
-2. Instala `awsemu` (la versión de la propia Action).
-3. Arranca el emulador (`--no-telemetry` por defecto, `idle_timeout` de una hora) y aplica el seed.
-4. Exporta las variables del emulador para los pasos siguientes (`AWS_ENDPOINT_URL`, `AWS_CA_BUNDLE`, `AWS_CONFIG_FILE`, `AWS_SHARED_CREDENTIALS_FILE`, región…) y `AWSEMU_PORT`, así que `awsemu` y el AWS CLI también funcionan sin `--port`.
+1. Downloads the official emulator package, **verifies its GPG signature** (and the key fingerprint) and installs it.
+2. Installs `awsemu` (the Action's own version).
+3. Starts the emulator (`--no-telemetry` by default, a one-hour `idle_timeout`) and applies the seed.
+4. Exports the emulator's variables for the following steps (`AWS_ENDPOINT_URL`, `AWS_CA_BUNDLE`, `AWS_CONFIG_FILE`, `AWS_SHARED_CREDENTIALS_FILE`, region…) and `AWSEMU_PORT`, so `awsemu` and the AWS CLI work without `--port` too.
 
-| Entrada | Por defecto | |
+| Input | Default | |
 | --- | --- | --- |
-| `seed` | — | Ruta del seed en tu repositorio |
+| `seed` | — | Path of the seed in your repository |
 | `port` | `9297` | |
-| `auth` | `true` | `false` acepta peticiones sin firmar |
+| `auth` | `true` | `false` accepts unsigned requests |
 | `telemetry` | `false` | |
-| `idle-timeout` | `3600` | Segundos sin llamadas antes de pararse |
-| `export-env` | `true` | `false` para solo arrancarlo |
+| `idle-timeout` | `3600` | Seconds without calls before it stops |
+| `export-env` | `true` | `false` to only start it |
 
-| Salida | |
+| Output | |
 | --- | --- |
-| `port` | Puerto |
-| `endpoint-url` | `https://127.0.0.1:PUERTO` |
-| `ca-bundle` | Ruta del certificado |
+| `port` | Port |
+| `endpoint-url` | `https://127.0.0.1:PORT` |
+| `ca-bundle` | Path of the certificate |
 
-Notas:
+Notes:
 
-- Necesita un runner **Linux** (x64 o ARM64): el emulador se distribuye como paquete de Linux.
-- No uses credenciales reales de AWS en el mismo job: tendrían prioridad sobre las del emulador (la Action avisa si las detecta). Si las necesitas, ejecuta los comandos contra el emulador con `awsemu exec -- …`.
-- Para ver qué pasó si algo falla:
+- It needs a **Linux** runner (x64 or ARM64): the emulator ships as a Linux package.
+- Don't use real AWS credentials in the same job: they'd take precedence over the emulator's (the Action warns if it detects them). If you need them, run the commands meant for the emulator with `awsemu exec -- …`.
+- To see what happened when something fails:
 
   ```yaml
       - if: failure()
         run: awsemu logs -n 200
   ```
 
-El job `action` de [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) prueba la Action en cada cambio.
+The `action` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) tests the Action on every change.
 
 ## Scripts
 
 ```bash
 awsemu start --idle-timeout 900 --seed tests/seed.yaml
-awsemu exec -- pytest tests/integration      # o npm test, go test, terraform…
+awsemu exec -- pytest tests/integration      # or npm test, go test, terraform…
 code=$?
 awsemu stop
 exit $code
 ```
 
-`awsemu exec` ejecuta el comando con las variables del emulador y **sin** tus credenciales reales, así que un test mal configurado no puede llegar a AWS por accidente.
+`awsemu exec` runs the command with the emulator's variables and **without** your real credentials, so a misconfigured test can't reach AWS by accident.
 
-### Estado limpio entre suites
+### Clean state between suites
 
-El emulador guarda todo en memoria y no tiene una ruta para vaciarlo. Reinícialo; con un seed, vuelve además con tus datos de partida:
+The emulator keeps everything in memory and has no route to empty it. Restart it; with a seed, it also comes back with your starting data:
 
 ```bash
 awsemu reset --seed tests/seed.yaml
 ```
 
-Para montar ese seed, crea el escenario a mano o con tu aplicación y expórtalo: `awsemu seed export -o tests/seed.yaml --no-secrets`.
+To build that seed, create the scenario by hand or with your application and export it: `awsemu seed export -o tests/seed.yaml --no-secrets`.
 
-### Varias suites en paralelo
+### Several suites in parallel
 
-Cada una en su puerto:
+Each one on its own port:
 
 ```bash
 awsemu --port 9301 start && AWSEMU_PORT=9301 awsemu exec -- pytest tests/a &
@@ -153,40 +153,40 @@ awsemu stop --all
 
 ## Docker Compose
 
-`awsemu compose` genera el servicio del emulador con la misma configuración que `awsemu start --docker`: la receta oficial de AWS, el puerto publicado solo en `127.0.0.1`, la memoria limitada y la carpeta de credenciales montada en la misma ruta que en tu máquina.
+`awsemu compose` generates the emulator's service with the same setup as `awsemu start --docker`: AWS's official recipe, the port published on `127.0.0.1` only, limited memory, and the credentials folder mounted at the same path as on your machine.
 
 ```bash
 awsemu compose -o compose.emulator.yaml
 docker compose -f compose.emulator.yaml up -d
-awsemu status                                 # espera a que esté sano
+awsemu status                                 # wait until it's healthy
 eval "$(awsemu env)"
 ```
 
-Usa la configuración del proyecto (`port`, `auth`, `telemetry`, `idle_timeout`, `image`, `memory`) y acepta `--no-auth`, `--no-telemetry`, `--idle-timeout`, `--name` y `--no-build` (si ya construiste la imagen con `awsemu image build`).
+It uses the project's settings (`port`, `auth`, `telemetry`, `idle_timeout`, `image`, `memory`) and accepts `--no-auth`, `--no-telemetry`, `--idle-timeout`, `--name` and `--no-build` (if you already built the image with `awsemu image build`).
 
-Para que **otros contenedores** hablen con el emulador: en Linux, `network_mode: host` y las variables de `awsemu env --shell dotenv`, montando `~/.aws/emulator` en la misma ruta para que `AWS_CA_BUNDLE` exista dentro del contenedor. El certificado del emulador es para `127.0.0.1`, así que acceder por el nombre del servicio fallaría la verificación TLS.
+For **other containers** to talk to the emulator: on Linux, `network_mode: host` and the variables from `awsemu env --shell dotenv`, mounting `~/.aws/emulator` at the same path so `AWS_CA_BUNDLE` exists inside the container. The emulator's certificate is for `127.0.0.1`, so going through the service name would fail TLS verification.
 
-El job `docker` de la CI construye la imagen, prueba `awsemu start --docker` y levanta el fichero que genera `awsemu compose`.
+The `docker` job in CI builds the image, tests `awsemu start --docker` and brings up the file `awsemu compose` generates.
 
-## Comprobar que hablas con el emulador
+## Checking you're talking to the emulator
 
 ```bash
-awsemu whoami                              # falla si la cuenta no es 000000000000
+awsemu whoami                              # fails if the account isn't 000000000000
 awsemu exec -- aws sts get-caller-identity
 ```
 
-Úsalo como primer paso de cualquier script que vaya a crear o borrar recursos.
+Use it as the first step of any script that creates or deletes resources.
 
-## Salida para máquinas
+## Machine-readable output
 
-| Comando | Salida |
+| Command | Output |
 | --- | --- |
-| `awsemu status --json` | Estado de la instancia (`status`, `mode`, `pid`, `auth`, `endpoint`…). Código de salida 3 si no está sana. |
-| `awsemu status --all --json` | Lista con todas las instancias conocidas. |
-| `awsemu overview --json` | Recursos por servicio. |
-| `awsemu s3 ls --json`, `sqs ls --json`, `sqs receive --json`, `ddb scan --json`, `sns ls --json`, `events rules --json`, `kinesis read --json` | Datos sin formatear. |
-| `awsemu lambda invoke … --raw`, `sfn start … --raw`, `secrets get … --raw` | Solo el resultado; código 1 si falló. |
-| `awsemu seed export` | El estado como YAML. |
-| `--plain` / `NO_COLOR=1` | Texto sin colores ni cajas. |
+| `awsemu status --json` | The instance's state (`status`, `mode`, `pid`, `auth`, `endpoint`…). Exit code 3 if it isn't healthy. |
+| `awsemu status --all --json` | A list with every known instance. |
+| `awsemu overview --json` | Resources per service. |
+| `awsemu s3 ls --json`, `sqs ls --json`, `sqs receive --json`, `ddb scan --json`, `sns ls --json`, `events rules --json`, `kinesis read --json` | Raw data. |
+| `awsemu lambda invoke … --raw`, `sfn start … --raw`, `secrets get … --raw` | Just the result; exit code 1 if it failed. |
+| `awsemu seed export` | The state as YAML. |
+| `--plain` / `NO_COLOR=1` | Text without colours or boxes. |
 
-El formato de `--json` todavía puede cambiar antes de la v1.0.
+The `--json` format may still change before v1.0.

@@ -1,144 +1,143 @@
 # Roadmap
 
-Plan de evolución de `awsemu`. Cada versión tiene un objetivo claro; dentro de cada una, las tareas están ordenadas por prioridad. Es un documento vivo: se ajusta según lo que aprendamos usando el CLI contra el emulador real.
+How `awsemu` will evolve. Each version has a clear goal; within each, tasks are ordered by priority. It's a living document: it changes as we learn from using the CLI against the real emulator.
 
-Leyenda: ✅ hecho · 🚧 en curso · ⬜ pendiente
+Legend: ✅ done · 🚧 in progress · ⬜ to do
 
 ---
 
-## v0.1 — Base ✅
+## v0.1 — Foundation ✅
 
-Objetivo: que arrancar, conectar y explorar el emulador sea un comando cada cosa.
+Goal: one command each to start, connect to and explore the emulator.
 
-- ✅ `start` / `stop` / `restart` / `status` / `logs` con el binario nativo o con Docker
+- ✅ `start` / `stop` / `restart` / `status` / `logs` with the native binary or Docker
 - ✅ `env` (bash, zsh, fish, PowerShell, dotenv), `exec`, `shell`, `aws`, `whoami`
-- ✅ `overview` de varios servicios en una pantalla
-- ✅ Comandos de S3, SQS y DynamoDB (con JSON normal)
+- ✅ `overview` of several services on one screen
+- ✅ S3, SQS and DynamoDB commands (with plain JSON)
 - ✅ `doctor`, `image build`, `config telemetry`
-- ✅ Tests con un emulador falso y clientes boto3 simulados; CI en Linux
+- ✅ Tests with a fake emulator and fake boto3 clients; CI on Linux
 
 ---
 
-## v0.2 — Validado contra el emulador real ✅
+## v0.2 — Validated against the real emulator ✅
 
-Objetivo: confiar en que todo funciona contra el emulador de verdad, en todos los sistemas.
+Goal: trust that everything works against the actual emulator, on every OS.
 
-- ✅ **Tests de integración reales en CI**: el job `real-emulator` descarga el `.deb` oficial, verifica su firma GPG y ejecuta `tests/test_real.py` (S3, SQS, DynamoDB, `overview`, `exec`, `restart`). En local: `AWSEMU_REAL_TESTS=1 pytest -m real`.
-- ✅ **Parada limpia en Windows**: se envía Ctrl+Break al grupo de procesos del emulador. Si tras una parada forzada (o en Windows) quedan ficheros en `~/.aws/emulator/<puerto>/`, `awsemu` los borra.
-- ✅ **CI en Linux, macOS y Windows**: el emulador falso genera su certificado con `cryptography`.
-- ✅ **Soporte de `--port 0`**: el puerto real se lee de la línea de arranque.
-- ✅ **Logs persistentes**: también en Docker, y legibles después de parar.
-- ✅ **Mejores errores**: pistas concretas para `AccessDenied`, `SignatureDoesNotMatch`, peticiones sin firmar, `UnknownService`, reloj desfasado, operaciones no emuladas y TLS.
-- ✅ `AWSEMU_BINARY` para usar un binario que no esté en el `PATH`.
+- ✅ **Real integration tests in CI**: the `real-emulator` job downloads the official `.deb`, verifies its GPG signature and runs `tests/test_real.py` (S3, SQS, DynamoDB, `overview`, `exec`, `restart`). Locally: `AWSEMU_REAL_TESTS=1 pytest -m real`.
+- ✅ **Clean stop on Windows**: Ctrl+Break is sent to the emulator's process group. If files are left in `~/.aws/emulator/<port>/` after a forced stop (or on Windows), `awsemu` deletes them.
+- ✅ **CI on Linux, macOS and Windows**: the fake emulator generates its certificate with `cryptography`.
+- ✅ **`--port 0` support**: the real port is read from the startup line.
+- ✅ **Persistent logs**: in Docker too, and readable after stopping.
+- ✅ **Better errors**: specific hints for `AccessDenied`, `SignatureDoesNotMatch`, unsigned requests, `UnknownService`, clock skew, unemulated operations and TLS.
+- ✅ `AWSEMU_BINARY` to use a binary that isn't on the `PATH`.
 
-## v0.3 — Más servicios ✅
+## v0.3 — More services ✅
 
-Objetivo: cubrir los servicios que más se usan en tests de aplicaciones. Todo probado contra el emulador real en CI.
+Goal: cover the services most used in application tests. All tested against the real emulator in CI.
 
-- ✅ **SNS**: `ls`, `create`, `publish`, `subscribe` (con `--to-sqs COLA`, que crea la suscripción y la política de la cola, y `--to-lambda`).
-- ✅ **Lambda**: `ls`, `deploy` (desde carpeta, fichero o zip; adivina handler y runtime), `invoke` con payload JSON y su log, `logs`, `info`, `rm`.
-- ✅ **Secrets Manager y SSM Parameter Store**: `put`, `get`, `ls`, `rm` (y `info` en secretos).
-- ✅ **EventBridge**: `rule` con su destino y permisos en un paso (`--to-sqs`, `--to-lambda`, `--to-sns`), `put`, `rules`, `buses`, `rm`.
-- ✅ **Kinesis**: `create`, `put`, `read` (todos los shards, `--follow`), `ls`, `rm`.
-- ✅ **Step Functions**: `deploy`, `start` (espera y muestra salida o causa del fallo), `executions`, `rm`.
-- ✅ **`awsemu describe <ARN>`** para 12 servicios.
+- ✅ **SNS**: `ls`, `create`, `publish`, `subscribe` (with `--to-sqs QUEUE`, which creates the subscription and the queue policy, and `--to-lambda`).
+- ✅ **Lambda**: `ls`, `deploy` (from a folder, file or zip; guesses handler and runtime), `invoke` with a JSON payload and its log, `logs`, `info`, `rm`.
+- ✅ **Secrets Manager and SSM Parameter Store**: `put`, `get`, `ls`, `rm` (and `info` for secrets).
+- ✅ **EventBridge**: `rule` with its target and permissions in one step (`--to-sqs`, `--to-lambda`, `--to-sns`), `put`, `rules`, `buses`, `rm`.
+- ✅ **Kinesis**: `create`, `put`, `read` (all shards, `--follow`), `ls`, `rm`.
+- ✅ **Step Functions**: `deploy`, `start` (waits and shows the output or the failure's cause), `executions`, `rm`.
+- ✅ **`awsemu describe <ARN>`** for 12 services.
 
-Aprendido en CI: el emulador no envía la salida de Lambda a CloudWatch Logs; `lambda invoke` muestra el log de cada invocación.
+Learned in CI: the emulator doesn't send Lambda output to CloudWatch Logs; `lambda invoke` shows the log of each invocation.
 
-## v0.4 — Estado reproducible (seeds) ✅
+## v0.4 — Reproducible state (seeds) ✅
 
-Objetivo: arrancar siempre con los mismos datos. El emulador lo guarda todo en memoria y no tiene ruta de reset, así que esto lo resuelve el CLI.
+Goal: always start with the same data. The emulator keeps everything in memory and has no reset route, so the CLI solves this.
 
-- ✅ **`awsemu seed apply seed.yaml`**: fichero declarativo con buckets (y objetos en línea, JSON o desde carpetas locales), colas con sus DLQ, tablas con items (en línea o desde fichero), temas con suscripciones, secretos y parámetros. Idempotente: crea, actualiza o deja igual, y nunca borra.
-- ✅ **`awsemu start --seed`** y **`awsemu reset --seed`**: el seed se valida antes de arrancar o parar nada.
-- ✅ **`awsemu seed export`**: vuelca el estado actual a un seed (secretos opcionales, binarios a una carpeta).
-- ✅ **Validación** con línea y campo exactos, sugerencias para campos mal escritos y `awsemu seed validate`.
-- ✅ Ejemplo completo en `examples/seed.yaml`, validado en los tests y aplicado contra el emulador real en CI.
+- ✅ **`awsemu seed apply seed.yaml`**: a declarative file with buckets (and objects inline, as JSON or from local folders), queues with their DLQs, tables with items (inline or from a file), topics with subscriptions, secrets and parameters. Idempotent: creates, updates or leaves as is, and never deletes.
+- ✅ **`awsemu start --seed`** and **`awsemu reset --seed`**: the seed is validated before starting or stopping anything.
+- ✅ **`awsemu seed export`**: dumps the current state to a seed (secrets optional, binaries to a folder).
+- ✅ **Validation** with exact line and field, suggestions for misspelled fields, and `awsemu seed validate`.
+- ✅ A full example in `examples/seed.yaml`, validated in the tests and applied against the real emulator in CI.
 
-Fuera de esta versión: funciones Lambda, reglas de EventBridge, streams de Kinesis y máquinas de Step Functions en el seed.
+Not in this version: Lambda functions, EventBridge rules, Kinesis streams and Step Functions state machines in seeds.
 
-## v0.5 — Integración con proyectos y CI ✅
+## v0.5 — Projects and CI integration ✅
 
-Objetivo: que un proyecto declare su emulador y cualquiera lo levante con `awsemu up`.
+Goal: a project declares its emulator and anyone brings it up with `awsemu up`.
 
-- ✅ **`awsemu.toml` por proyecto** (o `[tool.awsemu]` en `pyproject.toml`): puerto, modo, auth, telemetría, `idle_timeout`, seed, extras de SDK, imagen y memoria. `awsemu init` lo crea (con un puerto propio del proyecto), `awsemu up` arranca y aplica el seed, `awsemu down` lo para. Precedencia: flag > entorno > proyecto > defecto.
-- ✅ **Plugin de pytest**: fixtures `aws_emulator` (sesión, puerto libre, seed, entorno) y `aws_emulator_fresh` (reinicio por test), con opciones `--awsemu-*` e ini.
-- ✅ **GitHub Action** (`uses: skaidan/aws-emulator-cli@v0.5.0`): instala el paquete verificado y `awsemu`, arranca, aplica el seed y exporta las variables.
-- ✅ **`awsemu compose`**: genera el servicio de Docker Compose con la configuración segura.
-- ✅ CI con el modo Docker real (`image build`, `start --docker`, `compose`) y con la propia Action.
+- ✅ **Per-project `awsemu.toml`** (or `[tool.awsemu]` in `pyproject.toml`): port, mode, auth, telemetry, `idle_timeout`, seed, SDK extras, image and memory. `awsemu init` creates it (with a port of the project's own), `awsemu up` starts and applies the seed, `awsemu down` stops it. Precedence: flag > environment > project > default.
+- ✅ **pytest plugin**: `aws_emulator` (session, free port, seed, environment) and `aws_emulator_fresh` (restart per test) fixtures, with `--awsemu-*` and ini options.
+- ✅ **GitHub Action** (`uses: skaidan/aws-emulator-cli@v0.6.0`): installs the verified package and `awsemu`, starts the emulator, applies the seed and exports the variables.
+- ✅ **`awsemu compose`**: generates the Docker Compose service with the safe setup.
+- ✅ CI with the real Docker mode (`image build`, `start --docker`, `compose`) and with the Action itself.
 
-Aprendido en CI: el modo Docker funcionó a la primera; el plugin tenía un bug de orden con `HOME` que solo se veía con el emulador real (corregido y cubierto por un test).
+Learned in CI: Docker mode worked first time; the plugin had an ordering bug with `HOME` that only showed up with the real emulator (fixed and covered by a test).
 
-## v0.6 — Experiencia interactiva ✅
+## v0.6 — Interactive experience ✅
 
-Objetivo: explorar el emulador sin recordar comandos.
+Goal: explore the emulator without remembering commands.
 
-- ✅ **Autocompletado** (`awsemu completion bash|zsh|fish`), con los nombres reales de buckets (y rutas), colas, tablas, temas, funciones, secretos, parámetros, streams, máquinas de estados y reglas.
-- ✅ **Interfaz en la terminal** (`awsemu ui`, con Textual, extra `ui`): árbol de servicios y recursos, detalle de cada uno (sin mostrar valores secretos), refresco manual y automático.
-- ✅ **`awsemu watch`**: cambios en directo de los recursos (creados, borrados, mensajes, items, objetos).
-- ✅ **`awsemu fidelity`**: puntuación por servicio publicada con cada release del emulador, para tu versión instalada, y detalle de las pruebas que fallan.
+- ✅ **Shell completion** (`awsemu completion bash|zsh|fish`), with the real names of buckets (and paths), queues, tables, topics, functions, secrets, parameters, streams, state machines and rules.
+- ✅ **Terminal UI** (`awsemu ui`, with Textual, `ui` extra): a tree of services and resources, details of each one (never showing secret values), manual and automatic refresh.
+- ✅ **`awsemu watch`**: live resource changes (created, deleted, messages, items, objects).
+- ✅ **`awsemu fidelity`**: per-service scores published with each emulator release, for your installed version, and details of the failing tests.
 
-Aprendido en CI: el emulador no registra las llamadas a la API (ni con `RUST_LOG=debug`), así que `watch` muestra el efecto en los recursos en lugar de las llamadas. Las puntuaciones están en un `scores.json.gz` adjunto a cada release, con el resultado de cada prueba y los servicios que llama.
+Learned in CI: the emulator doesn't log API calls (not even with `RUST_LOG=debug`), so `watch` shows the effect on resources rather than the calls. The scores are in a `scores.json.gz` attached to each release, with each test's result and the services it calls.
 
-## v0.7 — Preparar la publicación
+## v0.7 — Getting ready to publish 🚧
 
-Objetivo: decidir lo que es difícil de cambiar una vez que otros instalan y usan `awsemu`.
+Goal: settle what's hard to change once others install and use `awsemu`.
 
-- ⬜ **Preparar el cambio de nombre** (el nombre se decide al final, en v1.0): hoy "aws-emulator-cli" aparece 37 veces en 13 ficheros. Reunirlo en pocos sitios y añadir un script que lo cambie de una vez (paquete, repositorio, URLs de la documentación y de la GitHub Action) y compruebe que no queda ninguna referencia antigua.
-- ⬜ **Documentación en inglés.** README y guías principales en inglés, con la versión en español enlazada (o al revés), para llegar a más gente. Los mensajes del CLI ya están en inglés.
-- ⬜ **Salida estable.** Fijar y documentar el formato de `--json` de cada comando y los códigos de salida (0, 1, 2, 3), con tests que detecten cambios accidentales; después de publicar, cambiarlos rompería scripts ajenos.
-- ⬜ Revisión general de mensajes, ayudas y valores por defecto antes de congelarlos.
+- ✅ **English as the official language**: code, comments, help, documentation, ROADMAP, CHANGELOG, examples, test data and commits.
+- ⬜ **Prepare the rename** (the name is decided at the end, in v1.0): today "aws-emulator-cli" appears 37 times in 13 files. Gather it in a few places and add a script that changes it in one go (package, repository, documentation and GitHub Action URLs) and checks no old reference is left.
+- ⬜ **Stable output.** Fix and document each command's `--json` format and the exit codes (0, 1, 2, 3), with tests that catch accidental changes; after publishing, changing them would break other people's scripts.
+- ⬜ A general review of messages, help texts and defaults before freezing them.
 
-## v0.8 — ¿Funcionará mi proyecto con el emulador?
+## v0.8 — Will my project work with the emulator?
 
-Objetivo: responder antes de empezar, y actualizar el emulador sin sustos.
+Goal: answer before you start, and upgrade the emulator without surprises.
 
-- ⬜ **`awsemu check`**: busca en tu código e infraestructura (boto3, SDK de Node/Java/Go, Terraform, CloudFormation/CDK) las operaciones de AWS que usas y las cruza con las pruebas de fidelidad que fallan, usando el fichero de puntuaciones y el `manifest.jsonl` del repositorio de pruebas, que relaciona cada prueba con sus operaciones. Resultado del estilo: "usas `dynamodb:TransactWriteItems`: 2 diferencias conocidas, estas".
-- ⬜ **`awsemu fidelity --compare vX`**: qué ha mejorado y qué ha empeorado entre dos releases, solo en los servicios que usas.
-- ⬜ **`awsemu install [--version]`**: instalar o fijar una versión concreta del emulador (paquete en Linux, imagen en Docker), y `emulator_version` en `awsemu.toml` para que el equipo y la CI usen la misma. La GitHub Action también aceptará la versión.
+- ⬜ **`awsemu check`**: finds the AWS operations your code and infrastructure use (boto3, Node/Java/Go SDKs, Terraform, CloudFormation/CDK) and cross-references them with the failing fidelity tests, using the scores file and the `manifest.jsonl` of the tests repository, which maps each test to its operations. Output along the lines of: "you use `dynamodb:TransactWriteItems`: 2 known differences, these".
+- ⬜ **`awsemu fidelity --compare vX`**: what improved and what got worse between two releases, only for the services you use.
+- ⬜ **`awsemu install [--version]`**: install or pin a specific emulator version (package on Linux, image in Docker), and `emulator_version` in `awsemu.toml` so the team and CI use the same one. The GitHub Action will accept the version too.
 
-## v0.9 — Proxy: ver las llamadas e inyectar fallos
+## v0.9 — Proxy: see the calls and inject faults
 
-Objetivo: lo que el emulador no da. No registra las llamadas a la API (comprobado en CI, v0.6) y, según los analistas, no simula throttling ni caídas.
+Goal: what the emulator doesn't provide. It doesn't log API calls (checked in CI, v0.6) and, according to analysts, doesn't simulate throttling or outages.
 
-- ⬜ **`awsemu proxy`**: un proxy local entre tu aplicación y el emulador, con su propio certificado, que registra cada llamada (servicio, operación, recurso, latencia, código de error).
-- ⬜ **`awsemu watch --calls`** y una vista de llamadas en `awsemu ui`, alimentadas por el proxy.
-- ⬜ **Inyección de fallos**: reglas como "`ThrottlingException` en el 10 % de las llamadas a DynamoDB" o "500 ms de latencia en S3", configurables por comando y en `awsemu.toml`, para probar reintentos y resiliencia.
-- ⬜ Integración con el plugin de pytest (fixture para activar fallos en un test concreto).
+- ⬜ **`awsemu proxy`**: a local proxy between your application and the emulator, with its own certificate, logging every call (service, operation, resource, latency, error code).
+- ⬜ **`awsemu watch --calls`** and a calls view in `awsemu ui`, fed by the proxy.
+- ⬜ **Fault injection**: rules such as "`ThrottlingException` on 10% of DynamoDB calls" or "500 ms of latency on S3", configurable per command and in `awsemu.toml`, to test retries and resilience.
+- ⬜ pytest plugin integration (a fixture to turn on faults for one test).
 
-## v0.10 — Completar lo que ya existe
+## v0.10 — Completing what exists
 
-Objetivo: cerrar los huecos conocidos de lo ya hecho.
+Goal: close the known gaps in what's already done.
 
-- ⬜ **Seeds con más servicios**: funciones Lambda (desde código local), reglas de EventBridge, streams de Kinesis y máquinas de Step Functions, también en `seed export`.
-- ⬜ **`awsemu snapshot save/restore`**: guardar y recuperar un escenario completo (el emulador no tiene snapshots), sobre la base de `seed export` y `reset --seed`.
-- ⬜ **Herramientas de infraestructura y otros lenguajes, probados en CI**: Terraform, CDK, y los SDK de Node, Java y Go contra el emulador, con guías y ejemplos. Hoy solo está probado Python.
+- ⬜ **Seeds with more services**: Lambda functions (from local code), EventBridge rules, Kinesis streams and Step Functions state machines, in `seed export` too.
+- ⬜ **`awsemu snapshot save/restore`**: save and restore a whole scenario (the emulator has no snapshots), built on `seed export` and `reset --seed`.
+- ⬜ **Infrastructure tools and other languages, tested in CI**: Terraform, CDK, and the Node, Java and Go SDKs against the emulator, with guides and examples. Today only Python is tested.
 
-## v0.11 — Agentes de IA
+## v0.11 — AI agents
 
-Objetivo: que un agente de programación pruebe su código contra el emulador sin tocar AWS.
+Goal: a coding agent tests its code against the emulator without touching AWS.
 
-- ⬜ **Servidor MCP de `awsemu`**: herramientas para arrancar y parar el emulador, aplicar seeds, consultar recursos, ver la fidelidad de un servicio y leer las llamadas del proxy.
-- ⬜ Guía para usarlo con agentes, junto al *skill* `aws-emulator` que menciona la documentación de AWS.
+- ⬜ **`awsemu` MCP server**: tools to start and stop the emulator, apply seeds, query resources, check a service's fidelity and read the proxy's calls.
+- ⬜ A guide to use it with agents, alongside the `aws-emulator` *skill* mentioned in AWS's documentation.
 
-## v1.0 — Distribución estable
+## v1.0 — Stable distribution
 
-Objetivo: instalar y actualizar en cualquier sitio con un comando.
+Goal: install and upgrade anywhere with one command.
 
-- ⬜ **Nombre definitivo, justo antes de publicar.** "aws-emulator-cli" usa la marca AWS; para un proyecto no oficial en PyPI y Homebrew puede causar problemas o confundirse con algo oficial. Elegir el nombre, comprobar que está libre en PyPI, Homebrew y GitHub, aplicarlo con el script de v0.7 y publicar enseguida, para que no lo ocupe nadie entre medias.
-- ✅ Releases automáticas en GitHub desde `CHANGELOG.md` (wheel y sdist adjuntos).
-- ⬜ Publicación en **PyPI** (`pipx install aws-emulator-cli`).
-- ⬜ **Homebrew tap** y binarios autónomos (PyInstaller) para quien no tenga Python.
-- ⬜ Versionado semántico y promesa de estabilidad (la salida se fija en v0.7).
-- ✅ Documentación en `docs/`: primeros pasos, servicios, tests y CI, solución de problemas, arquitectura y referencia generada desde el código.
-- ⬜ Web de documentación (MkDocs) con guías: "tests de integración con pytest", "CI con GitHub Actions" y "Node y Java contra el emulador".
+- ⬜ **Final name, right before publishing.** "aws-emulator-cli" uses the AWS trademark; for an unofficial project on PyPI and Homebrew it may cause problems or be mistaken for something official. Choose the name, check it's free on PyPI, Homebrew and GitHub, apply it with the v0.7 script and publish straight away, so nobody takes it in between.
+- ✅ Automatic GitHub releases from `CHANGELOG.md` (wheel and sdist attached).
+- ⬜ Publishing on **PyPI** (`pipx install <name>`).
+- ⬜ A **Homebrew tap** and standalone binaries (PyInstaller) for those without Python.
+- ⬜ Semantic versioning and a stability promise (the output is fixed in v0.7).
+- ✅ Documentation in `docs/`: getting started, services, testing and CI, troubleshooting, architecture and a reference generated from the code.
+- ⬜ A documentation website (MkDocs) with guides: "integration tests with pytest", "CI with GitHub Actions" and "Node and Java against the emulator".
 
 ---
 
-## Ideas sin versión asignada
+## Ideas without a version
 
-- Varias regiones: el emulador solo admite una región por instancia, así que `awsemu` podría gestionar un grupo de instancias, una por región.
-- Perfil de AWS CLI con nombre (`--profile emulator`) como alternativa a exportar variables.
-- Integración con Terraform y CDK (`awsemu exec -- terraform apply` con el `provider` ya configurado).
+- Several regions: the emulator supports one region per instance, so `awsemu` could manage a group of instances, one per region.
+- A named AWS CLI profile (`--profile emulator`) as an alternative to exporting variables.
 
-¿Tienes una idea o necesitas algo antes? Abre un issue.
+Have an idea or need something sooner? Open an issue.

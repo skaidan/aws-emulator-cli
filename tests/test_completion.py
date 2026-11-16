@@ -22,10 +22,10 @@ def emulator(monkeypatch):
                                                      "https://x/000000000000/jobs-dlq",
                                                      "https://x/000000000000/mail"]}),
         "dynamodb": FakeClient(list_tables=[{"TableNames": ["users", "orders"]}]),
-        "s3": FakeClient(list_buckets={"Buckets": [{"Name": "fotos"}, {"Name": "logs"}]},
+        "s3": FakeClient(list_buckets={"Buckets": [{"Name": "photos"}, {"Name": "logs"}]},
                          list_objects_v2=lambda **kw: {
                              "CommonPrefixes": [{"Prefix": kw["Prefix"] + "2026/"}],
-                             "Contents": [{"Key": kw["Prefix"] + "gato.jpg"}]}),
+                             "Contents": [{"Key": kw["Prefix"] + "cat.jpg"}]}),
         "ssm": FakeClient(describe_parameters=[{"Parameters": [{"Name": "/app/host"}, {"Name": "/app/key"}]}]),
     }
     monkeypatch.setattr(completion.health, "port_open", lambda port, timeout=0.5: True)
@@ -56,9 +56,9 @@ def test_table_and_parameter_names(emulator):
 
 
 def test_s3_paths(emulator):
-    assert complete(["s3", "ls"], "") == ["fotos/", "logs/"]
-    assert complete(["s3", "cat"], "fotos/") == ["fotos/2026/", "fotos/gato.jpg"]
-    assert complete(["s3", "cat"], "s3://fo") == ["s3://fotos/"]
+    assert complete(["s3", "ls"], "") == ["logs/", "photos/"]
+    assert complete(["s3", "cat"], "photos/") == ["photos/2026/", "photos/cat.jpg"]
+    assert complete(["s3", "cat"], "s3://ph") == ["s3://photos/"]
 
 
 def test_global_port_is_used(emulator):

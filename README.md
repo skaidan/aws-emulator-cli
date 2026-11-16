@@ -1,277 +1,277 @@
 # aws-emulator-cli (`awsemu`)
 
-Un CLI amigable para [AWS Emulator](https://github.com/aws/aws-emulator), el emulador local de las APIs de AWS.
+A friendly CLI for [AWS Emulator](https://github.com/aws/aws-emulator), the local emulator of the AWS APIs.
 
-El emulador en sí es un único binario sin subcomandos: se ejecuta en primer plano, escribe sus credenciales y su certificado en `~/.aws/emulator/<puerto>/` y espera que configures a mano varias variables de entorno. `awsemu` se encarga de todo eso:
+The emulator itself is a single binary with no subcommands: it runs in the foreground, writes its credentials and certificate to `~/.aws/emulator/<port>/`, and expects you to set several environment variables by hand. `awsemu` takes care of all that:
 
-- **Arrancar y parar** el emulador en segundo plano, con el binario nativo o con Docker, esperando a que esté sano.
-- **Conectar tu shell** con un solo comando (`eval "$(awsemu env)"`), sin tocar tus credenciales reales.
-- **Ver qué hay dentro**: buckets, colas, tablas, funciones, secretos… en una sola pantalla.
-- **Trabajar con S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis y Step Functions** con comandos cortos y tablas legibles: DynamoDB con JSON normal, `lambda deploy` desde una carpeta, reglas de EventBridge con su destino y permisos en un paso, y `describe` para cualquier ARN.
-- **Arrancar siempre con los mismos datos** con un *seed* en YAML: `awsemu start --seed seed.yaml`, `awsemu reset --seed seed.yaml`, y `seed export` para guardar el estado actual.
-- **Configurarlo por proyecto** con `awsemu.toml` (`awsemu init`, `awsemu up`, `awsemu down`): puerto propio, modo, seed…
-- **Usarlo en tests y CI**: plugin de pytest (fixture `aws_emulator`), GitHub Action (`uses: skaidan/aws-emulator-cli@v0.5.0`) y `awsemu compose` para Docker Compose.
-- **Explorarlo**: interfaz en la terminal (`awsemu ui`), cambios en directo (`awsemu watch`), autocompletado con los nombres de tus recursos y la **fidelidad por servicio** de tu versión del emulador (`awsemu fidelity`).
-- **Diagnosticar** problemas típicos (`awsemu doctor`).
+- **Start and stop** the emulator in the background, with the native binary or Docker, waiting until it's healthy.
+- **Point your shell at it** with one command (`eval "$(awsemu env)"`), without touching your real credentials.
+- **See what's inside**: buckets, queues, tables, functions, secrets… on one screen.
+- **Work with S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis and Step Functions** through short commands and readable tables: DynamoDB with plain JSON, `lambda deploy` from a folder, EventBridge rules with their target and permissions in one step, and `describe` for any ARN.
+- **Always start with the same data** using a YAML *seed*: `awsemu start --seed seed.yaml`, `awsemu reset --seed seed.yaml`, and `seed export` to save the current state.
+- **Configure it per project** with `awsemu.toml` (`awsemu init`, `awsemu up`, `awsemu down`): its own port, mode, seed…
+- **Use it in tests and CI**: a pytest plugin (`aws_emulator` fixture), a GitHub Action (`uses: skaidan/aws-emulator-cli@v0.6.0`) and `awsemu compose` for Docker Compose.
+- **Explore it**: a terminal UI (`awsemu ui`), live changes (`awsemu watch`), completion of your resource names, and the **per-service fidelity** of your emulator version (`awsemu fidelity`).
+- **Diagnose** common problems (`awsemu doctor`).
 
 ```
 $ awsemu start
 Starting AWS Emulator (native) on port 9297…
 ✓ AWS Emulator is up at https://127.0.0.1:9297
 
-$ awsemu s3 mb fotos && awsemu s3 put ./gato.jpg fotos/
-$ awsemu sqs create trabajos && awsemu sqs send trabajos '{"id": 1}'
-$ awsemu ddb create usuarios --pk id
-$ awsemu ddb put usuarios '{"id": "u1", "nombre": "Ana", "edad": 30}'
+$ awsemu s3 mb photos && awsemu s3 put ./cat.jpg photos/
+$ awsemu sqs create jobs && awsemu sqs send jobs '{"id": 1}'
+$ awsemu ddb create users --pk id
+$ awsemu ddb put users '{"id": "u1", "name": "Ana", "age": 30}'
 
 $ awsemu overview
 AWS Emulator on port 9297
 resource         count  names
-S3 buckets       1      fotos
-SQS queues       1      trabajos
-DynamoDB tables  1      usuarios
+S3 buckets       1      photos
+SQS queues       1      jobs
+DynamoDB tables  1      users
 ```
 
-## Documentación
+## Documentation
 
-- [Primeros pasos](docs/getting-started.md): instalar, arrancar y conectar tus herramientas.
-- [Explorar el emulador](docs/explore.md): `ui`, `watch`, `fidelity` y autocompletado.
-- [Configuración por proyecto](docs/project-config.md): `awsemu.toml`, `init`, `up` y `down`.
-- [Seeds](docs/seeds.md): datos de partida reproducibles (formato, validación, `apply` y `export`).
-- [Guía de servicios](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions y `describe`, con ejemplos.
-- [Tests y CI](docs/testing.md): plugin de pytest, GitHub Action, scripts y Docker Compose.
-- [Solución de problemas](docs/troubleshooting.md): qué significa cada error.
-- [Referencia de comandos](docs/reference.md): todos los comandos y opciones.
-- [Arquitectura](docs/architecture.md) y [cómo contribuir](CONTRIBUTING.md).
+- [Getting started](docs/getting-started.md): install, start the emulator and connect your tools.
+- [Exploring the emulator](docs/explore.md): `ui`, `watch`, `fidelity` and shell completion.
+- [Project settings](docs/project-config.md): `awsemu.toml`, `init`, `up` and `down`.
+- [Seeds](docs/seeds.md): reproducible starting data (format, validation, `apply` and `export`).
+- [Services guide](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions and `describe`, with examples.
+- [Testing and CI](docs/testing.md): pytest plugin, GitHub Action, scripts and Docker Compose.
+- [Troubleshooting](docs/troubleshooting.md): what each error means.
+- [Command reference](docs/reference.md): every command and option.
+- [Architecture](docs/architecture.md) and [contributing](CONTRIBUTING.md).
 
-## Instalación
+## Installation
 
-Requisitos: Python 3.10+ y **una** de estas dos opciones para ejecutar el emulador:
+Requirements: Python 3.10+ and **one** of these two ways to run the emulator:
 
-- **Linux**: el paquete `.rpm` o `.deb` de AWS Emulator (deja `aws-emulator` en el `PATH`).
-- **macOS, Windows o Linux**: Docker. AWS no publica una imagen, pero `awsemu image build` la construye con la receta oficial.
+- **Linux**: the AWS Emulator `.rpm` or `.deb` package (puts `aws-emulator` on your `PATH`).
+- **macOS, Windows or Linux**: Docker. AWS doesn't publish an image, but `awsemu image build` builds one with the official recipe.
 
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
-# o una versión concreta, desde las releases:
+# or a specific version, from the releases:
 pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.6.0/aws_emulator_cli-0.6.0-py3-none-any.whl
 ```
 
-Todas las versiones: [Releases](https://github.com/skaidan/aws-emulator-cli/releases). Para la interfaz en la terminal (`awsemu ui`), instala el extra `ui`: `pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'`.
+All versions: [Releases](https://github.com/skaidan/aws-emulator-cli/releases). For the terminal UI (`awsemu ui`), install the `ui` extra: `pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'`.
 
-Después:
+Then:
 
 ```bash
-awsemu doctor          # comprueba qué tienes y qué falta
-awsemu image build     # solo si vas a usar Docker
+awsemu doctor          # checks what you have and what's missing
+awsemu image build     # only if you'll use Docker
 ```
 
-## Uso
+## Usage
 
-### Ciclo de vida
+### Lifecycle
 
-| Comando | Qué hace |
+| Command | What it does |
 | --- | --- |
-| `awsemu start` | Arranca en segundo plano y espera al health check. Usa el binario si está instalado; si no, Docker. |
-| `awsemu start --docker` / `--native` | Fuerza el modo. |
-| `awsemu up` / `awsemu down` | Arranca (si hace falta) y aplica el seed del proyecto / lo para. |
-| `awsemu start --no-auth` | Sin firma SigV4 (el emulador acepta cualquier petición). |
-| `awsemu start --idle-timeout 600` | Se para solo tras 10 min sin llamadas (útil en CI). |
-| `awsemu --port 0 start` | El sistema elige un puerto libre (solo en modo nativo); `awsemu` te dice cuál. |
-| `awsemu start -f` | En primer plano, como el binario original (Ctrl+C para parar). |
-| `awsemu start -- <opciones>` | Pasa opciones extra al emulador tal cual. |
-| `awsemu status` / `awsemu ps` | Estado, modo, PID o contenedor, uptime. `--all` para todos los puertos, `--json` para scripts. |
-| `awsemu logs [-f] [--grep TEXTO]` | Logs JSON del emulador, legibles, también después de pararlo y también en Docker. `--raw` para verlos tal cual. |
-| `awsemu stop [--all]` | Parada limpia (SIGTERM; Ctrl+Break en Windows): el emulador borra sus ficheros. |
-| `awsemu stop --force` | Si no responde. `awsemu` borra los ficheros que el emulador no haya podido limpiar. |
-| `awsemu restart` / `awsemu reset` | Reinicia. El emulador guarda todo en memoria, así que esto **vacía el estado**. |
+| `awsemu start` | Starts in the background and waits for the health check. Uses the binary if installed, otherwise Docker. |
+| `awsemu start --docker` / `--native` | Forces the mode. |
+| `awsemu up` / `awsemu down` | Starts (if needed) and applies the project's seed / stops it. |
+| `awsemu start --no-auth` | No SigV4 signing (the emulator accepts any request). |
+| `awsemu start --idle-timeout 600` | Stops by itself after 10 minutes without calls (handy in CI). |
+| `awsemu --port 0 start` | The OS picks a free port (native mode only); `awsemu` tells you which. |
+| `awsemu start -f` | In the foreground, like the original binary (Ctrl+C to stop). |
+| `awsemu start -- <options>` | Passes extra options to the emulator as-is. |
+| `awsemu status` / `awsemu ps` | Status, mode, PID or container, uptime. `--all` for every port, `--json` for scripts. |
+| `awsemu logs [-f] [--grep TEXT]` | The emulator's JSON log, readable, also after it stopped and also in Docker. `--raw` for the original lines. |
+| `awsemu stop [--all]` | Clean stop (SIGTERM; Ctrl+Break on Windows): the emulator deletes its files. |
+| `awsemu stop --force` | If it doesn't respond. `awsemu` deletes the files the emulator couldn't clean up. |
+| `awsemu restart` / `awsemu reset` | Restarts. The emulator keeps everything in memory, so this **empties its state**. |
 
-Varias instancias a la vez: usa `--port` (o la variable `AWSEMU_PORT`) en cualquier comando.
-
-Si el binario no está en el `PATH`, indícalo con `AWSEMU_BINARY` (admite argumentos):
-
-```bash
-export AWSEMU_BINARY=/opt/aws-emulator/bin/aws-emulator
-```
+Several instances at once: use `--port` (or the `AWSEMU_PORT` variable) with any command.
 
 ```bash
 awsemu --port 9300 start
 awsemu --port 9300 overview
 ```
 
-### Conectar tus herramientas
+If the binary isn't on your `PATH`, point to it with `AWSEMU_BINARY` (arguments allowed):
+
+```bash
+export AWSEMU_BINARY=/opt/aws-emulator/bin/aws-emulator
+```
+
+### Connecting your tools
 
 ```bash
 eval "$(awsemu env)"                       # bash / zsh
 awsemu env --shell fish | source           # fish
 awsemu env --shell powershell | iex        # PowerShell
 awsemu env --shell dotenv > .env.emulator  # docker compose, IDEs…
-awsemu env --sdk node --sdk java           # añade NODE_EXTRA_CA_CERTS / JAVA_TOOL_OPTIONS
-eval "$(awsemu env --unset)"               # volver a AWS real
+awsemu env --sdk node --sdk java           # adds NODE_EXTRA_CA_CERTS / JAVA_TOOL_OPTIONS
+eval "$(awsemu env --unset)"               # back to real AWS
 ```
 
-`awsemu env` exporta las mismas variables que indica la documentación oficial (`AWS_ENDPOINT_URL`, `AWS_CA_BUNDLE`, `AWS_CONFIG_FILE`, `AWS_SHARED_CREDENTIALS_FILE`, `AWS_DISABLE_HOST_PREFIX_INJECTION`…) y además **desactiva** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` y `AWS_PROFILE`, que si no tendrían prioridad y harían fallar la autenticación.
+`awsemu env` exports the variables the official documentation lists (`AWS_ENDPOINT_URL`, `AWS_CA_BUNDLE`, `AWS_CONFIG_FILE`, `AWS_SHARED_CREDENTIALS_FILE`, `AWS_DISABLE_HOST_PREFIX_INJECTION`…) and also **unsets** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `AWS_PROFILE`, which would otherwise take precedence and make authentication fail.
 
-Si no quieres tocar tu shell actual:
+If you'd rather not touch your current shell:
 
 ```bash
-awsemu exec -- pytest -k integration       # cualquier comando, ya apuntando al emulador
-awsemu aws s3 ls                           # el AWS CLI, apuntando al emulador
-awsemu shell                               # una sub-shell conectada ('exit' para salir)
-awsemu whoami                              # comprueba que hablas con la cuenta 000000000000
+awsemu exec -- pytest -k integration       # any command, already pointed at the emulator
+awsemu aws s3 ls                           # the AWS CLI, pointed at the emulator
+awsemu shell                               # a connected sub-shell ('exit' to leave)
+awsemu whoami                              # checks you're talking to account 000000000000
 ```
 
-### Servicios
+### Services
 
 ```bash
 awsemu overview [--all] [-s s3 -s sqs] [--json]   # alias: awsemu ls
 
-awsemu s3 ls [BUCKET[/PREFIJO]] [-r]
+awsemu s3 ls [BUCKET[/PREFIX]] [-r]
 awsemu s3 mb BUCKET...
-awsemu s3 put FICHERO_O_CARPETA BUCKET[/CLAVE]
-awsemu s3 get BUCKET/CLAVE [DESTINO]
-awsemu s3 cat BUCKET/CLAVE
-awsemu s3 rm BUCKET/CLAVE   |   awsemu s3 rm -r BUCKET/PREFIJO
+awsemu s3 put FILE_OR_FOLDER BUCKET[/KEY]
+awsemu s3 get BUCKET/KEY [DEST]
+awsemu s3 cat BUCKET/KEY
+awsemu s3 rm BUCKET/KEY   |   awsemu s3 rm -r BUCKET/PREFIX
 awsemu s3 rb BUCKET [--force]
-awsemu s3 presign BUCKET/CLAVE [--put] [--expires 600]
+awsemu s3 presign BUCKET/KEY [--put] [--expires 600]
 
 awsemu sqs ls
-awsemu sqs create NOMBRE [--fifo] [--dlq OTRA_COLA]
-awsemu sqs send COLA 'cuerpo' [-a clave=valor] [--group G]
-awsemu sqs receive COLA [-n 10] [--delete]
-awsemu sqs info COLA
-awsemu sqs purge COLA   |   awsemu sqs rm COLA
+awsemu sqs create NAME [--fifo] [--dlq OTHER_QUEUE]
+awsemu sqs send QUEUE 'body' [-a key=value] [--group G]
+awsemu sqs receive QUEUE [-n 10] [--delete]
+awsemu sqs info QUEUE
+awsemu sqs purge QUEUE   |   awsemu sqs rm QUEUE
 
 awsemu ddb ls                                      # ddb = dynamodb
-awsemu ddb create TABLA --pk id [--sk fecha:N]
-awsemu ddb put TABLA '{"id": "u1", "edad": 30}'    # o --file items.json (objeto o lista)
-awsemu ddb get TABLA '{"id": "u1"}'
-awsemu ddb scan TABLA [-n 50] [--json]
-awsemu ddb delete TABLA '{"id": "u1"}'
-awsemu ddb drop TABLA
+awsemu ddb create TABLE --pk id [--sk date:N]
+awsemu ddb put TABLE '{"id": "u1", "age": 30}'     # or --file items.json (object or list)
+awsemu ddb get TABLE '{"id": "u1"}'
+awsemu ddb scan TABLE [-n 50] [--json]
+awsemu ddb delete TABLE '{"id": "u1"}'
+awsemu ddb drop TABLE
 
 awsemu sns ls
 awsemu sns create TOPIC [--fifo]
-awsemu sns subscribe TOPIC --to-sqs COLA [--raw]     # configura la política de la cola
-awsemu sns subscribe TOPIC --to-lambda FUNCION
-awsemu sns publish TOPIC 'mensaje' [--subject S] [-a clave=valor]
+awsemu sns subscribe TOPIC --to-sqs QUEUE [--raw]  # sets the queue policy
+awsemu sns subscribe TOPIC --to-lambda FUNCTION
+awsemu sns publish TOPIC 'message' [--subject S] [-a key=value]
 awsemu sns subs [TOPIC]   |   awsemu sns rm TOPIC
 
-awsemu lambda deploy NOMBRE ./carpeta|fichero.py|code.zip [-e CLAVE=valor]   # alias: fn
-awsemu lambda invoke NOMBRE '{"name": "Ana"}' [--raw] [--async]
-awsemu lambda logs NOMBRE [-f]
-awsemu lambda ls   |   awsemu lambda info NOMBRE   |   awsemu lambda rm NOMBRE
+awsemu lambda deploy NAME ./folder|file.py|code.zip [-e KEY=value]   # alias: fn
+awsemu lambda invoke NAME '{"name": "Ana"}' [--raw] [--async]
+awsemu lambda logs NAME [-f]
+awsemu lambda ls   |   awsemu lambda info NAME   |   awsemu lambda rm NAME
 ```
 
-`lambda deploy` adivina el handler y el runtime a partir del código (`def handler(...)` en Python, `exports.handler` / `export const handler` en Node), crea un rol de ejecución si no le pasas `--role` y, si la función ya existe, la actualiza.
+`lambda deploy` guesses the handler and runtime from the code (`def handler(...)` in Python, `exports.handler` / `export const handler` in Node), creates an execution role if you don't pass `--role` and, if the function already exists, updates it.
 
-Y además `awsemu secrets`, `ssm`, `events`, `kinesis`, `sfn` y `describe ARN`: ejemplos de todos en la [guía de servicios](docs/services.md).
+There's also `awsemu secrets`, `ssm`, `events`, `kinesis`, `sfn` and `describe ARN`: examples of all of them in the [services guide](docs/services.md).
 
-Para cualquier otro servicio u operación: `awsemu aws <servicio> <operación> ...`.
+For any other service or operation: `awsemu aws <service> <operation> ...`.
 
-### Explorar
+### Exploring
 
 ```bash
-awsemu ui                          # interfaz en la terminal (extra 'ui')
-awsemu watch                       # cambios en directo mientras tu app trabaja
-awsemu fidelity s3 sqs dynamodb    # cuánto se parece a AWS, para tu versión
-awsemu fidelity lambda --failures  # qué pruebas fallan y por qué
-eval "$(awsemu completion bash)"   # autocompletado, también de nombres de recursos
+awsemu ui                          # terminal UI ('ui' extra)
+awsemu watch                       # live changes while your app works
+awsemu fidelity s3 sqs dynamodb    # how closely it matches AWS, for your version
+awsemu fidelity lambda --failures  # which tests fail and why
+eval "$(awsemu completion bash)"   # completion, including resource names
 ```
 
-Más en [docs/explore.md](docs/explore.md).
+More in [docs/explore.md](docs/explore.md).
 
-### Por proyecto
+### Per project
 
 ```bash
-awsemu init        # crea awsemu.toml (puerto propio del proyecto, seed detectado)
-awsemu up          # arranca si hace falta y aplica el seed
+awsemu init        # creates awsemu.toml (a port of its own, seed detected)
+awsemu up          # starts it if needed and applies the seed
 awsemu down
 ```
 
-Todos los comandos usan el `awsemu.toml` de la carpeta (o de una superior). Detalles en [docs/project-config.md](docs/project-config.md).
+Every command uses the `awsemu.toml` in the current folder (or a parent). Details in [docs/project-config.md](docs/project-config.md).
 
-### Tests y CI
+### Testing and CI
 
 ```python
-def test_upload(aws_emulator):           # plugin de pytest: emulador propio, seed y entorno listos
+def test_upload(aws_emulator):           # pytest plugin: own emulator, seed and environment ready
     boto3.client("s3").create_bucket(Bucket="demo")
 ```
 
 ```yaml
-- uses: skaidan/aws-emulator-cli@v0.5.0   # GitHub Actions: paquete verificado, seed y variables
+- uses: skaidan/aws-emulator-cli@v0.6.0   # GitHub Actions: verified package, seed and variables
   with:
     seed: tests/seed.yaml
 ```
 
-Más en [docs/testing.md](docs/testing.md).
+More in [docs/testing.md](docs/testing.md).
 
 ### Seeds
 
 ```bash
-awsemu seed validate seed.yaml     # errores con línea y campo
-awsemu start --seed seed.yaml      # arrancar + aplicar
-awsemu seed apply seed.yaml        # se puede repetir: crea, actualiza o deja igual
-awsemu reset --seed seed.yaml      # estado vacío + seed
-awsemu seed export -o seed.yaml    # el estado actual, como seed
+awsemu seed validate seed.yaml     # errors with line and field
+awsemu start --seed seed.yaml      # start + apply
+awsemu seed apply seed.yaml        # repeatable: creates, updates or leaves as is
+awsemu reset --seed seed.yaml      # empty state + seed
+awsemu seed export -o seed.yaml    # the current state, as a seed
 ```
 
-Formato y detalles en [docs/seeds.md](docs/seeds.md); ejemplo completo en [examples/seed.yaml](examples/seed.yaml).
+Format and details in [docs/seeds.md](docs/seeds.md); a full example in [examples/seed.yaml](examples/seed.yaml).
 
-### Configuración del emulador
+### Emulator settings
 
 ```bash
-awsemu config show                 # ~/.aws/emulator/config.toml (o $EMULATOR_CONFIG)
-awsemu config telemetry off        # escribe [telemetry] enabled = false
-awsemu start --no-telemetry        # solo para esta ejecución
+awsemu config show                 # ~/.aws/emulator/config.toml (or $EMULATOR_CONFIG)
+awsemu config telemetry off        # writes [telemetry] enabled = false
+awsemu start --no-telemetry        # just for this run
 ```
 
-### Otras opciones
+### Other options
 
-- `--plain` o `NO_COLOR=1`: salida en texto plano, sin colores ni cajas.
-- Prefijos y alias: `awsemu stat` → `status`, `ps`, `up`, `down`, `reset`, `ddb`, `ls`.
-- Códigos de salida: `status` devuelve `3` si el emulador no está sano, útil en scripts.
+- `--plain` or `NO_COLOR=1`: plain-text output, no colours or boxes.
+- Prefixes and aliases: `awsemu stat` → `status`; aliases `ps`, `reset`, `ddb`, `fn`, `eb`, `ls`.
+- Exit codes: `status` returns `3` when the emulator isn't healthy, handy in scripts.
 
-## Cómo funciona
+## How it works
 
-- El emulador escribe `config`, `emulator_credentials`, `ca.pem` y `truststore.p12` en `~/.aws/emulator/<puerto>/` y los borra al pararse limpiamente. `awsemu` los lee, pero nunca escribe ahí.
-- `awsemu` guarda su propio estado (PID o contenedor, y el log en modo nativo) en `~/.aws/emulator-cli/<puerto>/`. Se puede cambiar con `AWSEMU_HOME`.
-- Para saber si el emulador está listo usa `GET /__admin/health`, que es la única ruta de control que ofrece el emulador.
-- En Docker sigue la receta oficial: publica el puerto **solo** en `127.0.0.1`, limita la memoria a 2 GiB, monta `~/.aws/emulator` y, en Linux, usa tu UID para que los ficheros sean tuyos.
-- Los comandos de servicios usan boto3 con el endpoint, el certificado y las claves del emulador configurados de forma explícita. Aunque tu shell tenga credenciales reales, `awsemu` nunca llama a AWS.
+- The emulator writes `config`, `emulator_credentials`, `ca.pem` and `truststore.p12` to `~/.aws/emulator/<port>/` and deletes them on a clean stop. `awsemu` reads them, but never writes there.
+- `awsemu` keeps its own state (PID or container, and the log) in `~/.aws/emulator-cli/<port>/`. Change it with `AWSEMU_HOME`.
+- To know when the emulator is ready it uses `GET /__admin/health`, the only admin route the emulator offers.
+- In Docker it follows the official recipe: publishes the port on `127.0.0.1` **only**, limits memory to 2 GiB, mounts `~/.aws/emulator` and, on Linux, uses your UID so the files are yours.
+- Service commands use boto3 with the emulator's endpoint, certificate and keys set explicitly. Even if your shell has real credentials, `awsemu` never calls AWS.
 
-## Limitaciones
+## Limitations
 
-- `--port 0` solo funciona en modo nativo: Docker no puede redirigir un puerto que se elige al arrancar.
-- En Windows, la parada limpia usa Ctrl+Break. Si el emulador no la atiende, `awsemu` borra igualmente sus ficheros, pero el emulador no llega a enviar su último lote de telemetría.
-- El emulador no persiste datos: al parar o reiniciar se pierde todo. Es así por diseño del emulador; los [seeds](docs/seeds.md) lo resuelven.
-- S3 Control no funciona contra el emulador (el SDK siempre mete el ID de cuenta en el host). Es una limitación del emulador.
+- `--port 0` only works in native mode: Docker can't forward a port chosen at startup.
+- On Windows, the clean stop uses Ctrl+Break. If the emulator doesn't handle it, `awsemu` still deletes its files, but the emulator doesn't get to send its last telemetry batch.
+- The emulator doesn't persist data: stopping or restarting loses everything. That's by design; [seeds](docs/seeds.md) solve it.
+- S3 Control doesn't work against the emulator (the SDK always puts the account ID in the host name). That's an emulator limitation.
 
 ## Roadmap
 
-Hecho: ciclo de vida nativo y Docker, validación contra el emulador real en Linux, macOS y Windows (v0.2), y 10 servicios con comandos propios más `describe` (v0.3), seeds para arrancar con datos reproducibles (v0.4), `awsemu.toml`, plugin de pytest, GitHub Action y Docker Compose (v0.5), y `ui`, `watch`, `fidelity` y autocompletado (v0.6). Lo que viene: preparar la publicación (inglés, salida estable y un cambio de nombre fácil; v0.7), `awsemu check` para saber si tu proyecto funcionará y actualizaciones seguras (v0.8), un proxy para ver llamadas e inyectar fallos (v0.9), completar seeds, snapshots y otros lenguajes (v0.10), un servidor MCP para agentes (v0.11), y el nombre definitivo con PyPI, Homebrew y binarios autónomos (v1.0). Detalles en [ROADMAP.md](ROADMAP.md) y cambios por versión en [CHANGELOG.md](CHANGELOG.md).
+Done: native and Docker lifecycle, validation against the real emulator on Linux, macOS and Windows (v0.2), 10 services with their own commands plus `describe` (v0.3), seeds for reproducible starting data (v0.4), `awsemu.toml`, pytest plugin, GitHub Action and Docker Compose (v0.5), and `ui`, `watch`, `fidelity` and completion (v0.6). Coming next: getting ready to publish (stable output and an easy rename; v0.7), `awsemu check` to know whether your project will work, and safe upgrades (v0.8), a proxy to see calls and inject faults (v0.9), more seed coverage, snapshots and other languages (v0.10), an MCP server for agents (v0.11), and the final name with PyPI, Homebrew and standalone binaries (v1.0). Details in [ROADMAP.md](ROADMAP.md), changes per version in [CHANGELOG.md](CHANGELOG.md).
 
-## Desarrollo
+## Development
 
 ```bash
 git clone https://github.com/skaidan/aws-emulator-cli && cd aws-emulator-cli
 python -m venv .venv && . .venv/bin/activate
-pip install -e '.[dev]'
+pip install -e '.[dev,ui]'
 pytest
 ```
 
-Guía completa (tests, añadir un servicio, documentación y releases) en [CONTRIBUTING.md](CONTRIBUTING.md).
+Full guide (tests, adding a service, documentation and releases) in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Los tests normales no necesitan el emulador real: `tests/fake_emulator.py` imita su comportamiento documentado (opciones, `-p 0`, ficheros, health check, log JSON y limpieza al pararse). Los comandos de servicios se prueban con un cliente boto3 simulado. Corren en Linux, macOS y Windows.
+The regular tests don't need the real emulator: `tests/fake_emulator.py` mimics its documented behaviour (options, `-p 0`, files, health check, JSON log and cleanup on stop), and service commands are tested with a fake boto3 client. They run on Linux, macOS and Windows.
 
-Los tests contra el emulador real (`tests/test_real.py`) se activan aparte:
+Tests against the real emulator (`tests/test_real.py`) are enabled separately:
 
 ```bash
 AWSEMU_REAL_TESTS=1 pytest -m real -v
 ```
 
-En CI, el job `real-emulator` descarga el `.deb` oficial, verifica su firma GPG y los ejecuta.
+In CI, the `real-emulator` job downloads the official `.deb`, verifies its GPG signature and runs them.
 
-## Licencia
+## License
 
-MIT. Este proyecto no es oficial ni está afiliado a AWS.
+MIT. This project is not official and not affiliated with AWS.

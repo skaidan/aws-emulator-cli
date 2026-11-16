@@ -58,10 +58,10 @@ def test_subscribe_needs_one_target(runner, running):
 def test_publish_with_attributes(runner, monkeypatch, running):
     sns = FakeClient(publish={"MessageId": "m-1"})
     monkeypatch.setattr(sns_mod, "client", lambda service, port: sns)
-    result = runner.invoke(cli, ["sns", "publish", "orders", "hola", "--subject", "s", "-a", "k=v"])
+    result = runner.invoke(cli, ["sns", "publish", "orders", "hello", "--subject", "s", "-a", "k=v"])
     assert result.exit_code == 0, result.output
     kwargs = sns.calls[-1][1]
-    assert kwargs["TopicArn"] == TOPIC_ARN and kwargs["Message"] == "hola"
+    assert kwargs["TopicArn"] == TOPIC_ARN and kwargs["Message"] == "hello"
     assert kwargs["MessageAttributes"]["k"]["StringValue"] == "v"
 
 
@@ -157,13 +157,13 @@ def test_deploy_updates_existing(runner, monkeypatch, running, tmp_path):
 
 
 def test_invoke_shows_payload_and_logs(runner, monkeypatch, running):
-    resp = {"StatusCode": 200, "Payload": io.BytesIO(b'{"greeting": "hola Ana"}'),
+    resp = {"StatusCode": 200, "Payload": io.BytesIO(b'{"greeting": "hello Ana"}'),
             "LogResult": base64.b64encode(b"START RequestId: 1\nhello log\nEND").decode()}
     lam = FakeClient(invoke=resp)
     monkeypatch.setattr(lam_mod, "client", lambda service, port: lam)
     result = runner.invoke(cli, ["lambda", "invoke", "hi", '{"name": "Ana"}'])
     assert result.exit_code == 0, result.output
-    assert "hola Ana" in result.output and "hello log" in result.output
+    assert "hello Ana" in result.output and "hello log" in result.output
     assert lam.calls[0][1]["Payload"] == b'{"name": "Ana"}'
 
 
