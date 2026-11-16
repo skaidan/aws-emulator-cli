@@ -10,7 +10,7 @@ The emulator itself is a single binary with no subcommands: it runs in the foreg
 - **Work with S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis and Step Functions** through short commands and readable tables: DynamoDB with plain JSON, `lambda deploy` from a folder, EventBridge rules with their target and permissions in one step, and `describe` for any ARN.
 - **Always start with the same data** using a YAML *seed*: `awsemu start --seed seed.yaml`, `awsemu reset --seed seed.yaml`, and `seed export` to save the current state.
 - **Configure it per project** with `awsemu.toml` (`awsemu init`, `awsemu up`, `awsemu down`): its own port, mode, seed…
-- **Use it in tests and CI**: a pytest plugin (`aws_emulator` fixture), a GitHub Action (`uses: skaidan/aws-emulator-cli@v0.6.0`) and `awsemu compose` for Docker Compose.
+- **Use it in tests and CI**: a pytest plugin (`aws_emulator` fixture), a GitHub Action (`uses: skaidan/aws-emulator-cli@v0.7.0`) and `awsemu compose` for Docker Compose.
 - **Explore it**: a terminal UI (`awsemu ui`), live changes (`awsemu watch`), completion of your resource names, and the **per-service fidelity** of your emulator version (`awsemu fidelity`).
 - **Diagnose** common problems (`awsemu doctor`).
 
@@ -40,6 +40,7 @@ DynamoDB tables  1      users
 - [Seeds](docs/seeds.md): reproducible starting data (format, validation, `apply` and `export`).
 - [Services guide](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions and `describe`, with examples.
 - [Testing and CI](docs/testing.md): pytest plugin, GitHub Action, scripts and Docker Compose.
+- [Scripting](docs/scripting.md): stable JSON output and exit codes.
 - [Troubleshooting](docs/troubleshooting.md): what each error means.
 - [Command reference](docs/reference.md): every command and option.
 - [Architecture](docs/architecture.md) and [contributing](CONTRIBUTING.md).
@@ -53,8 +54,8 @@ Requirements: Python 3.10+ and **one** of these two ways to run the emulator:
 
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
-# or a specific version, from the releases:
-pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.6.0/aws_emulator_cli-0.6.0-py3-none-any.whl
+# or a specific release (any tag from the Releases page):
+pipx install git+https://github.com/skaidan/aws-emulator-cli@v0.7.0
 ```
 
 All versions: [Releases](https://github.com/skaidan/aws-emulator-cli/releases). For the terminal UI (`awsemu ui`), install the `ui` extra: `pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'`.
@@ -199,7 +200,7 @@ def test_upload(aws_emulator):           # pytest plugin: own emulator, seed and
 ```
 
 ```yaml
-- uses: skaidan/aws-emulator-cli@v0.6.0   # GitHub Actions: verified package, seed and variables
+- uses: skaidan/aws-emulator-cli@v0.7.0   # GitHub Actions: verified package, seed and variables
   with:
     seed: tests/seed.yaml
 ```
@@ -230,7 +231,7 @@ awsemu start --no-telemetry        # just for this run
 
 - `--plain` or `NO_COLOR=1`: plain-text output, no colours or boxes.
 - Prefixes and aliases: `awsemu stat` → `status`; aliases `ps`, `reset`, `ddb`, `fn`, `eb`, `ls`.
-- Exit codes: `status` returns `3` when the emulator isn't healthy, handy in scripts.
+- For scripts: every listing has `--json`, and exit codes are fixed (0 OK, 1 failed, 2 usage, 3 not healthy). Both are a stable interface: [docs/scripting.md](docs/scripting.md).
 
 ## How it works
 
@@ -249,7 +250,7 @@ awsemu start --no-telemetry        # just for this run
 
 ## Roadmap
 
-Done: native and Docker lifecycle, validation against the real emulator on Linux, macOS and Windows (v0.2), 10 services with their own commands plus `describe` (v0.3), seeds for reproducible starting data (v0.4), `awsemu.toml`, pytest plugin, GitHub Action and Docker Compose (v0.5), and `ui`, `watch`, `fidelity` and completion (v0.6). Coming next: getting ready to publish (stable output and an easy rename; v0.7), `awsemu check` to know whether your project will work, and safe upgrades (v0.8), a proxy to see calls and inject faults (v0.9), more seed coverage, snapshots and other languages (v0.10), an MCP server for agents (v0.11), and the final name with PyPI, Homebrew and standalone binaries (v1.0). Details in [ROADMAP.md](ROADMAP.md), changes per version in [CHANGELOG.md](CHANGELOG.md).
+Done: native and Docker lifecycle, validation against the real emulator on Linux, macOS and Windows (v0.2), 10 services with their own commands plus `describe` (v0.3), seeds for reproducible starting data (v0.4), `awsemu.toml`, pytest plugin, GitHub Action and Docker Compose (v0.5), `ui`, `watch`, `fidelity` and completion (v0.6), and getting ready to publish: English, stable output and an easy rename (v0.7). Coming next: `awsemu check` to know whether your project will work, and safe upgrades (v0.8), a proxy to see calls and inject faults (v0.9), more seed coverage, snapshots and other languages (v0.10), an MCP server for agents (v0.11), and the final name with PyPI, Homebrew and standalone binaries (v1.0). Details in [ROADMAP.md](ROADMAP.md), changes per version in [CHANGELOG.md](CHANGELOG.md).
 
 ## Development
 

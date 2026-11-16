@@ -13,10 +13,11 @@ from typing import Any
 
 import click
 
+from .. import exitcodes
 from .. import ui
 from ..clients import client
 from ..completion import complete
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
 
 TYPES = {"S": "S", "N": "N", "B": "B", "STRING": "S", "NUMBER": "N", "BINARY": "B"}
 
@@ -110,23 +111,36 @@ def _load_json(text: str) -> dict:
 
 @click.group()
 def dynamodb():
-    """Tables and items (JSON in, JSON out). Alias: 'awsemu ddb'."""
+    """DynamoDB: tables and items, with plain JSON in and out. Alias: 'awsemu ddb'."""
 
 
 @dynamodb.command(name="ls")
+@json_option
 @pass_ctx
 @handle_errors
-def ls(c: Ctx):
+def ls(c: Ctx, as_json: bool):
     """List tables with keys and item counts."""
     d = client("dynamodb", c.port)
     names = []
     for page in d.get_paginator("list_tables").paginate():
         names += page.get("TableNames", [])
-    rows = []
+    rows, data = [], []
     for name in names:
         t = d.describe_table(TableName=name)["Table"]
+        types = {a["AttributeName"]: a["AttributeType"] for a in t.get("AttributeDefinitions", [])}
+        key = {k["KeyType"]: k["AttributeName"] for k in t["KeySchema"]}
+        data.append({
+            "name": name,
+            "partition_key": {"name": key.get("HASH"), "type": types.get(key.get("HASH"))},
+            "sort_key": {"name": key["RANGE"], "type": types.get(key["RANGE"])} if "RANGE" in key else None,
+            "item_count": t.get("ItemCount"),
+            "status": t.get("TableStatus"),
+        })
         keys = " / ".join(f"{k['AttributeName']} ({k['KeyType'].lower()})" for k in t["KeySchema"])
         rows.append([name, keys, t.get("ItemCount", ""), t.get("TableStatus", "")])
+    if as_json:
+        ui.print_json(data)
+        return
     ui.table(["table", "key", "items", "status"], rows,
              empty="No tables. Try 'awsemu dynamodb create NAME --pk id'.")
 
@@ -165,7 +179,7 @@ def create(c: Ctx, table: str, pk: str, sk: str | None):
 @dynamodb.command(name="scan")
 @click.argument("table", shell_complete=complete("table"))
 @click.option("-n", "--limit", type=int, default=50, show_default=True, help="Max items (0 = all).")
-@click.option("--json", "as_json", is_flag=True, help="Print items as JSON.")
+@json_option
 @pass_ctx
 @handle_errors
 def scan(c: Ctx, table: str, limit: int, as_json: bool):
@@ -208,7 +222,7 @@ def get(c: Ctx, table: str, key_json: str):
     resp = client("dynamodb", c.port).get_item(TableName=table, Key=to_item(_load_json(key_json)))
     if "Item" not in resp:
         ui.warn("not found")
-        raise SystemExit(1)
+        raise SystemExit(exitcodes.FAILED)
     ui.print_json(from_item(resp["Item"]))
 
 
@@ -251,7 +265,7 @@ def delete(c: Ctx, table: str, key_json: str):
 
 @dynamodb.command(name="drop")
 @click.argument("table", shell_complete=complete("table"))
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def drop(c: Ctx, table: str, yes: bool):

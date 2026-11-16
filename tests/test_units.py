@@ -267,3 +267,26 @@ def test_compose_service_matches_docker_recipe(isolated_home):
     win = compose.service(opts, system="Windows", build=False)
     assert "build" not in win and "user" not in win
     assert win["volumes"][0].endswith(":/home/emulator/.aws/emulator")
+
+
+def test_every_command_and_option_has_help():
+    """Help is part of the product: no command or option without it."""
+    import click
+
+    from awsemu.cli import cli
+
+    missing = []
+
+    def walk(cmd, path):
+        if not (cmd.help or cmd.short_help):
+            missing.append(" ".join(path) or "awsemu")
+        for p in cmd.params:
+            if isinstance(p, click.Option) and not p.help and not p.hidden and "--help" not in p.opts \
+                    and "--version" not in p.opts:
+                missing.append(f"{' '.join(path)} {p.opts[-1]}")
+        if isinstance(cmd, click.Group):
+            ctx = click.Context(cmd)
+            for n in cmd.list_commands(ctx):
+                walk(cmd.get_command(ctx, n), path + [n])
+    walk(cli, [])
+    assert missing == []

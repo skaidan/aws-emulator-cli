@@ -13,6 +13,7 @@ from datetime import datetime
 
 import click
 
+from .. import exitcodes
 from .. import health, ui
 from ..clients import client
 from ..context import Ctx, handle_errors, pass_ctx
@@ -195,7 +196,7 @@ def watch(c: Ctx, services, interval: float, once: bool):
             time.sleep(interval)
             if not health.port_open(c.port):
                 ui.error("The emulator stopped.")
-                raise SystemExit(1)
+                raise SystemExit(exitcodes.FAILED)
             nxt, _ = snapshot(c.port, watched)  # failed services keep their last state
             for service, part in nxt.items():
                 for event in diff(current.get(service, {}), part):

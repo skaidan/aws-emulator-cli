@@ -9,7 +9,7 @@ import click
 from .. import ui
 from ..clients import client
 from ..completion import complete
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
 from ._common import allow_lambda, allow_queue, is_error, load_json_arg
 
 bus_option = click.option("--bus", default="default", show_default=True, help="Event bus name.")
@@ -17,16 +17,20 @@ bus_option = click.option("--bus", default="default", show_default=True, help="E
 
 @click.group()
 def events():
-    """EventBridge: buses, rules and events."""
+    """EventBridge: buses, rules and events. Alias: 'awsemu eb'."""
 
 
 @events.command(name="buses")
+@json_option
 @pass_ctx
 @handle_errors
-def buses(c: Ctx):
+def buses(c: Ctx, as_json: bool):
     """List event buses."""
-    rows = [[b["Name"], b["Arn"]] for b in client("events", c.port).list_event_buses().get("EventBuses", [])]
-    ui.table(["bus", "arn"], rows)
+    items = client("events", c.port).list_event_buses().get("EventBuses", [])
+    if as_json:
+        ui.print_json(items)
+        return
+    ui.table(["bus", "arn"], [[b["Name"], b["Arn"]] for b in items])
 
 
 @events.command(name="create-bus")
@@ -42,7 +46,7 @@ def create_bus(c: Ctx, name: str):
 
 @events.command(name="rules")
 @bus_option
-@click.option("--json", "as_json", is_flag=True)
+@json_option
 @pass_ctx
 @handle_errors
 def rules(c: Ctx, bus: str, as_json: bool):
@@ -142,7 +146,7 @@ def put(c: Ctx, source: str, detail_type: str, detail: str, bus: str):
 @events.command(name="rm")
 @click.argument("name", shell_complete=complete("rule"))
 @bus_option
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def rm(c: Ctx, name: str, bus: str, yes: bool):

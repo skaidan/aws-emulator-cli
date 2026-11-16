@@ -9,10 +9,11 @@ from pathlib import Path
 
 import click
 
+from .. import exitcodes
 from .. import ui
 from ..clients import client
 from ..completion import complete
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
 from ._common import arn, ensure_service_role, is_error, load_json_arg
 
 DEFAULT_ROLE_NAME = "awsemu-sfn-role"
@@ -41,15 +42,19 @@ def sfn():
 
 
 @sfn.command(name="ls")
+@json_option
 @pass_ctx
 @handle_errors
-def ls(c: Ctx):
+def ls(c: Ctx, as_json: bool):
     """List state machines."""
     s = client("stepfunctions", c.port)
-    rows = []
+    machines = []
     for page in s.get_paginator("list_state_machines").paginate():
-        for m in page.get("stateMachines", []):
-            rows.append([m["name"], m.get("type", ""), str(m.get("creationDate", ""))[:19]])
+        machines += page.get("stateMachines", [])
+    if as_json:
+        ui.print_json(machines)
+        return
+    rows = [[m["name"], m.get("type", ""), str(m.get("creationDate", ""))[:19]] for m in machines]
     ui.table(["state machine", "type", "created"], rows,
              empty="No state machines. Try 'awsemu sfn deploy NAME definition.json'.")
 
@@ -113,7 +118,8 @@ def _history_error(s, execution_arn: str) -> str | None:
 @click.argument("input_json", required=False, default="{}")
 @click.option("--file", "file_", type=click.File("r"), help="Input from a file ('-' = stdin).")
 @click.option("--no-wait", is_flag=True, help="Start and return without waiting for the result.")
-@click.option("--timeout", type=float, default=120, show_default=True, metavar="SECONDS")
+@click.option("--timeout", type=float, default=120, show_default=True, metavar="SECONDS",
+              help="How long to wait for the execution to finish.")
 @click.option("--raw", is_flag=True, help="Print only the output JSON.")
 @pass_ctx
 @handle_errors
@@ -140,7 +146,7 @@ def start(c: Ctx, name: str, input_json: str, file_, no_wait: bool, timeout: flo
     output = d.get("output")
     if raw:
         click.echo(output or "")
-        raise SystemExit(0 if d["status"] == "SUCCEEDED" else 1)
+        raise SystemExit(exitcodes.OK if d["status"] == "SUCCEEDED" else exitcodes.FAILED)
     if output:
         try:
             ui.print_json(json.loads(output))
@@ -152,18 +158,22 @@ def start(c: Ctx, name: str, input_json: str, file_, no_wait: bool, timeout: flo
         return
     cause = " ".join(x for x in (d.get("error"), d.get("cause")) if x) or _history_error(s, exec_arn)
     ui.error(d["status"] + (f": {cause}" if cause else ""))
-    raise SystemExit(1)
+    raise SystemExit(exitcodes.FAILED)
 
 
 @sfn.command(name="executions")
 @click.argument("name", shell_complete=complete("statemachine"))
-@click.option("-n", "--limit", type=int, default=20, show_default=True)
+@click.option("-n", "--limit", type=int, default=20, show_default=True, help="How many executions.")
+@json_option
 @pass_ctx
 @handle_errors
-def executions(c: Ctx, name: str, limit: int):
+def executions(c: Ctx, name: str, limit: int, as_json: bool):
     """Recent executions of a state machine."""
     resp = client("stepfunctions", c.port).list_executions(stateMachineArn=machine_arn(name),
                                                            maxResults=limit)
+    if as_json:
+        ui.print_json(resp.get("executions", []))
+        return
     rows = [[e["name"], ui.styled(e["status"], STATUS_STYLE.get(e["status"])),
              str(e.get("startDate", ""))[:19], str(e.get("stopDate", "") or "")[:19]]
             for e in resp.get("executions", [])]
@@ -172,7 +182,7 @@ def executions(c: Ctx, name: str, limit: int):
 
 @sfn.command(name="rm")
 @click.argument("name", shell_complete=complete("statemachine"))
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def rm(c: Ctx, name: str, yes: bool):

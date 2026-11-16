@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 
+from .. import exitcodes
 from .. import seed as seedlib
 from .. import ui
 from ..clients import client
@@ -291,7 +292,7 @@ def load_or_fail(path: str) -> seedlib.Seed:
     except seedlib.SeedError as exc:
         for p in exc.problems:
             ui.error(p.format(exc.source))
-        raise SystemExit(2)
+        raise SystemExit(exitcodes.USAGE)
     for w in seed.warnings:
         ui.warn(w)
     return seed
@@ -309,7 +310,7 @@ def run_apply(seed: seedlib.Seed, port: int) -> None:
     summary = ", ".join(f"{n} {k}" for k, n in counts.items())
     if report.failures:
         ui.error(f"seed applied with errors ({summary})")
-        raise SystemExit(1)
+        raise SystemExit(exitcodes.FAILED)
     ui.success(f"seed applied in {time.monotonic() - started:.1f}s ({summary})")
 
 

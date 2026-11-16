@@ -46,7 +46,9 @@ Variables to trigger odd cases: `FAKE_EMULATOR_CRASH=1` (exits with code 1) and 
    - get the client with `client("<service>", c.port)`;
    - decorate each command with `@pass_ctx` and `@handle_errors`;
    - use `ui.table`, `ui.kv`, `ui.success` and `ui.print_json` for output;
-   - offer `--json` on listings and `--yes` on anything that deletes;
+   - offer `--json` on listings (`@json_option`) and `--yes` on anything that deletes (`@yes_option`), and give every option a `help` text (a test checks it);
+   - JSON: `snake_case` for awsemu's own summaries, AWS's field names for AWS resources; add the format to `docs/scripting.md` and a test to `tests/test_json_contract.py`;
+   - exit with the constants in `exitcodes.py`, never bare numbers;
    - add `shell_complete=complete("<kind>")` to arguments that take resource names (see `completion.py`);
    - for roles, queue policies, Lambda permissions or expected errors (`is_error(exc, "ResourceNotFound")`), use `commands/_common.py`.
 2. Register it in `cli.py` (`cli.add_command(...)`).
@@ -65,6 +67,22 @@ Variables to trigger odd cases: `FAKE_EMULATOR_CRASH=1` (exits with code 1) and 
 
   CI fails if it's out of date (`python scripts/gen_reference.py --check`).
 - The guides (`docs/*.md`), README, ROADMAP and CHANGELOG are written by hand.
+
+## Changing the JSON output or exit codes
+
+They're a stable interface (`docs/scripting.md`). Adding a field is fine. Renaming, removing or changing the type of one, or changing an exit code, is a breaking change: update `tests/test_json_contract.py` and `docs/scripting.md`, and list it under **Breaking** in the CHANGELOG.
+
+## Renaming the package
+
+The name is decided right before publishing (ROADMAP, v1.0). When it is:
+
+```bash
+python scripts/rename.py --check                                  # where the current names appear
+python scripts/rename.py --package NEW-NAME --dry-run             # what would change
+python scripts/rename.py --package NEW-NAME [--repo OWNER/NAME]   # do it, and verify
+```
+
+Then rename the GitHub repository (GitHub redirects the old URLs), update your git remote, run the tests and add a CHANGELOG entry. The command (`awsemu`), the Python package, `AWSEMU_*` variables and `awsemu.toml` don't change.
 
 ## Releasing a version
 

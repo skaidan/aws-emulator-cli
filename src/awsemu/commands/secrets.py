@@ -6,10 +6,11 @@ import json
 
 import click
 
+from .. import exitcodes
 from .. import ui
 from ..clients import client
 from ..completion import complete
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
 from ._common import is_error
 
 
@@ -42,7 +43,7 @@ def secrets():
 
 
 @secrets.command(name="ls")
-@click.option("--json", "as_json", is_flag=True)
+@json_option
 @pass_ctx
 @handle_errors
 def secrets_ls(c: Ctx, as_json: bool):
@@ -79,7 +80,7 @@ def secrets_get(c: Ctx, name: str, stage: str, raw: bool):
 @click.argument("name", shell_complete=complete("secret"))
 @click.argument("value", required=False)
 @click.option("--file", "file_", type=click.File("r"), help="Read the value from a file ('-' = stdin).")
-@click.option("--description")
+@click.option("--description", help="Free text stored with it.")
 @pass_ctx
 @handle_errors
 def secrets_put(c: Ctx, name: str, value: str | None, file_, description: str | None):
@@ -110,7 +111,7 @@ def secrets_put(c: Ctx, name: str, value: str | None, file_, description: str | 
 @secrets.command(name="rm")
 @click.argument("name", shell_complete=complete("secret"))
 @click.option("--now", is_flag=True, help="Delete immediately, without a recovery window.")
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def secrets_rm(c: Ctx, name: str, now: bool, yes: bool):
@@ -151,7 +152,7 @@ def ssm():
 @ssm.command(name="ls")
 @click.argument("path", required=False)
 @click.option("--values", is_flag=True, help="Also show values (SecureString shown as ****).")
-@click.option("--json", "as_json", is_flag=True)
+@json_option
 @pass_ctx
 @handle_errors
 def ssm_ls(c: Ctx, path: str | None, values: bool, as_json: bool):
@@ -203,7 +204,7 @@ def ssm_get(c: Ctx, name: str, no_decrypt: bool):
 @click.option("--file", "file_", type=click.File("r"), help="Read the value from a file ('-' = stdin).")
 @click.option("--secure", is_flag=True, help="Store as SecureString.")
 @click.option("--list", "as_list", is_flag=True, help="Store as StringList (comma-separated).")
-@click.option("--description")
+@click.option("--description", help="Free text stored with it.")
 @pass_ctx
 @handle_errors
 def ssm_put(c: Ctx, name: str, value: str | None, file_, secure: bool, as_list: bool,
@@ -236,4 +237,4 @@ def ssm_rm(c: Ctx, names):
             ui.warn(f"not found: {n}")
             missing += 1
     if missing:
-        raise SystemExit(1)
+        raise SystemExit(exitcodes.FAILED)

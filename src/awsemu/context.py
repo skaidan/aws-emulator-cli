@@ -7,8 +7,18 @@ import sys
 
 import click
 
+from . import exitcodes
 from . import ui
 from .runtime import RuntimeErrorWithHint
+
+
+json_option = click.option(
+    "--json", "as_json", is_flag=True,
+    help="Machine-readable JSON output (format: docs/scripting.md).")
+
+
+yes_option = click.option("-y", "--yes", is_flag=True,
+                          help="Don't ask for confirmation (for scripts).")
 
 
 class Ctx:
@@ -38,13 +48,13 @@ def handle_errors(fn):
             return fn(*args, **kwargs)
         except RuntimeErrorWithHint as exc:
             ui.error(str(exc), exc.hint)
-            sys.exit(1)
+            sys.exit(exitcodes.FAILED)
         except Exception as exc:  # botocore errors without importing botocore here
             if _is_botocore_error(exc):
                 from .clients import describe_error, hint_for
 
                 ui.error(describe_error(exc), hint_for(exc))
-                sys.exit(1)
+                sys.exit(exitcodes.FAILED)
             raise
 
     return wrapper

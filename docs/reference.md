@@ -14,25 +14,25 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`describe`](#awsemu-describe) — Show any supported resource from its ARN.
 - [`doctor`](#awsemu-doctor) — Check your setup and explain how to fix what's missing.
 - [`down`](#awsemu-down) — Stop this project's emulator (same as 'awsemu stop').
-- [`dynamodb`](#awsemu-dynamodb) — Tables and items (JSON in, JSON out).
+- [`dynamodb`](#awsemu-dynamodb) — DynamoDB: tables and items, with plain JSON in and out.
 - [`env`](#awsemu-env) — Print shell commands that point the AWS CLI and SDKs at the emulator.
 - [`events`](#awsemu-events) — EventBridge: buses, rules and events.
 - [`exec`](#awsemu-exec) — Run COMMAND with the environment pointed at the emulator.
 - [`fidelity`](#awsemu-fidelity) — Fidelity scores published with each emulator release: tests passed per service.
 - [`image`](#awsemu-image) — Build the Docker image (AWS doesn't publish a prebuilt one).
 - [`init`](#awsemu-init) — Create awsemu.toml in this folder.
-- [`kinesis`](#awsemu-kinesis) — Kinesis Data Streams.
-- [`lambda`](#awsemu-lambda) — Deploy, invoke and inspect Lambda functions.
+- [`kinesis`](#awsemu-kinesis) — Kinesis: data streams and records.
+- [`lambda`](#awsemu-lambda) — Lambda: deploy, invoke and inspect functions.
 - [`logs`](#awsemu-logs) — Show the emulator's log, prettified (also after it stopped).
 - [`overview`](#awsemu-overview) — What's inside the emulator, across common services.
-- [`restart`](#awsemu-restart) — Restart the emulator.
-- [`s3`](#awsemu-s3) — Buckets and objects.
+- [`restart`](#awsemu-restart) — Restart the emulator, which empties its state (it's all in memory).
+- [`s3`](#awsemu-s3) — S3: buckets and objects.
 - [`secrets`](#awsemu-secrets) — Secrets Manager: store and read secrets.
 - [`seed`](#awsemu-seed) — Seed files: the same starting data after every start or reset.
 - [`sfn`](#awsemu-sfn) — Step Functions: state machines and executions.
 - [`shell`](#awsemu-shell) — Open a sub-shell already pointed at the emulator ('exit' to leave).
-- [`sns`](#awsemu-sns) — Topics, publishing and subscriptions.
-- [`sqs`](#awsemu-sqs) — Queues and messages.
+- [`sns`](#awsemu-sns) — SNS: topics, publishing and subscriptions.
+- [`sqs`](#awsemu-sqs) — SQS: queues and messages.
 - [`ssm`](#awsemu-ssm) — SSM Parameter Store: configuration parameters.
 - [`start`](#awsemu-start) — Start an emulator in the background and wait until it's healthy.
 - [`status`](#awsemu-status) — Show whether the emulator is running and healthy.
@@ -84,9 +84,9 @@ awsemu compose [OPTIONS]
 | `-o, --output FILE` | Write to this file (default: stdout). |
 | `--name TEXT` | Service name.  [default: aws-emulator] |
 | `--no-build` | Omit the build section (image built with 'awsemu image build'). |
-| `--auth / --no-auth` | [default: (auth)] |
-| `--telemetry / --no-telemetry` |  |
-| `--idle-timeout SECONDS` | [1<=x<=31536000] |
+| `--auth / --no-auth` | Require SigV4-signed requests (default: awsemu.toml, else auth).  [default: (auth)] |
+| `--telemetry / --no-telemetry` | Force telemetry on/off (default: awsemu.toml, else emulator settings). |
+| `--idle-timeout SECONDS` | Stop after this many seconds without API calls.  [1<=x<=31536000] |
 
 ## `awsemu config`
 
@@ -131,9 +131,15 @@ awsemu describe [OPTIONS] ARN
 
 Check your setup and explain how to fix what's missing.
 
+Exits with 1 if something required is missing (warnings don't count).
+
 ```
 awsemu doctor [OPTIONS]
 ```
+
+| Option | Description |
+| --- | --- |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu down`
 
@@ -149,7 +155,7 @@ awsemu down [OPTIONS]
 
 ## `awsemu dynamodb`
 
-Tables and items (JSON in, JSON out). Alias: 'awsemu ddb'.
+DynamoDB: tables and items, with plain JSON in and out. Alias: 'awsemu ddb'.
 
 ### `awsemu dynamodb create`
 
@@ -190,7 +196,7 @@ awsemu dynamodb drop [OPTIONS] TABLE
 
 | Option | Description |
 | --- | --- |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ### `awsemu dynamodb get`
 
@@ -207,6 +213,10 @@ List tables with keys and item counts.
 ```
 awsemu dynamodb ls [OPTIONS]
 ```
+
+| Option | Description |
+| --- | --- |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu dynamodb put`
 
@@ -231,7 +241,7 @@ awsemu dynamodb scan [OPTIONS] TABLE
 | Option | Description |
 | --- | --- |
 | `-n, --limit INTEGER` | Max items (0 = all).  [default: 50] |
-| `--json` | Print items as JSON. |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu env`
 
@@ -258,7 +268,7 @@ awsemu env [OPTIONS]
 
 ## `awsemu events`
 
-EventBridge: buses, rules and events.
+EventBridge: buses, rules and events. Alias: 'awsemu eb'.
 
 ### `awsemu events buses`
 
@@ -267,6 +277,10 @@ List event buses.
 ```
 awsemu events buses [OPTIONS]
 ```
+
+| Option | Description |
+| --- | --- |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu events create-bus`
 
@@ -299,7 +313,7 @@ awsemu events rm [OPTIONS] NAME
 | Option | Description |
 | --- | --- |
 | `--bus TEXT` | Event bus name.  [default: default] |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ### `awsemu events rule`
 
@@ -335,7 +349,7 @@ awsemu events rules [OPTIONS]
 | Option | Description |
 | --- | --- |
 | `--bus TEXT` | Event bus name.  [default: default] |
-| `--json` |  |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu exec`
 
@@ -353,7 +367,7 @@ awsemu exec [OPTIONS] COMMAND...
 
 | Option | Description |
 | --- | --- |
-| `--sdk [node|java|rust|dotnet]` |  |
+| `--sdk [node|java|rust|dotnet]` | Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable. |
 
 ## `awsemu fidelity`
 
@@ -376,9 +390,9 @@ awsemu fidelity [OPTIONS] [SERVICES]...
 | --- | --- |
 | `--release VERSION` | Emulator release: 1.0.385, v1.0.385 or latest (default: your installed version). |
 | `--failures` | List the failing tests of the given services. |
-| `--sort [name|score]` | [default: name] |
+| `--sort [name|score]` | Order of the table (score: worst first).  [default: name] |
 | `--refresh` | Download again instead of using the cache. |
-| `--json` |  |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu image`
 
@@ -394,7 +408,7 @@ awsemu image build [OPTIONS]
 
 | Option | Description |
 | --- | --- |
-| `--tag TEXT` | [default: aws-emulator] |
+| `--tag TEXT` | Image name to build.  [default: aws-emulator] |
 | `--arch [x86_64|aarch64]` | Package architecture (default: this machine's). |
 
 ### `awsemu image dockerfile`
@@ -407,7 +421,7 @@ awsemu image dockerfile [OPTIONS]
 
 | Option | Description |
 | --- | --- |
-| `--arch [x86_64|aarch64]` |  |
+| `--arch [x86_64|aarch64]` | Package architecture (default: this machine's). |
 
 ## `awsemu init`
 
@@ -427,7 +441,7 @@ awsemu init [OPTIONS]
 
 ## `awsemu kinesis`
 
-Kinesis Data Streams.
+Kinesis: data streams and records.
 
 ### `awsemu kinesis create`
 
@@ -439,7 +453,7 @@ awsemu kinesis create [OPTIONS] NAME
 
 | Option | Description |
 | --- | --- |
-| `--shards INTEGER RANGE` | [default: 1; 1<=x<=64] |
+| `--shards INTEGER RANGE` | Number of shards.  [default: 1; 1<=x<=64] |
 
 ### `awsemu kinesis ls`
 
@@ -448,6 +462,10 @@ List streams with status and shard count.
 ```
 awsemu kinesis ls [OPTIONS]
 ```
+
+| Option | Description |
+| --- | --- |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu kinesis put`
 
@@ -475,7 +493,7 @@ awsemu kinesis read [OPTIONS] STREAM
 | `--from [start|latest]` | Read from the oldest record or only new ones.  [default: start] |
 | `-n, --limit INTEGER` | Max records (0 = no limit).  [default: 100] |
 | `-f, --follow` | Keep polling for new records. |
-| `--json` | One JSON object per record. |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu kinesis rm`
 
@@ -487,11 +505,11 @@ awsemu kinesis rm [OPTIONS] STREAM
 
 | Option | Description |
 | --- | --- |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ## `awsemu lambda`
 
-Deploy, invoke and inspect Lambda functions.
+Lambda: deploy, invoke and inspect functions. Alias: 'awsemu fn'.
 
 ### `awsemu lambda deploy`
 
@@ -551,8 +569,8 @@ awsemu lambda logs [OPTIONS] NAME
 
 | Option | Description |
 | --- | --- |
-| `-f, --follow` |  |
-| `--since MINUTES` | [default: 60] |
+| `-f, --follow` | Keep printing new log events. |
+| `--since MINUTES` | Start this many minutes ago.  [default: 60] |
 
 ### `awsemu lambda ls`
 
@@ -561,6 +579,10 @@ List functions.
 ```
 awsemu lambda ls [OPTIONS]
 ```
+
+| Option | Description |
+| --- | --- |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu lambda rm`
 
@@ -572,7 +594,7 @@ awsemu lambda rm [OPTIONS] NAME
 
 | Option | Description |
 | --- | --- |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ## `awsemu logs`
 
@@ -601,11 +623,11 @@ awsemu overview [OPTIONS]
 | --- | --- |
 | `-s, --service [s3|sqs|dynamodb|sns|lambda|secretsmanager|ssm|kinesis|events|stepfunctions|logs|iam]` | Only these services. Repeatable. |
 | `--all` | Also list services with nothing in them. |
-| `--json` |  |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu restart`
 
-Restart the emulator. The emulator keeps state in memory, so this also resets it.
+Restart the emulator, which empties its state (it's all in memory).
 
 Alias: 'awsemu reset'. With --seed, the seed is applied to the fresh emulator.
 
@@ -628,7 +650,7 @@ awsemu restart [OPTIONS] [EXTRA]...
 
 ## `awsemu s3`
 
-Buckets and objects.
+S3: buckets and objects.
 
 ### `awsemu s3 cat`
 
@@ -657,7 +679,7 @@ awsemu s3 ls [OPTIONS] [TARGET]
 | Option | Description |
 | --- | --- |
 | `-r, --recursive` | List every key, not just one level. |
-| `--json` |  |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu s3 mb`
 
@@ -677,7 +699,7 @@ awsemu s3 presign [OPTIONS] TARGET
 
 | Option | Description |
 | --- | --- |
-| `--expires SECONDS` | [default: 3600] |
+| `--expires SECONDS` | How long the URL stays valid.  [default: 3600] |
 | `--put` | URL for uploading instead of downloading. |
 
 ### `awsemu s3 put`
@@ -718,7 +740,7 @@ awsemu s3 rm [OPTIONS] TARGET
 | Option | Description |
 | --- | --- |
 | `-r, --recursive` | Delete every key under the prefix. |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ## `awsemu secrets`
 
@@ -755,7 +777,7 @@ awsemu secrets ls [OPTIONS]
 
 | Option | Description |
 | --- | --- |
-| `--json` |  |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu secrets put`
 
@@ -774,7 +796,7 @@ awsemu secrets put [OPTIONS] NAME [VALUE]
 | Option | Description |
 | --- | --- |
 | `--file FILENAME` | Read the value from a file ('-' = stdin). |
-| `--description TEXT` |  |
+| `--description TEXT` | Free text stored with it. |
 
 ### `awsemu secrets rm`
 
@@ -787,7 +809,7 @@ awsemu secrets rm [OPTIONS] NAME
 | Option | Description |
 | --- | --- |
 | `--now` | Delete immediately, without a recovery window. |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ## `awsemu seed`
 
@@ -865,7 +887,8 @@ awsemu sfn executions [OPTIONS] NAME
 
 | Option | Description |
 | --- | --- |
-| `-n, --limit INTEGER` | [default: 20] |
+| `-n, --limit INTEGER` | How many executions.  [default: 20] |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu sfn ls`
 
@@ -874,6 +897,10 @@ List state machines.
 ```
 awsemu sfn ls [OPTIONS]
 ```
+
+| Option | Description |
+| --- | --- |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu sfn rm`
 
@@ -885,7 +912,7 @@ awsemu sfn rm [OPTIONS] NAME
 
 | Option | Description |
 | --- | --- |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ### `awsemu sfn start`
 
@@ -899,7 +926,7 @@ awsemu sfn start [OPTIONS] NAME [INPUT_JSON]
 | --- | --- |
 | `--file FILENAME` | Input from a file ('-' = stdin). |
 | `--no-wait` | Start and return without waiting for the result. |
-| `--timeout SECONDS` | [default: 120] |
+| `--timeout SECONDS` | How long to wait for the execution to finish.  [default: 120] |
 | `--raw` | Print only the output JSON. |
 
 ## `awsemu shell`
@@ -912,11 +939,11 @@ awsemu shell [OPTIONS]
 
 | Option | Description |
 | --- | --- |
-| `--sdk [node|java|rust|dotnet]` |  |
+| `--sdk [node|java|rust|dotnet]` | Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable. |
 
 ## `awsemu sns`
 
-Topics, publishing and subscriptions.
+SNS: topics, publishing and subscriptions.
 
 ### `awsemu sns create`
 
@@ -940,7 +967,7 @@ awsemu sns ls [OPTIONS]
 
 | Option | Description |
 | --- | --- |
-| `--json` |  |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu sns publish`
 
@@ -953,7 +980,7 @@ awsemu sns publish [OPTIONS] TOPIC [MESSAGE]
 | Option | Description |
 | --- | --- |
 | `--file FILENAME` | Read the message from a file ('-' = stdin). |
-| `--subject TEXT` |  |
+| `--subject TEXT` | Subject (used by email subscriptions). |
 | `-a, --attr KEY=VALUE` | String message attribute. Repeatable. |
 | `--group TEXT` | MessageGroupId (FIFO). |
 | `--dedup-id TEXT` | MessageDeduplicationId (FIFO). |
@@ -968,7 +995,7 @@ awsemu sns rm [OPTIONS] TOPIC
 
 | Option | Description |
 | --- | --- |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ### `awsemu sns subs`
 
@@ -977,6 +1004,10 @@ List subscriptions (of one topic, or all).
 ```
 awsemu sns subs [OPTIONS] [TOPIC]
 ```
+
+| Option | Description |
+| --- | --- |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu sns subscribe`
 
@@ -1009,7 +1040,7 @@ awsemu sns unsubscribe [OPTIONS] SUBSCRIPTION_ARN
 
 ## `awsemu sqs`
 
-Queues and messages.
+SQS: queues and messages.
 
 ### `awsemu sqs create`
 
@@ -1023,7 +1054,7 @@ awsemu sqs create [OPTIONS] NAME
 | --- | --- |
 | `--fifo` | FIFO queue ('.fifo' is added if missing). |
 | `--dedup` | Content-based deduplication (FIFO only). |
-| `--visibility-timeout SECONDS` |  |
+| `--visibility-timeout SECONDS` | How long a received message stays hidden. |
 | `--dlq QUEUE` | Dead-letter queue (name or URL). |
 | `--max-receive INTEGER` | Receives before a message goes to the DLQ.  [default: 5] |
 
@@ -1046,7 +1077,7 @@ awsemu sqs ls [OPTIONS]
 | Option | Description |
 | --- | --- |
 | `--prefix TEXT` | Only queues whose name starts with this. |
-| `--json` |  |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu sqs purge`
 
@@ -1058,7 +1089,7 @@ awsemu sqs purge [OPTIONS] QUEUE
 
 | Option | Description |
 | --- | --- |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ### `awsemu sqs receive`
 
@@ -1070,10 +1101,10 @@ awsemu sqs receive [OPTIONS] QUEUE
 
 | Option | Description |
 | --- | --- |
-| `-n, --max INTEGER RANGE` | [default: 10; 1<=x<=10] |
+| `-n, --max INTEGER RANGE` | Maximum number of messages.  [default: 10; 1<=x<=10] |
 | `--wait SECONDS` | Long-poll time.  [default: 1; 0<=x<=20] |
 | `--delete` | Delete messages after printing them. |
-| `--json` |  |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu sqs rm`
 
@@ -1085,7 +1116,7 @@ awsemu sqs rm [OPTIONS] QUEUE
 
 | Option | Description |
 | --- | --- |
-| `-y, --yes` |  |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
 
 ### `awsemu sqs send`
 
@@ -1100,7 +1131,7 @@ awsemu sqs send [OPTIONS] QUEUE [BODY]
 | `--file FILENAME` | Read the body from a file ('-' = stdin). |
 | `--group TEXT` | MessageGroupId (FIFO). |
 | `--dedup-id TEXT` | MessageDeduplicationId (FIFO). |
-| `--delay SECONDS` |  |
+| `--delay SECONDS` | Delay before the message becomes visible. |
 | `-a, --attr KEY=VALUE` | String message attribute. Repeatable. |
 
 ## `awsemu ssm`
@@ -1130,7 +1161,7 @@ awsemu ssm ls [OPTIONS] [PATH]
 | Option | Description |
 | --- | --- |
 | `--values` | Also show values (SecureString shown as ****). |
-| `--json` |  |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu ssm put`
 
@@ -1145,7 +1176,7 @@ awsemu ssm put [OPTIONS] NAME [VALUE]
 | `--file FILENAME` | Read the value from a file ('-' = stdin). |
 | `--secure` | Store as SecureString. |
 | `--list` | Store as StringList (comma-separated). |
-| `--description TEXT` |  |
+| `--description TEXT` | Free text stored with it. |
 
 ### `awsemu ssm rm`
 
@@ -1191,7 +1222,7 @@ awsemu status [OPTIONS]
 | Option | Description |
 | --- | --- |
 | `--all` | Show every known port, not just the selected one. |
-| `--json` | Machine-readable output. |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu stop`
 
@@ -1205,14 +1236,14 @@ awsemu stop [OPTIONS]
 | --- | --- |
 | `--all` | Stop every instance awsemu knows about. |
 | `--force` | SIGKILL / docker kill (loses the clean shutdown). |
-| `--timeout SECONDS` | [default: 15] |
+| `--timeout SECONDS` | How long to wait for a clean stop.  [default: 15] |
 
 ## `awsemu ui`
 
 Browse the emulator in the terminal: services, resources and their details.
 
 Keys: arrows/enter to navigate, r refresh, w auto-refresh, q quit.
-Needs the 'ui' extra:  pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'
+Needs the 'ui' extra (Textual); if it's missing, this command says how to install it.
 
 ```
 awsemu ui [OPTIONS]
@@ -1234,7 +1265,7 @@ awsemu up [OPTIONS]
 | --- | --- |
 | `--seed FILE` | Seed to apply (default: 'seed' from awsemu.toml). |
 | `--no-seed` | Don't apply any seed. |
-| `--wait SECONDS` | [default: 30] |
+| `--wait SECONDS` | How long to wait for the health check.  [default: 30] |
 
 ## `awsemu watch`
 

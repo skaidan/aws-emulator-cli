@@ -49,7 +49,7 @@ TYPES: dict[str, tuple] = {
 TEMPLATE = """\
 # awsemu project settings. Every command run in this folder (or below) uses them;
 # command-line flags and environment variables (AWSEMU_PORT) still win.
-# Docs: https://github.com/skaidan/aws-emulator-cli/blob/main/docs/project-config.md
+# Docs: {docs_url}/project-config.md
 
 port = {port}
 # mode = "auto"            # auto | native | docker
@@ -176,4 +176,6 @@ def clear_cache() -> None:
 
 def template(port: int, seed: str | None) -> str:
     seed_line = f'seed = "{seed}"' if seed else '# seed = "tests/seed.yaml"  # applied by awsemu up / start --seed'
-    return TEMPLATE.format(port=port, seed_line=seed_line)
+    from ._meta import DOCS_URL
+
+    return TEMPLATE.format(port=port, seed_line=seed_line, docs_url=DOCS_URL)

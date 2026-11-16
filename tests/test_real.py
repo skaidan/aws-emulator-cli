@@ -138,8 +138,8 @@ def test_dynamodb_roundtrip(emu):
 def test_overview_reports_every_service(emu):
     run(emu, "s3", "mb", "awsemu-overview")
     data = json.loads(run(emu, "overview", "--json").output)
-    assert "awsemu-overview" in data["s3"]
-    errors = {k: v for k, v in data.items() if isinstance(v, dict) and "error" in v}
+    assert "awsemu-overview" in data["s3"]["items"]
+    errors = {k: v["error"] for k, v in data.items() if v["error"]}
     # Not a failure (fidelity varies by release) but worth seeing in the CI log.
     if errors:
         print("overview errors:", json.dumps(errors, indent=2))
@@ -529,3 +529,21 @@ def test_tui_against_real_emulator(emu):
 
     asyncio.run(scenario())
     run(emu, "ddb", "drop", "awsemu-tui", "--yes")
+
+
+
+def test_json_listings_against_real_emulator(emu):
+    """The --json contract holds with real responses too (types, ISO dates)."""
+    run(emu, "ddb", "create", "awsemu-json", "--pk", "id", "--sk", "at:N")
+    run(emu, "sqs", "create", "awsemu-json-q")
+    tables = json.loads(run(emu, "ddb", "ls", "--json").output)
+    t = next(x for x in tables if x["name"] == "awsemu-json")
+    assert t["partition_key"] == {"name": "id", "type": "S"} and t["sort_key"] == {"name": "at", "type": "N"}
+    q = next(x for x in json.loads(run(emu, "sqs", "ls", "--json").output) if x["name"] == "awsemu-json-q")
+    assert q["visible"] == 0 and isinstance(q["in_flight"], int)
+    for args in (["lambda", "ls"], ["sfn", "ls"], ["kinesis", "ls"], ["events", "buses"], ["sns", "subs"]):
+        assert isinstance(json.loads(run(emu, *args, "--json").output), list), args
+    doctor = json.loads(run(emu, "doctor", "--json", ok=False).output)
+    assert any(c["check"] == f"emulator :{emu}" and c["result"] == "ok" for c in doctor["checks"])
+    run(emu, "ddb", "drop", "awsemu-json", "--yes")
+    run(emu, "sqs", "rm", "awsemu-json-q", "--yes")

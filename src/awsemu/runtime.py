@@ -519,7 +519,7 @@ def instance_info(port: int) -> dict:
         "mode": state.mode if state else ("external" if h.port_open else "-"),
         "pid": state.pid if state else None,
         "container": state.container if state else None,
-        "uptime": time.time() - state.started_at if state and state.started_at else None,
+        "uptime_seconds": round(time.time() - state.started_at, 1) if state and state.started_at else None,
         "auth": files.auth_enabled() if files.exists() else None,
         "files": str(files.dir),
         "log": state.log if state else None,

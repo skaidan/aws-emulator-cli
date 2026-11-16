@@ -11,7 +11,7 @@ import click
 from .. import ui
 from ..clients import client
 from ..completion import complete
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
 
 
 def decode(data: bytes) -> str:
@@ -28,30 +28,32 @@ def decode(data: bytes) -> str:
 
 @click.group()
 def kinesis():
-    """Kinesis Data Streams."""
+    """Kinesis: data streams and records."""
 
 
 @kinesis.command(name="ls")
+@json_option
 @pass_ctx
 @handle_errors
-def ls(c: Ctx):
+def ls(c: Ctx, as_json: bool):
     """List streams with status and shard count."""
     k = client("kinesis", c.port)
     names = []
     for page in k.get_paginator("list_streams").paginate():
         names += page.get("StreamNames", [])
-    rows = []
-    for name in names:
-        s = k.describe_stream_summary(StreamName=name)["StreamDescriptionSummary"]
-        rows.append([name, s.get("StreamStatus", ""), s.get("OpenShardCount", ""),
-                     s.get("RetentionPeriodHours", "")])
+    summaries = [k.describe_stream_summary(StreamName=n)["StreamDescriptionSummary"] for n in names]
+    if as_json:
+        ui.print_json(summaries)
+        return
+    rows = [[s.get("StreamName", ""), s.get("StreamStatus", ""), s.get("OpenShardCount", ""),
+             s.get("RetentionPeriodHours", "")] for s in summaries]
     ui.table(["stream", "status", "shards", "retention h"], rows,
              empty="No streams. Try 'awsemu kinesis create NAME'.")
 
 
 @kinesis.command(name="create")
 @click.argument("name")
-@click.option("--shards", type=click.IntRange(1, 64), default=1, show_default=True)
+@click.option("--shards", type=click.IntRange(1, 64), default=1, show_default=True, help="Number of shards.")
 @pass_ctx
 @handle_errors
 def create(c: Ctx, name: str, shards: int):
@@ -88,7 +90,7 @@ def put(c: Ctx, stream: str, data: str | None, file_, key: str | None):
               show_default=True, help="Read from the oldest record or only new ones.")
 @click.option("-n", "--limit", type=int, default=100, show_default=True, help="Max records (0 = no limit).")
 @click.option("-f", "--follow", is_flag=True, help="Keep polling for new records.")
-@click.option("--json", "as_json", is_flag=True, help="One JSON object per record.")
+@json_option
 @pass_ctx
 @handle_errors
 def read(c: Ctx, stream: str, start: str, limit: int, follow: bool, as_json: bool):
@@ -106,9 +108,9 @@ def read(c: Ctx, stream: str, start: str, limit: int, follow: bool, as_json: boo
 
     def emit(shard: str, r: dict) -> None:
         if as_json:
-            click.echo(json.dumps({"shard": shard, "sequence": r["SequenceNumber"],
+            click.echo(ui.to_json({"shard": shard, "sequence": r["SequenceNumber"],
                                    "key": r["PartitionKey"], "data": decode(r["Data"]),
-                                   "arrived": str(r.get("ApproximateArrivalTimestamp", ""))}))
+                                   "arrived": r.get("ApproximateArrivalTimestamp")}, indent=None))
         else:
             ui.echo(f"{r['PartitionKey'][:12]:<12}  {decode(r['Data'])}")
 
@@ -147,7 +149,7 @@ def read(c: Ctx, stream: str, start: str, limit: int, follow: bool, as_json: boo
 
 @kinesis.command(name="rm")
 @click.argument("stream", shell_complete=complete("stream"))
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def rm(c: Ctx, stream: str, yes: bool):

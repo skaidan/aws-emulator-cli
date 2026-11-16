@@ -11,10 +11,11 @@ from pathlib import Path
 
 import click
 
+from .. import exitcodes
 from .. import ui
 from ..clients import client
 from ..completion import complete
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
 from ._common import ensure_service_role, is_error, parse_kv
 
 DEFAULT_ROLE_NAME = "awsemu-lambda-role"
@@ -112,21 +113,25 @@ def _exists(lam, name: str) -> bool:
 
 @click.group(name="lambda")
 def lambda_():
-    """Deploy, invoke and inspect Lambda functions."""
+    """Lambda: deploy, invoke and inspect functions. Alias: 'awsemu fn'."""
 
 
 @lambda_.command(name="ls")
+@json_option
 @pass_ctx
 @handle_errors
-def ls(c: Ctx):
+def ls(c: Ctx, as_json: bool):
     """List functions."""
     lam = client("lambda", c.port)
-    rows = []
+    functions = []
     for page in lam.get_paginator("list_functions").paginate():
-        for f in page.get("Functions", []):
-            rows.append([f["FunctionName"], f.get("Runtime", f.get("PackageType", "")),
-                         f.get("Handler", ""), f.get("MemorySize", ""), f.get("Timeout", ""),
-                         (f.get("LastModified") or "")[:19]])
+        functions += page.get("Functions", [])
+    if as_json:
+        ui.print_json(functions)
+        return
+    rows = [[f["FunctionName"], f.get("Runtime", f.get("PackageType", "")), f.get("Handler", ""),
+             f.get("MemorySize", ""), f.get("Timeout", ""), (f.get("LastModified") or "")[:19]]
+            for f in functions]
     ui.table(["function", "runtime", "handler", "MB", "timeout", "modified"], rows,
              empty="No functions. Try 'awsemu lambda deploy NAME ./src'.")
 
@@ -226,7 +231,7 @@ def invoke(c: Ctx, name: str, payload: str | None, file_, is_async: bool, show_l
     error = resp.get("FunctionError")
     if raw:
         click.echo(body)
-        raise SystemExit(1 if error else 0)
+        raise SystemExit(exitcodes.FAILED if error else exitcodes.OK)
 
     if show_logs and resp.get("LogResult"):
         ui.echo("── logs ──", "muted")
@@ -239,15 +244,16 @@ def invoke(c: Ctx, name: str, payload: str | None, file_, is_async: bool, show_l
         click.echo(body)
     if error:
         ui.error(f"function error ({error}) after {elapsed:.2f}s")
-        raise SystemExit(1)
+        raise SystemExit(exitcodes.FAILED)
     ui.echo(f"HTTP {resp.get('StatusCode')} in {elapsed:.2f}s"
             + (f", version {resp['ExecutedVersion']}" if resp.get("ExecutedVersion") else ""), "muted")
 
 
 @lambda_.command(name="logs")
 @click.argument("name", shell_complete=complete("function"))
-@click.option("-f", "--follow", is_flag=True)
-@click.option("--since", type=int, default=60, show_default=True, metavar="MINUTES")
+@click.option("-f", "--follow", is_flag=True, help="Keep printing new log events.")
+@click.option("--since", type=int, default=60, show_default=True, metavar="MINUTES",
+              help="Start this many minutes ago.")
 @pass_ctx
 @handle_errors
 def logs_cmd(c: Ctx, name: str, follow: bool, since: int):
@@ -306,7 +312,7 @@ def info(c: Ctx, name: str):
 
 @lambda_.command(name="rm")
 @click.argument("name", shell_complete=complete("function"))
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def rm(c: Ctx, name: str, yes: bool):

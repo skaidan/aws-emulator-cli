@@ -10,7 +10,7 @@ import click
 from .. import ui
 from ..clients import client
 from ..completion import complete
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
 
 
 def split_uri(uri: str) -> tuple[str, str]:
@@ -29,13 +29,13 @@ def _fmt_time(value) -> str:
 
 @click.group()
 def s3():
-    """Buckets and objects."""
+    """S3: buckets and objects."""
 
 
 @s3.command(name="ls")
 @click.argument("target", required=False, shell_complete=complete("s3path"))
 @click.option("-r", "--recursive", is_flag=True, help="List every key, not just one level.")
-@click.option("--json", "as_json", is_flag=True)
+@json_option
 @pass_ctx
 @handle_errors
 def ls(c: Ctx, target: str | None, recursive: bool, as_json: bool):
@@ -176,7 +176,7 @@ def cat(c: Ctx, source: str):
 @s3.command(name="rm")
 @click.argument("target", shell_complete=complete("s3path"))
 @click.option("-r", "--recursive", is_flag=True, help="Delete every key under the prefix.")
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def rm(c: Ctx, target: str, recursive: bool, yes: bool):
@@ -197,7 +197,8 @@ def rm(c: Ctx, target: str, recursive: bool, yes: bool):
 
 @s3.command(name="presign")
 @click.argument("target", shell_complete=complete("s3path"))
-@click.option("--expires", type=int, default=3600, show_default=True, metavar="SECONDS")
+@click.option("--expires", type=int, default=3600, show_default=True, metavar="SECONDS",
+              help="How long the URL stays valid.")
 @click.option("--put", "for_put", is_flag=True, help="URL for uploading instead of downloading.")
 @pass_ctx
 @handle_errors

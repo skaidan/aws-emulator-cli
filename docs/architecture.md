@@ -31,6 +31,8 @@
 
 ```
 src/awsemu/
+  _meta.py          project identity (package, repository, command): the one place to rename
+  exitcodes.py      exit codes 0-3, part of the stable interface
   cli.py            lifecycle, environment, doctor, image, config, up/down/init, ui and
                     completion commands; registers the rest
   context.py        global --port and error handling (botocore → message + hint)
@@ -54,6 +56,7 @@ src/awsemu/
                     seed (idempotent apply, export), compose, fidelity, watch
   commands/_common.py  service roles, queue policies, Lambda permissions, error codes
 action.yml          composite GitHub Action (verified package, awsemu, seed, variables)
+scripts/            gen_reference.py (docs/reference.md), rename.py (package/repository rename)
 ```
 
 ## Design decisions
@@ -79,6 +82,10 @@ action.yml          composite GitHub Action (verified package, awsemu, seed, var
 **Fidelity of your version, not the latest.** `fidelity` reads the version from `aws-emulator -v` and downloads that release's scores, because comparing against another version would lead to wrong conclusions.
 
 **The UI is optional.** Textual is a big dependency for those who don't use it, so it lives in the `ui` extra; the data logic (`browse.py`) doesn't depend on it and is always tested.
+
+**A stable scripting interface.** Exit codes live in `exitcodes.py` and every `--json` output goes through one encoder (ISO dates, Decimal as numbers). awsemu's own summaries use `snake_case`; AWS resources keep AWS's field names. `tests/test_json_contract.py` pins every format, so a change can't slip in unnoticed.
+
+**Rename-ready.** The package and repository names live in `_meta.py`; `scripts/rename.py` changes them there and in the docs, `pyproject.toml` and the Action references in one go, and checks nothing is left (CHANGELOG excepted).
 
 **Don't write in the emulator's folder.** awsemu's own state lives in `~/.aws/emulator-cli/`. The only exception is deleting, after checking the port is free, the documented files the emulator left behind when it couldn't stop cleanly.
 

@@ -5,7 +5,7 @@ The emulator is ideal for integration tests: no AWS account needed, it starts in
 | Where | How |
 | --- | --- |
 | pytest | [Plugin](#pytest-plugin): `aws_emulator` fixture, no setup |
-| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.6.0` |
+| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.7.0` |
 | Anywhere else | [Scripts](#scripts) with `awsemu start`/`exec`/`stop`, or [Docker Compose](#docker-compose) |
 
 In every case, starting data goes in a [seed](seeds.md).
@@ -77,7 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: skaidan/aws-emulator-cli@v0.6.0
+      - uses: skaidan/aws-emulator-cli@v0.7.0
         with:
           seed: tests/seed.yaml
       - run: pytest tests/integration      # AWS_ENDPOINT_URL & co. are already set
@@ -179,14 +179,4 @@ Use it as the first step of any script that creates or deletes resources.
 
 ## Machine-readable output
 
-| Command | Output |
-| --- | --- |
-| `awsemu status --json` | The instance's state (`status`, `mode`, `pid`, `auth`, `endpoint`…). Exit code 3 if it isn't healthy. |
-| `awsemu status --all --json` | A list with every known instance. |
-| `awsemu overview --json` | Resources per service. |
-| `awsemu s3 ls --json`, `sqs ls --json`, `sqs receive --json`, `ddb scan --json`, `sns ls --json`, `events rules --json`, `kinesis read --json` | Raw data. |
-| `awsemu lambda invoke … --raw`, `sfn start … --raw`, `secrets get … --raw` | Just the result; exit code 1 if it failed. |
-| `awsemu seed export` | The state as YAML. |
-| `--plain` / `NO_COLOR=1` | Text without colours or boxes. |
-
-The `--json` format may still change before v1.0.
+Every listing has `--json`, results have `--raw`, and exit codes are documented: see [Scripting: JSON output and exit codes](scripting.md). Those formats are stable; the tables are for humans and may change.

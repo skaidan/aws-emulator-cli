@@ -71,9 +71,12 @@ def render(name: str, svc: dict, port: int) -> str:
               help="Write to this file (default: stdout).")
 @click.option("--name", default="aws-emulator", show_default=True, help="Service name.")
 @click.option("--no-build", is_flag=True, help="Omit the build section (image built with 'awsemu image build').")
-@click.option("--auth/--no-auth", default=None, show_default="auth")
-@click.option("--telemetry/--no-telemetry", default=None)
-@click.option("--idle-timeout", type=click.IntRange(1, 31536000), metavar="SECONDS")
+@click.option("--auth/--no-auth", default=None, show_default="auth",
+              help="Require SigV4-signed requests (default: awsemu.toml, else auth).")
+@click.option("--telemetry/--no-telemetry", default=None,
+              help="Force telemetry on/off (default: awsemu.toml, else emulator settings).")
+@click.option("--idle-timeout", type=click.IntRange(1, 31536000), metavar="SECONDS",
+              help="Stop after this many seconds without API calls.")
 @pass_ctx
 @handle_errors
 def compose(c: Ctx, output: Path | None, name: str, no_build: bool, auth, telemetry, idle_timeout):

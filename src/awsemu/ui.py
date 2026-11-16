@@ -138,8 +138,29 @@ def kv(pairs: Sequence[tuple[str, Any]], title: str | None = None) -> None:
         print(f"{k.ljust(width)}  {'' if v is None else v}")
 
 
+def json_default(value: Any) -> Any:
+    """How --json writes values JSON doesn't have: dates as ISO 8601, Decimal as numbers."""
+    import base64
+    from datetime import date, datetime
+    from decimal import Decimal
+
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    if isinstance(value, (bytes, bytearray)):
+        return base64.b64encode(bytes(value)).decode()
+    if isinstance(value, (set, frozenset)):
+        return sorted(value)
+    return str(value)
+
+
+def to_json(data: Any, indent: int | None = 2) -> str:
+    return json.dumps(data, indent=indent, default=json_default, ensure_ascii=False)
+
+
 def print_json(data: Any) -> None:
-    text = json.dumps(data, indent=2, default=str, ensure_ascii=False)
+    text = to_json(data)
     con = console()
     if con is not None:
         con.print_json(text)

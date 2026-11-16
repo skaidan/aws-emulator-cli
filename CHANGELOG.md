@@ -1,8 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 — 2026-11-16
 
-- English is now the project's official language: documentation, ROADMAP, CHANGELOG, examples and test data have been translated (code, help and messages were already in English). See "Language" in `CONTRIBUTING.md`.
+Getting ready to publish: English, a stable scripting interface, and an easy rename.
+
+**Breaking** (JSON output; see `docs/scripting.md`):
+
+- `overview --json`: each service is now `{"label", "items", "error"}` (it was a list of names, or `{"error"}`).
+- `sqs ls --json`: `{"name", "url", "visible", "in_flight", "delayed"}` with integer counts (it had AWS attribute names with string values).
+- `fidelity --json`: `scoredAt`, `multiServicePassed` and `multiServiceTotal` are now `scored_at`, `multi_service_passed` and `multi_service_total`.
+- `status --json`: `uptime` is now `uptime_seconds`; `status --json` exits with 3 when the emulator isn't healthy, like `status`.
+- Dates in every `--json` output are ISO 8601 (`2026-11-16T12:00:00+00:00`) instead of Python's default format.
+
+Added and changed:
+
+- English is the project's official language: documentation, ROADMAP, CHANGELOG, examples, test data and release notes (code, help and messages already were). See "Language" in `CONTRIBUTING.md`.
+- `--json` on `ddb ls`, `lambda ls`, `kinesis ls`, `sfn ls`, `sfn executions`, `sns subs`, `events buses` and `doctor`; `sns ls --json` includes each topic's `name`.
+- `docs/scripting.md`: exit codes, JSON conventions and every format, with a stability promise; `tests/test_json_contract.py` pins them.
+- Exit codes in one place (`exitcodes.py`): 0 OK, 1 failed, 2 usage, 3 not healthy.
+- `doctor` reports a missing emulator runtime as a check of its own.
+- Every command and option has help text; service groups have consistent summaries.
+- `scripts/rename.py` and `_meta.py`: the package and repository names in one place, renamed everywhere in one go.
+- Install instructions use git tags instead of wheel URLs.
 
 ## 0.6.0 — 2026-11-16
 

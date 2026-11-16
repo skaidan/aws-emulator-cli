@@ -12,8 +12,9 @@ from pathlib import Path
 
 import click
 
-from . import __version__, envvars, health, logs, project, runtime, settings, ui
-from .context import Ctx, handle_errors, pass_ctx
+from . import exitcodes
+from . import __version__, _meta, envvars, health, logs, project, runtime, settings, ui
+from .context import Ctx, handle_errors, pass_ctx, json_option
 from .paths import ACCOUNT_ID, InstanceFiles, default_port, emulator_settings_file, known_ports
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"], "max_content_width": 100}
@@ -67,7 +68,7 @@ def cli(ctx: click.Context, port: int, plain: bool):
         project.load()
     except project.ProjectError as exc:
         ui.error(str(exc), "Fix the file, or set AWSEMU_CONFIG to another one.")
-        sys.exit(2)
+        sys.exit(exitcodes.USAGE)
     ctx.obj = Ctx(port)
 
 
@@ -150,7 +151,7 @@ def _do_start(port, docker, native, auth, telemetry, idle_timeout, image, memory
         if state.log:
             for line in runtime.tail(Path(state.log), 15):
                 ui.echo("  " + logs.format_plain(logs.parse(line)), "muted", err=True)
-        sys.exit(1)
+        sys.exit(exitcodes.FAILED)
 
     port = state.port
     files = InstanceFiles(port)
@@ -190,7 +191,8 @@ def start(c: Ctx, **kwargs):
 @cli.command()
 @click.option("--all", "all_", is_flag=True, help="Stop every instance awsemu knows about.")
 @click.option("--force", is_flag=True, help="SIGKILL / docker kill (loses the clean shutdown).")
-@click.option("--timeout", type=float, default=15, show_default=True, metavar="SECONDS")
+@click.option("--timeout", type=float, default=15, show_default=True, metavar="SECONDS",
+              help="How long to wait for a clean stop.")
 @pass_ctx
 @handle_errors
 def stop(c: Ctx, all_: bool, force: bool, timeout: float):
@@ -211,7 +213,7 @@ def stop(c: Ctx, all_: bool, force: bool, timeout: float):
 @pass_ctx
 @handle_errors
 def restart(c: Ctx, **kwargs):
-    """Restart the emulator. The emulator keeps state in memory, so this also resets it.
+    """Restart the emulator, which empties its state (it's all in memory).
 
     Alias: 'awsemu reset'. With --seed, the seed is applied to the fresh emulator.
     """
@@ -238,7 +240,8 @@ def restart(c: Ctx, **kwargs):
 @click.option("--seed", "seed_file", type=click.Path(dir_okay=False), metavar="FILE",
               help="Seed to apply (default: 'seed' from awsemu.toml).")
 @click.option("--no-seed", is_flag=True, help="Don't apply any seed.")
-@click.option("--wait", type=float, default=30, show_default=True, metavar="SECONDS")
+@click.option("--wait", type=float, default=30, show_default=True, metavar="SECONDS",
+              help="How long to wait for the health check.")
 @pass_ctx
 @handle_errors
 def up(c: Ctx, seed_file: str | None, no_seed: bool, wait: float):
@@ -310,7 +313,7 @@ def _all_ports() -> list[int]:
 
 @cli.command()
 @click.option("--all", "all_", is_flag=True, help="Show every known port, not just the selected one.")
-@click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
+@json_option
 @pass_ctx
 @handle_errors
 def status(c: Ctx, all_: bool, as_json: bool):
@@ -320,19 +323,21 @@ def status(c: Ctx, all_: bool, as_json: bool):
     infos = [runtime.instance_info(p) for p in ports]
     if as_json:
         ui.print_json(infos if all_ else infos[0])
+        if not all_ and infos[0]["status"] != "healthy":
+            sys.exit(exitcodes.NOT_HEALTHY)
         return
     rows = []
     for i in infos:
         ident = i["pid"] or i["container"] or ""
         auth = "" if i["auth"] is None else ("on" if i["auth"] else "off")
         rows.append([i["port"], ui.styled(i["status"], i["status"]), i["mode"], ident,
-                     ui.human_duration(i["uptime"]), auth, i["endpoint"]])
+                     ui.human_duration(i["uptime_seconds"]), auth, i["endpoint"]])
     ui.table(["port", "status", "mode", "pid/container", "uptime", "auth", "endpoint"], rows)
     for i in infos:
         if i["status"] != "healthy" and i["detail"] and i["status"] != "stopped":
             ui.warn(f"port {i['port']}: {i['detail']}")
     if not all_ and infos[0]["status"] != "healthy":
-        sys.exit(3)
+        sys.exit(exitcodes.NOT_HEALTHY)
 
 
 @cli.command(name="logs")
@@ -429,7 +434,8 @@ def env(c: Ctx, shell: str | None, extras: tuple[str, ...], unset: bool, keep_re
 @cli.command(name="exec", context_settings={"ignore_unknown_options": True,
                                              "allow_interspersed_args": False})
 @click.argument("command", nargs=-1, required=True, type=click.UNPROCESSED)
-@click.option("--sdk", "extras", multiple=True, type=click.Choice(envvars.EXTRAS))
+@click.option("--sdk", "extras", multiple=True, type=click.Choice(envvars.EXTRAS),
+              help="Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable.")
 @pass_ctx
 @handle_errors
 def exec_cmd(c: Ctx, command: tuple[str, ...], extras):
@@ -449,7 +455,8 @@ def exec_cmd(c: Ctx, command: tuple[str, ...], extras):
 
 
 @cli.command()
-@click.option("--sdk", "extras", multiple=True, type=click.Choice(envvars.EXTRAS))
+@click.option("--sdk", "extras", multiple=True, type=click.Choice(envvars.EXTRAS),
+              help="Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable.")
 @pass_ctx
 @handle_errors
 def shell(c: Ctx, extras):
@@ -517,28 +524,36 @@ def whoami(c: Ctx):
         ui.success("Talking to AWS Emulator.")
     else:
         ui.error("This doesn't look like the emulator account (000000000000)!")
-        sys.exit(1)
+        sys.exit(exitcodes.FAILED)
 
 
 # =========================================================================== setup & diagnostics
 
 
 @cli.command()
+@json_option
 @pass_ctx
-def doctor(c: Ctx):
-    """Check your setup and explain how to fix what's missing."""
+def doctor(c: Ctx, as_json: bool):
+    """Check your setup and explain how to fix what's missing.
+
+    Exits with 1 if something required is missing (warnings don't count).
+    """
     rows = []
+    checks = []
     problems = 0
 
     def add(name, ok, detail, fix=None, warn_only=False):
         nonlocal problems
         if ok is True:
-            mark = ui.styled("ok", "ok")
+            result = "ok"
         elif warn_only or ok is None:
-            mark = ui.styled("warn", "warn")
+            result = "warn"
         else:
-            mark = ui.styled("fail", "error")
+            result = "fail"
             problems += 1
+        checks.append({"check": name, "result": result, "detail": detail,
+                       "fix": fix if result != "ok" else None})
+        mark = ui.styled(result, {"ok": "ok", "warn": "warn", "fail": "error"}[result])
         sep = "\n→ " if ui.rich_enabled() else "  → "
         rows.append([name, mark, detail + (f"{sep}{fix}" if fix and ok is not True else "")])
 
@@ -566,7 +581,8 @@ def doctor(c: Ctx):
         add("docker", None, "not found", "only needed if you don't use the native binary")
 
     if not binary and not runtime.docker_available():
-        problems += 1
+        add("emulator runtime", False, "neither the aws-emulator binary nor Docker is available",
+            "install the Linux package, set AWSEMU_BINARY, or install Docker")
 
     aws = shutil.which("aws")
     if aws:
@@ -607,10 +623,15 @@ def doctor(c: Ctx):
         "default (on)" if tele is None else ("on" if tele else "off") + f" in {emulator_settings_file()}")
     add("telemetry", True, detail)
 
+    if as_json:
+        ui.print_json({"ok": problems == 0, "problems": problems, "checks": checks})
+        if problems:
+            sys.exit(exitcodes.FAILED)
+        return
     ui.table(["check", "result", "detail"], rows)
     if problems:
         ui.error(f"{problems} problem(s) found.")
-        sys.exit(1)
+        sys.exit(exitcodes.FAILED)
     ui.success("Looks good.")
 
 
@@ -628,7 +649,7 @@ def image():
 
 
 @image.command(name="build")
-@click.option("--tag", default=runtime.DEFAULT_IMAGE, show_default=True)
+@click.option("--tag", default=runtime.DEFAULT_IMAGE, show_default=True, help="Image name to build.")
 @click.option("--arch", type=click.Choice(["x86_64", "aarch64"]), default=None,
               help="Package architecture (default: this machine's).")
 @handle_errors
@@ -645,7 +666,8 @@ def image_build(tag: str, arch: str | None):
 
 
 @image.command(name="dockerfile")
-@click.option("--arch", type=click.Choice(["x86_64", "aarch64"]), default=None)
+@click.option("--arch", type=click.Choice(["x86_64", "aarch64"]), default=None,
+              help="Package architecture (default: this machine's).")
 def image_dockerfile(arch: str | None):
     """Print the Dockerfile awsemu builds from."""
     click.echo(runtime.dockerfile(arch), nl=False)
@@ -742,14 +764,14 @@ def ui_cmd(c: Ctx):
     """Browse the emulator in the terminal: services, resources and their details.
 
     Keys: arrows/enter to navigate, r refresh, w auto-refresh, q quit.
-    Needs the 'ui' extra:  pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'
+    Needs the 'ui' extra (Textual); if it's missing, this command says how to install it.
     """
     try:
         from . import tui
     except ImportError as exc:
         raise runtime.RuntimeErrorWithHint(
             "The terminal UI needs Textual, which isn't installed.",
-            "pip install 'aws-emulator-cli[ui]'  (or: pip install textual)") from exc
+            f"{_meta.install_hint('ui')}  (or: pip install textual)") from exc
     _require_healthy(c.port)
     tui.run(c.port)
 

@@ -1,0 +1,181 @@
+"""The --json output is a stable interface (docs/scripting.md). These tests pin
+its shape: if one fails, you changed the contract. Update docs/scripting.md and
+CHANGELOG.md (as a breaking change) together with the test.
+"""
+
+import gzip
+import json
+from datetime import datetime, timezone
+
+import pytest
+
+from awsemu.cli import cli
+from awsemu.commands import dynamodb as ddb_mod
+from awsemu.commands import kinesis as kinesis_mod
+from awsemu.commands import overview as overview_mod
+from awsemu.commands import s3 as s3_mod
+from awsemu.commands import sns as sns_mod
+from awsemu.commands import sqs as sqs_mod
+from tests.test_services import FakeClient, running  # noqa: F401  (fixture)
+
+NOW = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc)
+
+
+def run_json(runner, *args):
+    result = runner.invoke(cli, list(args))
+    assert result.exit_code in (0, 1, 3), result.output
+    return json.loads(result.output)
+
+
+def use(monkeypatch, module, **clients):
+    monkeypatch.setattr(module, "client", lambda service, port: clients[service])
+
+
+def test_status(runner, free_port):
+    result = runner.invoke(cli, ["--port", str(free_port), "status", "--json"])
+    assert result.exit_code == 3  # not healthy: same exit code as without --json
+    data = json.loads(result.output)
+    assert set(data) == {"port", "status", "detail", "endpoint", "mode", "pid", "container",
+                         "uptime_seconds", "auth", "files", "log"}
+    assert data["status"] in ("healthy", "unhealthy", "stopped") and data["port"] == free_port
+    assert isinstance(run_json(runner, "--port", str(free_port), "status", "--all", "--json"), list)
+
+
+def test_overview(runner, monkeypatch, running):
+    def fake(service, port):
+        if service == "s3":
+            return FakeClient(list_buckets={"Buckets": [{"Name": "b1"}]})
+        if service == "sqs":
+            def boom(**_):
+                raise RuntimeError("nope")
+            return FakeClient(list_queues=boom)
+        return FakeClient(list_tables={"TableNames": []}, list_event_buses={"EventBuses": []},
+                          **{op: [{}] for op in ("list_topics", "list_functions", "list_secrets",
+                                                 "describe_parameters", "list_streams",
+                                                 "list_state_machines", "describe_log_groups",
+                                                 "list_roles")})
+    monkeypatch.setattr(overview_mod, "client", fake)
+    data = run_json(runner, "overview", "--json")
+    assert data["s3"] == {"label": "S3 buckets", "items": ["b1"], "error": None}
+    assert data["sqs"]["items"] == [] and "nope" in data["sqs"]["error"]
+    assert all(set(v) == {"label", "items", "error"} for v in data.values())
+
+
+def test_sqs_ls(runner, monkeypatch, running):
+    use(monkeypatch, sqs_mod, sqs=FakeClient(
+        list_queues={"QueueUrls": ["https://x/000000000000/jobs"]},
+        get_queue_attributes={"Attributes": {"ApproximateNumberOfMessages": "3",
+                                             "ApproximateNumberOfMessagesNotVisible": "1",
+                                             "ApproximateNumberOfMessagesDelayed": "0"}}))
+    assert run_json(runner, "sqs", "ls", "--json") == [
+        {"name": "jobs", "url": "https://x/000000000000/jobs", "visible": 3, "in_flight": 1, "delayed": 0}]
+
+
+def test_sns_ls(runner, monkeypatch, running):
+    arn = "arn:aws:sns:us-east-1:000000000000:orders"
+    sub = {"TopicArn": arn, "Protocol": "sqs", "Endpoint": "arn:aws:sqs:us-east-1:000000000000:q",
+           "SubscriptionArn": arn + ":1"}
+    use(monkeypatch, sns_mod, sns=FakeClient(list_topics=[{"Topics": [{"TopicArn": arn}]}],
+                                             list_subscriptions=[{"Subscriptions": [sub]}]))
+    assert run_json(runner, "sns", "ls", "--json") == [{"name": "orders", "arn": arn, "subscriptions": [sub]}]
+
+
+def test_dynamodb_ls(runner, monkeypatch, running):
+    table = {"TableName": "events", "ItemCount": 2, "TableStatus": "ACTIVE",
+             "KeySchema": [{"AttributeName": "user", "KeyType": "HASH"},
+                           {"AttributeName": "at", "KeyType": "RANGE"}],
+             "AttributeDefinitions": [{"AttributeName": "user", "AttributeType": "S"},
+                                      {"AttributeName": "at", "AttributeType": "N"}]}
+    use(monkeypatch, ddb_mod, dynamodb=FakeClient(list_tables=[{"TableNames": ["events"]}],
+                                                  describe_table={"Table": table}))
+    assert run_json(runner, "ddb", "ls", "--json") == [{
+        "name": "events", "partition_key": {"name": "user", "type": "S"},
+        "sort_key": {"name": "at", "type": "N"}, "item_count": 2, "status": "ACTIVE"}]
+
+
+def test_s3_ls_with_prefix_and_iso_dates(runner, monkeypatch, running):
+    use(monkeypatch, s3_mod, s3=FakeClient(list_objects_v2=[{
+        "CommonPrefixes": [{"Prefix": "a/"}],
+        "Contents": [{"Key": "x.txt", "Size": 1, "LastModified": NOW}]}]))
+    data = run_json(runner, "s3", "ls", "photos", "--json")
+    assert set(data) == {"prefixes", "objects"}
+    assert data["prefixes"] == ["a/"] and data["objects"][0]["LastModified"] == "2026-11-16T12:00:00+00:00"
+
+
+def test_kinesis_read_lines(runner, monkeypatch, running):
+    pages = iter([{"Records": [{"SequenceNumber": "1", "PartitionKey": "k", "Data": b'{"n":1}',
+                                "ApproximateArrivalTimestamp": NOW}],
+                   "NextShardIterator": "i2", "MillisBehindLatest": 0},
+                  {"Records": [], "NextShardIterator": "i3", "MillisBehindLatest": 0}])
+    use(monkeypatch, kinesis_mod, kinesis=FakeClient(
+        list_shards=[{"Shards": [{"ShardId": "s-0"}]}], get_shard_iterator={"ShardIterator": "i1"},
+        get_records=lambda **_: next(pages)))
+    result = runner.invoke(cli, ["kinesis", "read", "clicks", "--json"])
+    lines = [json.loads(line) for line in result.output.strip().splitlines()]
+    assert lines == [{"shard": "s-0", "sequence": "1", "key": "k", "data": '{"n": 1}',
+                      "arrived": "2026-11-16T12:00:00+00:00"}]
+
+
+def test_fidelity(runner, isolated_home, monkeypatch):
+    from awsemu import fidelity as fid
+
+    scores = {"commit": "abc", "schemaVersion": 1, "scoredAt": "2026-11-14T18:34:58+00:00",
+              "units": [{"unitId": "t1", "outcome": "fail", "services": ["com.amazonaws.s3#AmazonS3"],
+                         "detail": {"operation": "PutObject", "mismatch": "status",
+                                    "expected": {"status": 400}, "actual": {"status": 200}}}]}
+    fid.cache_dir().mkdir(parents=True)
+    (fid.cache_dir() / "v1.0.385.json.gz").write_bytes(gzip.compress(json.dumps(scores).encode()))
+    monkeypatch.setattr(fid, "installed_version", lambda binary=None: "1.0.385")
+    data = run_json(runner, "fidelity", "s3", "--failures", "--json")
+    assert set(data) == {"release", "commit", "scored_at", "installed", "services"}
+    assert set(data["services"]["s3"]) == {"passed", "total", "multi_service_passed",
+                                           "multi_service_total", "failures"}
+    assert set(data["services"]["s3"]["failures"][0]) == {"test", "operation", "mismatch",
+                                                          "expected", "actual", "step"}
+
+
+def test_doctor(runner):
+    data = run_json(runner, "doctor", "--json")
+    assert set(data) == {"ok", "problems", "checks"}
+    assert all(set(c) == {"check", "result", "detail", "fix"} for c in data["checks"])
+    assert {c["result"] for c in data["checks"]} <= {"ok", "warn", "fail"}
+    assert data["problems"] == sum(c["result"] == "fail" for c in data["checks"])
+
+
+@pytest.mark.parametrize("args,module,service,fake,expected", [
+    (["lambda", "ls", "--json"], "lambda_", "lambda", {"list_functions": [{"Functions": [{"FunctionName": "f"}]}]},
+     [{"FunctionName": "f"}]),
+    (["sfn", "ls", "--json"], "sfn", "stepfunctions",
+     {"list_state_machines": [{"stateMachines": [{"name": "m", "creationDate": NOW}]}]},
+     [{"name": "m", "creationDate": "2026-11-16T12:00:00+00:00"}]),
+    (["events", "buses", "--json"], "events", "events", {"list_event_buses": {"EventBuses": [{"Name": "default"}]}},
+     [{"Name": "default"}]),
+    (["sns", "subs", "--json"], "sns", "sns", {"list_subscriptions": [{"Subscriptions": [{"Protocol": "sqs"}]}]},
+     [{"Protocol": "sqs"}]),
+])
+def test_aws_shapes_pass_through(runner, monkeypatch, running, args, module, service, fake, expected):
+    """Listings of AWS resources keep AWS's own field names."""
+    import importlib
+
+    mod = importlib.import_module(f"awsemu.commands.{module}")
+    use(monkeypatch, mod, **{service: FakeClient(**fake)})
+    assert run_json(runner, *args) == expected
+
+
+def test_every_listing_has_json():
+    """New listing commands must offer --json too."""
+    import click
+
+    missing = []
+
+    def walk(cmd, path):
+        ctx = click.Context(cmd)
+        if isinstance(cmd, click.Group):
+            for n in cmd.list_commands(ctx):
+                walk(cmd.get_command(ctx, n), path + [n])
+            return
+        if path[-1] in ("ls", "subs", "buses", "executions", "rules", "doctor", "status") and \
+                not any("--json" in p.opts for p in cmd.params if hasattr(p, "opts")):
+            missing.append(" ".join(path))
+    walk(cli, [])
+    assert missing == []

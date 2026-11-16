@@ -6,8 +6,8 @@ You need Python 3.10 or later.
 
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
-# or, from a specific release:
-pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.6.0/aws_emulator_cli-0.6.0-py3-none-any.whl
+# or a specific release (any tag from the Releases page):
+pipx install git+https://github.com/skaidan/aws-emulator-cli@v0.7.0
 ```
 
 Optional: shell completion (including the names of your buckets, queues, tables…) and the terminal UI:

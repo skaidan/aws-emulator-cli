@@ -8,7 +8,7 @@ import click
 
 from .. import ui
 from ..clients import client, describe_error, ensure_running
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, pass_ctx, json_option
 
 
 def _s3(c):
@@ -83,7 +83,7 @@ def collect(port: int, only: set[str] | None = None) -> list[dict]:
               type=click.Choice([s[1] for s in SERVICES]),
               help="Only these services. Repeatable.")
 @click.option("--all", "show_empty", is_flag=True, help="Also list services with nothing in them.")
-@click.option("--json", "as_json", is_flag=True)
+@json_option
 @pass_ctx
 @handle_errors
 def overview(c: Ctx, services, show_empty: bool, as_json: bool):
@@ -91,7 +91,7 @@ def overview(c: Ctx, services, show_empty: bool, as_json: bool):
     ensure_running(c.port)
     results = collect(c.port, set(services) or None)
     if as_json:
-        ui.print_json({r["service"]: (r["items"] if not r["error"] else {"error": r["error"]})
+        ui.print_json({r["service"]: {"label": r["label"], "items": r["items"], "error": r["error"]}
                        for r in results})
         return
     rows = []

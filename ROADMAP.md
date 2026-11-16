@@ -80,14 +80,14 @@ Goal: explore the emulator without remembering commands.
 
 Learned in CI: the emulator doesn't log API calls (not even with `RUST_LOG=debug`), so `watch` shows the effect on resources rather than the calls. The scores are in a `scores.json.gz` attached to each release, with each test's result and the services it calls.
 
-## v0.7 — Getting ready to publish 🚧
+## v0.7 — Getting ready to publish ✅
 
 Goal: settle what's hard to change once others install and use `awsemu`.
 
 - ✅ **English as the official language**: code, comments, help, documentation, ROADMAP, CHANGELOG, examples, test data and commits.
-- ⬜ **Prepare the rename** (the name is decided at the end, in v1.0): today "aws-emulator-cli" appears 37 times in 13 files. Gather it in a few places and add a script that changes it in one go (package, repository, documentation and GitHub Action URLs) and checks no old reference is left.
-- ⬜ **Stable output.** Fix and document each command's `--json` format and the exit codes (0, 1, 2, 3), with tests that catch accidental changes; after publishing, changing them would break other people's scripts.
-- ⬜ A general review of messages, help texts and defaults before freezing them.
+- ✅ **Rename-ready** (the name itself is decided at the end, in v1.0): the package and repository names live in `_meta.py`, and `scripts/rename.py` changes them everywhere in one go (CHANGELOG excepted), with `--check` and `--dry-run`, and verifies nothing old is left. Install instructions no longer depend on wheel file names.
+- ✅ **Stable output**: exit codes 0–3 in one module; one JSON encoder (ISO dates); `snake_case` for awsemu's own summaries and AWS's names for AWS resources; `--json` on every listing (and `doctor`); every format documented in `docs/scripting.md` and pinned by contract tests. Stability promise: changes only as **Breaking** in the CHANGELOG.
+- ✅ **Help review**: every command and option has help text (enforced by a test); consistent summaries for service groups.
 
 ## v0.8 — Will my project work with the emulator?
 

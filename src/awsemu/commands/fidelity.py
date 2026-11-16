@@ -6,7 +6,7 @@ import click
 
 from .. import fidelity as fid
 from .. import ui
-from ..context import handle_errors
+from ..context import handle_errors, json_option
 from ..runtime import RuntimeErrorWithHint
 
 
@@ -21,9 +21,10 @@ def _score_style(pct: float | None) -> str | None:
 @click.option("--release", metavar="VERSION",
               help="Emulator release: 1.0.385, v1.0.385 or latest (default: your installed version).")
 @click.option("--failures", is_flag=True, help="List the failing tests of the given services.")
-@click.option("--sort", type=click.Choice(["name", "score"]), default="name", show_default=True)
+@click.option("--sort", type=click.Choice(["name", "score"]), default="name", show_default=True,
+              help="Order of the table (score: worst first).")
 @click.option("--refresh", is_flag=True, help="Download again instead of using the cache.")
-@click.option("--json", "as_json", is_flag=True)
+@json_option
 @handle_errors
 def fidelity(services, release, failures, sort, refresh, as_json):
     """Fidelity scores published with each emulator release: tests passed per service.
@@ -56,11 +57,11 @@ def fidelity(services, release, failures, sort, refresh, as_json):
 
     if as_json:
         ui.print_json({
-            "release": tag, "commit": scores.get("commit"), "scoredAt": scores.get("scoredAt"),
+            "release": tag, "commit": scores.get("commit"), "scored_at": scores.get("scoredAt"),
             "installed": installed,
             "services": {n: {"passed": table[n].passed, "total": table[n].total,
-                             "multiServicePassed": table[n].multi_passed,
-                             "multiServiceTotal": table[n].multi_total,
+                             "multi_service_passed": table[n].multi_passed,
+                             "multi_service_total": table[n].multi_total,
                              **({"failures": [fid.describe_failure(u) for u in table[n].failures]}
                                 if failures else {})}
                          for n in names},

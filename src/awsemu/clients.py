@@ -10,6 +10,7 @@ from __future__ import annotations
 import configparser
 from functools import lru_cache
 
+from . import _meta
 from .paths import REGION, InstanceFiles
 from .runtime import RuntimeErrorWithHint
 
@@ -46,7 +47,7 @@ def _session_for(key: str, secret: str):
         import boto3
     except ImportError as exc:  # pragma: no cover
         raise RuntimeErrorWithHint("boto3 is not installed.",
-                                   "pip install boto3  (or reinstall aws-emulator-cli)") from exc
+                                   f"pip install boto3  (or: {_meta.install_hint()})") from exc
     return boto3.session.Session(aws_access_key_id=key, aws_secret_access_key=secret,
                                  region_name=REGION)
 

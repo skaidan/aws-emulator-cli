@@ -61,7 +61,9 @@ def test_ui_without_textual_explains(runner, monkeypatch):
         return real_import(name, *a, **k)
     monkeypatch.setattr(builtins, "__import__", no_textual)
     result = runner.invoke(cli, ["ui"])
-    assert result.exit_code == 1 and "aws-emulator-cli[ui]" in result.output
+    from awsemu import _meta
+
+    assert result.exit_code == 1 and _meta.install_hint("ui") in result.output
 
 
 def test_textual_app(fake_emulator, monkeypatch):

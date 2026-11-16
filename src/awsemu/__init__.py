@@ -1,3 +1,3 @@
 """A friendly CLI for AWS Emulator."""
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"

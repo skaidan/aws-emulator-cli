@@ -9,7 +9,7 @@ import click
 from .. import ui
 from ..clients import client
 from ..completion import complete
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
 
 COUNT_ATTRS = ["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible",
                "ApproximateNumberOfMessagesDelayed"]
@@ -24,12 +24,12 @@ def queue_url(sqs, queue: str) -> str:
 
 @click.group()
 def sqs():
-    """Queues and messages."""
+    """SQS: queues and messages."""
 
 
 @sqs.command(name="ls")
 @click.option("--prefix", default="", help="Only queues whose name starts with this.")
-@click.option("--json", "as_json", is_flag=True)
+@json_option
 @pass_ctx
 @handle_errors
 def ls(c: Ctx, prefix: str, as_json: bool):
@@ -40,7 +40,10 @@ def ls(c: Ctx, prefix: str, as_json: bool):
     for url in urls:
         attrs = q.get_queue_attributes(QueueUrl=url, AttributeNames=COUNT_ATTRS).get("Attributes", {})
         name = url.rsplit("/", 1)[-1]
-        data.append({"name": name, "url": url, **attrs})
+        data.append({"name": name, "url": url,
+                     "visible": int(attrs.get("ApproximateNumberOfMessages", 0)),
+                     "in_flight": int(attrs.get("ApproximateNumberOfMessagesNotVisible", 0)),
+                     "delayed": int(attrs.get("ApproximateNumberOfMessagesDelayed", 0))})
         rows.append([name, attrs.get("ApproximateNumberOfMessages", "?"),
                      attrs.get("ApproximateNumberOfMessagesNotVisible", "?"),
                      attrs.get("ApproximateNumberOfMessagesDelayed", "?")])
@@ -55,7 +58,8 @@ def ls(c: Ctx, prefix: str, as_json: bool):
 @click.argument("name")
 @click.option("--fifo", is_flag=True, help="FIFO queue ('.fifo' is added if missing).")
 @click.option("--dedup", is_flag=True, help="Content-based deduplication (FIFO only).")
-@click.option("--visibility-timeout", type=int, metavar="SECONDS")
+@click.option("--visibility-timeout", type=int, metavar="SECONDS",
+              help="How long a received message stays hidden.")
 @click.option("--dlq", metavar="QUEUE", help="Dead-letter queue (name or URL).", shell_complete=complete("queue"))
 @click.option("--max-receive", type=int, default=5, show_default=True,
               help="Receives before a message goes to the DLQ.")
@@ -90,7 +94,7 @@ def create(c: Ctx, name: str, fifo: bool, dedup: bool, visibility_timeout: int |
 @click.option("--file", "file_", type=click.File("r"), help="Read the body from a file ('-' = stdin).")
 @click.option("--group", help="MessageGroupId (FIFO).")
 @click.option("--dedup-id", help="MessageDeduplicationId (FIFO).")
-@click.option("--delay", type=int, metavar="SECONDS")
+@click.option("--delay", type=int, metavar="SECONDS", help="Delay before the message becomes visible.")
 @click.option("-a", "--attr", "attrs", multiple=True, metavar="KEY=VALUE",
               help="String message attribute. Repeatable.")
 @pass_ctx
@@ -123,11 +127,12 @@ def send(c: Ctx, queue: str, body: str | None, file_, group, dedup_id, delay, at
 
 @sqs.command(name="receive")
 @click.argument("queue", shell_complete=complete("queue"))
-@click.option("-n", "--max", "max_", type=click.IntRange(1, 10), default=10, show_default=True)
+@click.option("-n", "--max", "max_", type=click.IntRange(1, 10), default=10, show_default=True,
+              help="Maximum number of messages.")
 @click.option("--wait", type=click.IntRange(0, 20), default=1, show_default=True, metavar="SECONDS",
               help="Long-poll time.")
 @click.option("--delete", is_flag=True, help="Delete messages after printing them.")
-@click.option("--json", "as_json", is_flag=True)
+@json_option
 @pass_ctx
 @handle_errors
 def receive(c: Ctx, queue: str, max_: int, wait: int, delete: bool, as_json: bool):
@@ -160,7 +165,7 @@ def receive(c: Ctx, queue: str, max_: int, wait: int, delete: bool, as_json: boo
 
 @sqs.command(name="purge")
 @click.argument("queue", shell_complete=complete("queue"))
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def purge(c: Ctx, queue: str, yes: bool):
@@ -174,7 +179,7 @@ def purge(c: Ctx, queue: str, yes: bool):
 
 @sqs.command(name="rm")
 @click.argument("queue", shell_complete=complete("queue"))
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def rm(c: Ctx, queue: str, yes: bool):

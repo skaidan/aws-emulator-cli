@@ -9,7 +9,7 @@ import click
 from .. import ui
 from ..clients import client
 from ..completion import complete
-from ..context import Ctx, handle_errors, pass_ctx
+from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
 from ..paths import ACCOUNT_ID, REGION
 from ._common import allow_lambda, allow_queue, parse_kv, queue_policy_allowing
 
@@ -49,11 +49,11 @@ def _parse_attrs(attrs) -> dict:
 
 @click.group()
 def sns():
-    """Topics, publishing and subscriptions."""
+    """SNS: topics, publishing and subscriptions."""
 
 
 @sns.command(name="ls")
-@click.option("--json", "as_json", is_flag=True)
+@json_option
 @pass_ctx
 @handle_errors
 def ls(c: Ctx, as_json: bool):
@@ -67,7 +67,8 @@ def ls(c: Ctx, as_json: bool):
     for sub in subs:
         by_topic.setdefault(sub["TopicArn"], []).append(sub)
     if as_json:
-        ui.print_json([{"arn": t, "subscriptions": by_topic.get(t, [])} for t in topics])
+        ui.print_json([{"name": topic_name(t), "arn": t, "subscriptions": by_topic.get(t, [])}
+                       for t in topics])
         return
     rows = []
     for arn in topics:
@@ -99,7 +100,7 @@ def create(c: Ctx, name: str, fifo: bool):
 @click.argument("topic", shell_complete=complete("topic"))
 @click.argument("message", required=False)
 @click.option("--file", "file_", type=click.File("r"), help="Read the message from a file ('-' = stdin).")
-@click.option("--subject")
+@click.option("--subject", help="Subject (used by email subscriptions).")
 @click.option("-a", "--attr", "attrs", multiple=True, metavar="KEY=VALUE",
               help="String message attribute. Repeatable.")
 @click.option("--group", help="MessageGroupId (FIFO).")
@@ -173,12 +174,16 @@ def subscribe(c: Ctx, topic: str, queue, function, endpoint, raw: bool, filter_p
 
 @sns.command(name="subs")
 @click.argument("topic", required=False, shell_complete=complete("topic"))
+@json_option
 @pass_ctx
 @handle_errors
-def subs(c: Ctx, topic: str | None):
+def subs(c: Ctx, topic: str | None, as_json: bool):
     """List subscriptions (of one topic, or all)."""
-    rows = [[topic_name(x["TopicArn"]), x["Protocol"], x["Endpoint"], x["SubscriptionArn"]]
-            for x in _list_subscriptions(client("sns", c.port), topic_arn(topic) if topic else None)]
+    items = _list_subscriptions(client("sns", c.port), topic_arn(topic) if topic else None)
+    if as_json:
+        ui.print_json(items)
+        return
+    rows = [[topic_name(x["TopicArn"]), x["Protocol"], x["Endpoint"], x["SubscriptionArn"]] for x in items]
     ui.table(["topic", "protocol", "endpoint", "subscription"], rows, empty="No subscriptions.")
 
 
@@ -194,7 +199,7 @@ def unsubscribe(c: Ctx, subscription_arn: str):
 
 @sns.command(name="rm")
 @click.argument("topic", shell_complete=complete("topic"))
-@click.option("-y", "--yes", is_flag=True)
+@yes_option
 @pass_ctx
 @handle_errors
 def rm(c: Ctx, topic: str, yes: bool):
