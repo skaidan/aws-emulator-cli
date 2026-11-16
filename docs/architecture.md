@@ -45,7 +45,14 @@ src/awsemu/
   seed.py           seed format: YAML parsing with a line map, and validation (no AWS calls)
   project.py        awsemu.toml / [tool.awsemu]: upward lookup, validation, per-file cache
   pytest_plugin.py  pytest plugin (pytest11 entry point): aws_emulator and aws_emulator_fresh
-  fidelity.py       download and cache of scores.json.gz from emulator releases; per-service scores
+  fidelity.py       download and cache of scores.json.gz from emulator releases; per-service
+                    scores; compare (test by test between two releases)
+  scan.py           static scan of a project: SDK calls (Python, JS, Java, Go) and Terraform,
+                    CloudFormation/SAM and CDK resources; service name mapping
+  _service_names.py boto3 name -> score-file name, where they differ by more than hyphens
+  check.py          manifest.jsonl download and cache; index of fidelity tests by operation;
+                    the report of known differences
+  install.py        versioned packages, versions.json, GPG verification, apt/rpm install plan
   completion.py     resource-name completion (silent and fast when the emulator doesn't answer)
   browse.py         data for awsemu ui (list and describe), with no Textual dependency
   tui.py            the Textual app (optional 'ui' extra)
@@ -53,7 +60,7 @@ src/awsemu/
   ui.py             output with Rich, or plain text if it's missing or with --plain
   commands/         one module per service: overview, s3, sqs, dynamodb, sns, lambda_,
                     secrets (secrets + ssm), events, kinesis, sfn, describe,
-                    seed (idempotent apply, export), compose, fidelity, watch
+                    seed (idempotent apply, export), compose, fidelity, watch, check, install
   commands/_common.py  service roles, queue policies, Lambda permissions, error codes
 action.yml          composite GitHub Action (verified package, awsemu, seed, variables)
 scripts/            gen_reference.py (docs/reference.md), rename.py (package/repository rename)

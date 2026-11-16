@@ -7,7 +7,7 @@ You need Python 3.10 or later.
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
 # or a specific release (any tag from the Releases page):
-pipx install git+https://github.com/skaidan/aws-emulator-cli@v0.7.0
+pipx install git+https://github.com/skaidan/aws-emulator-cli@v0.8.0
 ```
 
 Optional: shell completion (including the names of your buckets, queues, tables…) and the terminal UI:
@@ -29,15 +29,15 @@ awsemu doctor
 
 ### Native (Linux)
 
-Install the official package. For example, on Debian/Ubuntu x86_64:
+Let `awsemu` install the official package (Debian/Ubuntu or RPM-based, x86_64 or ARM). It checks the package's GPG signature against AWS's key, shows what it will run, and asks:
 
 ```bash
-curl -fsSLo aws-emulator.deb https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest/aws-emulator_amd64.deb
-sudo apt-get install -y ./aws-emulator.deb
+awsemu install            # the latest version
+awsemu install 1.0.385    # a specific one (awsemu install --list)
 aws-emulator -v
 ```
 
-For RPM or ARM, and to verify the package signature, see the [official Linux installation guide](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-linux.html).
+To do it by hand instead, see the [official Linux installation guide](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started-linux.html). To give a whole team the same version, pin it: [compatibility.md](compatibility.md#awsemu-install-and-emulator_version).
 
 If the binary isn't on your `PATH`, tell `awsemu` where it is:
 
@@ -50,8 +50,8 @@ export AWSEMU_BINARY=/path/to/aws-emulator
 AWS doesn't publish an image; `awsemu` builds one with the official recipe (it detects whether your machine is x86_64 or ARM):
 
 ```bash
-awsemu image build
-awsemu image dockerfile   # to see the Dockerfile it uses
+awsemu image build                # or: awsemu install --docker [VERSION]
+awsemu image dockerfile           # to see the Dockerfile it uses
 ```
 
 Prefer Docker Compose? `awsemu compose -o compose.emulator.yaml` generates the service with the same setup (see [Testing and CI](testing.md#docker-compose)).
@@ -139,6 +139,14 @@ awsemu down
 ```
 
 See [Project settings](project-config.md).
+
+Before you rely on the emulator for a project, check what it uses against the known differences:
+
+```bash
+awsemu check     # the AWS operations your code calls, and the fidelity tests that fail for them
+```
+
+See [Will my project work?](compatibility.md).
 
 ## Several instances
 

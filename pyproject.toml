@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aws-emulator-cli"
-version = "0.7.0"
+version = "0.8.0"
 description = "A friendly CLI for AWS Emulator: start/stop it, wire your shell to it and browse what's inside."
 readme = "README.md"
 requires-python = ">=3.10"

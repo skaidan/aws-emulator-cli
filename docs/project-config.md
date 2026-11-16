@@ -21,6 +21,7 @@ seed = "tests/seed.yaml"   # relative to this file
 sdk = ["node"]             # node | java | rust | dotnet: trust the certificate in those SDKs
 image = "aws-emulator"     # Docker image
 memory = "2g"              # Docker memory limit
+emulator_version = "1.0.385"  # the emulator version the team and CI use (awsemu install)
 ```
 
 Every key is optional.
@@ -36,6 +37,7 @@ Every key is optional.
 | `sdk` | list | Certificate extras in `env`, `exec` and `shell` | none |
 | `image` | text | Docker image | `aws-emulator` |
 | `memory` | text | Docker memory limit | `2g` |
+| `emulator_version` | text (`1.0.385`) | The emulator version for this project: `start`/`up` warn if the installed one differs, Docker mode uses `aws-emulator:<version>`, `check`/`fidelity` use its data, the GitHub Action installs it. Set it with `awsemu install VERSION --pin`; see [compatibility.md](compatibility.md#awsemu-install-and-emulator_version) | none |
 
 ### In `pyproject.toml`
 

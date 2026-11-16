@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 — 2026-11-16
+
+Will my project work with the emulator? Answers before you start, and upgrades without surprises. Guide: `docs/compatibility.md`.
+
+- `awsemu check [PATHS]`: finds the AWS operations your code calls (boto3, AWS SDK for JavaScript v2/v3, Java, Go) and the services your infrastructure defines (Terraform, CloudFormation/SAM, CDK), and lists the known emulator differences for them from the release's fidelity tests: tests that fail at an operation you call, or that call only operations you call. Uses `manifest.jsonl` from the fidelity tests repository, at the version the release was scored with (cached; `--manifest` for another version or a local file). `--all`, `--strict` (exit 1 on known differences, for CI), `--json`.
+- `awsemu fidelity --compare VERSION`: tests fixed, regressed, added and removed between two releases, per service. `--mine` limits `fidelity` (with or without `--compare`) to the services the project in the current folder uses.
+- `awsemu install [VERSION]`: installs a given emulator version. On Linux, the `.deb`/`.rpm` from downloads.aws.com with its GPG signature and AWS's key fingerprint checked, through `apt-get`/`rpm` (downgrades allowed); elsewhere, a Docker image `aws-emulator:<version>`. `--list` (published versions), `--pin`, `--dry-run`, `--no-verify`, `-y`.
+- `emulator_version` in `awsemu.toml`/`[tool.awsemu]`: `start`, `up` and `doctor` warn when the installed emulator differs; Docker mode runs `aws-emulator:<version>`; `check` and `fidelity` default to that release.
+- GitHub Action: new `emulator-version` input (default: `emulator_version` from `awsemu.toml`, else latest) and `emulator-version` output.
+- `awsemu image build --version` and `awsemu image dockerfile --version`.
+- Fixed: `awsemu fidelity stepfunctions` (and `events`, `logs`, `cognito-idp`…) didn't find the service: the boto3 names are now mapped to the names in the scores file.
+- New: `examples/check-demo`, a tiny project to try `awsemu check`.
+
 ## 0.7.0 — 2026-11-16
 
 Getting ready to publish: English, a stable scripting interface, and an easy rename.

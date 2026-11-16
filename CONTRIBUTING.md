@@ -72,6 +72,12 @@ Variables to trigger odd cases: `FAKE_EMULATOR_CRASH=1` (exits with code 1) and 
 
 They're a stable interface (`docs/scripting.md`). Adding a field is fine. Renaming, removing or changing the type of one, or changing an exit code, is a breaking change: update `tests/test_json_contract.py` and `docs/scripting.md`, and list it under **Breaking** in the CHANGELOG.
 
+## Fidelity data and `awsemu check`
+
+- `check` and `fidelity` work with two public files: `scores.json.gz` (attached to each [emulator release](https://github.com/aws/aws-emulator/releases)) and `manifest.jsonl` (in the [fidelity tests repository](https://github.com/aws/aws-emulator-evaluation-suite)). Tests use small synthetic files with the same shape (`tests/test_check.py`, `tests/test_fidelity.py`); CI runs `check` against the real ones.
+- `src/awsemu/_service_names.py` maps boto3 client names to the names in the scores file where they differ by more than hyphens (`logs` → `cloudwatchlogs`). It was generated from both files: pair each single-service test's `service` in the manifest with its `services` in the scores. If AWS adds a service whose names differ, add it there.
+- New SDKs or infrastructure formats go in `src/awsemu/scan.py`, with a case in `FILES` of `tests/test_check.py`.
+
 ## Renaming the package
 
 The name is decided right before publishing (ROADMAP, v1.0). When it is:

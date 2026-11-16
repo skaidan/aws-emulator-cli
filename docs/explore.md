@@ -8,6 +8,7 @@ Tools to see what's inside the emulator, what's happening, and how far you can t
 | Browse services and resources | `awsemu ui` |
 | See live changes while my app works | `awsemu watch` |
 | Know how well a service is emulated | `awsemu fidelity` |
+| Know whether my project will work, or what an upgrade changes | `awsemu check`, `awsemu fidelity --compare` ([guide](compatibility.md)) |
 | See one specific resource | `awsemu describe ARN` |
 | Type less | `awsemu completion` |
 
@@ -77,6 +78,7 @@ awsemu fidelity s3 sqs dynamodb       # the ones you use
 awsemu fidelity --sort score          # worst to best
 awsemu fidelity lambda --failures     # which tests fail and how
 awsemu fidelity --release latest      # is the latest version better?
+awsemu fidelity --compare latest --mine   # test by test, for the services your project uses
 awsemu fidelity s3 --json
 ```
 
@@ -95,11 +97,11 @@ s3        603/688  88%    55/63
 
 - **passed / score:** tests that call only that service, the same "k of n" AWS publishes. Tests combining several services are shown separately under **multi-service**.
 - **`--failures`:** for each failing test, the operation, what differs (`status`, `errorCode`…), what AWS returned and what the emulator returned. The tests live in the [aws-emulator-evaluation-suite](https://github.com/aws/aws-emulator-evaluation-suite) repository, under `behavioral/<service>/`.
-- The installed version comes from `aws-emulator -v`. If you don't have the binary (for example, you use Docker), the latest release is used; pick another with `--release`.
+- The release is `--release`, else the `emulator_version` pinned in your `awsemu.toml`, else the installed one (`aws-emulator -v`), else the latest.
 - The data is downloaded from the [emulator's GitHub releases](https://github.com/aws/aws-emulator/releases) (`scores.json.gz`, ~1 MB) and cached in `~/.aws/emulator-cli/fidelity/`; `--refresh` downloads it again. If GitHub rate-limits you, set `GITHUB_TOKEN`.
 - Compare scores only between releases measured with the same version of the tests: AWS adds new tests and the total grows.
 
-Useful before you start using a service with the emulator, and to know whether a failing test of yours may be due to a known difference.
+Useful before you start using a service with the emulator, and to know whether a failing test of yours may be due to a known difference. To go from services to the exact operations your code calls, use [`awsemu check`](compatibility.md#awsemu-check); to compare two releases, [`--compare`](compatibility.md#awsemu-fidelity---compare).
 
 ## Shell completion
 

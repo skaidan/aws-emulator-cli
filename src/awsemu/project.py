@@ -12,6 +12,7 @@ Looked up from the current folder upwards (or ``$AWSEMU_CONFIG``)::
     sdk = ["node"]           # extra certificate settings for env/exec/shell
     image = "aws-emulator"
     memory = "2g"
+    emulator_version = "1.0.385"  # the team's emulator (awsemu install)
 
 Precedence everywhere: command-line flag > environment variable > project file > default.
 """
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import difflib
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -31,6 +33,7 @@ else:  # pragma: no cover
     import tomli as tomllib
 
 FILE_NAME = "awsemu.toml"
+VERSION_RE = re.compile(r"^v?\d+\.\d+\.\d+$")
 MODES = ("auto", "native", "docker")
 SDKS = ("node", "java", "rust", "dotnet")
 
@@ -44,6 +47,7 @@ TYPES: dict[str, tuple] = {
     "sdk": (list,),
     "image": (str,),
     "memory": (str,),
+    "emulator_version": (str,),
 }
 
 TEMPLATE = """\
@@ -60,6 +64,7 @@ idle_timeout = 3600        # stop after an hour without API calls
 # sdk = ["node"]           # also trust the certificate in Node/Java/Rust/.NET (env, exec, shell)
 # image = "aws-emulator"   # Docker image (awsemu image build)
 # memory = "2g"            # Docker memory limit
+# emulator_version = "1.0.385"  # pin the emulator: awsemu install, warnings at start
 """
 
 
@@ -79,6 +84,7 @@ class Project:
     sdk: list[str] = field(default_factory=list)
     image: str | None = None
     memory: str | None = None
+    emulator_version: str | None = None
 
     @property
     def root(self) -> Path:
@@ -137,6 +143,9 @@ def parse(path: Path) -> Project:
             problems.append("'port' must be between 1 and 65535")
         if "idle_timeout" in data and data["idle_timeout"] <= 0:
             problems.append("'idle_timeout' must be positive")
+        version = data.get("emulator_version")
+        if version is not None and not VERSION_RE.match(version):
+            problems.append(f"'emulator_version' must be a version like 1.0.385 (got '{version}')")
         bad_sdk = [s for s in data.get("sdk", []) if s not in SDKS]
         if bad_sdk:
             problems.append(f"'sdk' accepts {', '.join(SDKS)} (got {', '.join(map(str, bad_sdk))})")
@@ -154,6 +163,7 @@ def parse(path: Path) -> Project:
         sdk=list(data.get("sdk", [])),
         image=data.get("image"),
         memory=data.get("memory"),
+        emulator_version=data["emulator_version"].lstrip("v") if data.get("emulator_version") else None,
     )
 
 
@@ -179,3 +189,32 @@ def template(port: int, seed: str | None) -> str:
     from ._meta import DOCS_URL
 
     return TEMPLATE.format(port=port, seed_line=seed_line, docs_url=DOCS_URL)
+
+
+def set_value(key: str, value: str, path: Path | None = None) -> Path:
+    """Set a top-level setting in the project file (``[tool.awsemu]`` in pyproject.toml),
+    creating ``awsemu.toml`` in the current folder when there's none. Keeps comments."""
+    from . import settings
+
+    path = path or find() or Path.cwd() / FILE_NAME
+    if path.name == "pyproject.toml":
+        settings.set_value("tool.awsemu", key, value, path)
+        clear_cache()
+        return path
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    line = f'{key} = "{value}"'
+    lines = text.splitlines()
+    key_re = re.compile(rf"^\s*{re.escape(key)}\s*=")
+    for i, existing in enumerate(lines):
+        if existing.lstrip().startswith("["):
+            lines.insert(i, line)  # top-level keys must come before any table
+            break
+        if key_re.match(existing):
+            lines[i] = line
+            break
+    else:
+        lines.append(line)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    parse(path)  # still valid?
+    clear_cache()
+    return path

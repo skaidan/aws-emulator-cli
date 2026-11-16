@@ -8,6 +8,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 
 
 - [`aws`](#awsemu-aws) — Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
+- [`check`](#awsemu-check) — Find the AWS operations your project uses and the known emulator differences for them.
 - [`completion`](#awsemu-completion) — Print the shell completion script (commands, options and resource names).
 - [`compose`](#awsemu-compose) — Print a Docker Compose service for the emulator (same setup as 'start --docker').
 - [`config`](#awsemu-config) — Read or change the emulator's settings file (config.toml).
@@ -21,6 +22,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`fidelity`](#awsemu-fidelity) — Fidelity scores published with each emulator release: tests passed per service.
 - [`image`](#awsemu-image) — Build the Docker image (AWS doesn't publish a prebuilt one).
 - [`init`](#awsemu-init) — Create awsemu.toml in this folder.
+- [`install`](#awsemu-install) — Install a given emulator version: the Linux package, or a Docker image.
 - [`kinesis`](#awsemu-kinesis) — Kinesis: data streams and records.
 - [`lambda`](#awsemu-lambda) — Lambda: deploy, invoke and inspect functions.
 - [`logs`](#awsemu-logs) — Show the emulator's log, prettified (also after it stopped).
@@ -49,6 +51,35 @@ Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
 ```
 awsemu aws [OPTIONS] [ARGS]...
 ```
+
+## `awsemu check`
+
+Find the AWS operations your project uses and the known emulator differences for them.
+
+```bash
+awsemu check                    # this folder
+awsemu check src infra          # just these
+awsemu check --release latest   # would upgrading help?
+awsemu check --strict           # exit 1 on known differences (CI)
+```
+Reads code that uses boto3, the AWS SDKs for JavaScript, Java and Go, and
+Terraform, CloudFormation/SAM and CDK files; nothing is run. Then it looks
+the operations up in the fidelity tests of the release
+(https://github.com/aws/aws-emulator-evaluation-suite): a test is listed when
+it fails at an operation you call, or calls only operations you call.
+
+```
+awsemu check [OPTIONS] [PATHS]...
+```
+
+| Option | Description |
+| --- | --- |
+| `--release VERSION` | Emulator release to check against: 1.0.385 or latest (default: emulator_version in awsemu.toml, else your installed one). |
+| `--manifest FILE|REF` | manifest.jsonl to use: a local file, or a tag/branch of the fidelity tests repository (default: the version the release was scored with). |
+| `--all` | List every known difference, not the first 3 per operation. |
+| `--strict` | Exit with code 1 when an operation you use has known differences (for CI). |
+| `--refresh` | Download scores and manifest again instead of using the cache. |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu completion`
 
@@ -378,6 +409,7 @@ awsemu fidelity                     # every service
 awsemu fidelity s3 sqs dynamodb     # just these
 awsemu fidelity lambda --failures   # which tests fail, and how
 awsemu fidelity --release latest    # a newer release than yours?
+awsemu fidelity --compare latest --mine   # what an upgrade changes for you
 ```
 A score counts the tests that call only that service ("k of n", as AWS
 publishes it). Data from https://github.com/aws/aws-emulator/releases.
@@ -391,6 +423,8 @@ awsemu fidelity [OPTIONS] [SERVICES]...
 | `--release VERSION` | Emulator release: 1.0.385, v1.0.385 or latest (default: your installed version). |
 | `--failures` | List the failing tests of the given services. |
 | `--sort [name|score]` | Order of the table (score: worst first).  [default: name] |
+| `--compare VERSION` | Compare with another release: tests fixed, regressed and added, per service. |
+| `--mine` | Only the services this project uses (found like 'awsemu check' does). |
 | `--refresh` | Download again instead of using the cache. |
 | `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
@@ -410,6 +444,7 @@ awsemu image build [OPTIONS]
 | --- | --- |
 | `--tag TEXT` | Image name to build.  [default: aws-emulator] |
 | `--arch [x86_64|aarch64]` | Package architecture (default: this machine's). |
+| `--version VERSION` | Emulator version to put in the image (default: latest). See 'awsemu install --docker'. |
 
 ### `awsemu image dockerfile`
 
@@ -422,6 +457,7 @@ awsemu image dockerfile [OPTIONS]
 | Option | Description |
 | --- | --- |
 | `--arch [x86_64|aarch64]` | Package architecture (default: this machine's). |
+| `--version VERSION` | Emulator version (default: latest). |
 
 ## `awsemu init`
 
@@ -438,6 +474,36 @@ awsemu init [OPTIONS]
 | --- | --- |
 | `--seed PATH` | Seed file to reference (default: auto-detect). |
 | `--force` | Overwrite an existing awsemu.toml. |
+
+## `awsemu install`
+
+Install a given emulator version: the Linux package, or a Docker image.
+
+```bash
+awsemu install --list            # published versions
+awsemu install 1.0.385 --pin     # install it and pin it for the project
+awsemu install                   # the project's pinned version, else latest
+awsemu install --docker          # image aws-emulator:<version> (macOS/Windows)
+```
+On Linux it downloads the .deb/.rpm from downloads.aws.com, checks its
+signature against AWS's key, and installs it with apt-get or rpm (sudo).
+With a pinned emulator_version, 'awsemu start' warns when the installed
+emulator differs, and uses the image aws-emulator:<version> in Docker mode.
+
+```
+awsemu install [OPTIONS] [VERSION]
+```
+
+| Option | Description |
+| --- | --- |
+| `--docker` | Build a Docker image of that version instead (macOS, Windows). |
+| `--native` | Install the Linux package (the default on Linux with apt or rpm). |
+| `--pin` | Also write emulator_version to the project file (awsemu.toml), so the team and CI use it. |
+| `--list` | List the published versions, newest first. |
+| `--no-verify` | Don't check the package signature with gpg (not recommended). |
+| `--dry-run` | Show what would be downloaded and run, and stop. |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu kinesis`
 

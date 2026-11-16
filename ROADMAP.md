@@ -89,13 +89,13 @@ Goal: settle what's hard to change once others install and use `awsemu`.
 - ✅ **Stable output**: exit codes 0–3 in one module; one JSON encoder (ISO dates); `snake_case` for awsemu's own summaries and AWS's names for AWS resources; `--json` on every listing (and `doctor`); every format documented in `docs/scripting.md` and pinned by contract tests. Stability promise: changes only as **Breaking** in the CHANGELOG.
 - ✅ **Help review**: every command and option has help text (enforced by a test); consistent summaries for service groups.
 
-## v0.8 — Will my project work with the emulator?
+## v0.8 — Will my project work with the emulator? ✅
 
 Goal: answer before you start, and upgrade the emulator without surprises.
 
-- ⬜ **`awsemu check`**: finds the AWS operations your code and infrastructure use (boto3, Node/Java/Go SDKs, Terraform, CloudFormation/CDK) and cross-references them with the failing fidelity tests, using the scores file and the `manifest.jsonl` of the tests repository, which maps each test to its operations. Output along the lines of: "you use `dynamodb:TransactWriteItems`: 2 known differences, these".
-- ⬜ **`awsemu fidelity --compare vX`**: what improved and what got worse between two releases, only for the services you use.
-- ⬜ **`awsemu install [--version]`**: install or pin a specific emulator version (package on Linux, image in Docker), and `emulator_version` in `awsemu.toml` so the team and CI use the same one. The GitHub Action will accept the version too.
+- ✅ **`awsemu check`**: finds the AWS operations your code and infrastructure use (boto3, JavaScript v2/v3, Java and Go SDKs, Terraform, CloudFormation/SAM, CDK) and cross-references them with the fidelity tests, using the release's scores file and the `manifest.jsonl` of the tests version the release was scored with. Lists a failing test when it fails at an operation you call or calls only operations you call; counts the rest. Services defined as infrastructure get their score and, with CloudFormation/SAM/CDK, the score of the tests that deploy them through CloudFormation. `--strict` for CI, `--json`, and a runnable example in `examples/check-demo`.
+- ✅ **`awsemu fidelity --compare VERSION`**: tests fixed, regressed, added and removed between two releases, per service; `--mine` for the services your project uses.
+- ✅ **`awsemu install [VERSION]`**: the Linux package of any published version (GPG signature and key fingerprint checked, downgrades allowed), or a Docker image `aws-emulator:<version>`; `--list`, `--dry-run`, `--pin`. `emulator_version` in `awsemu.toml`: `start`, `up` and `doctor` warn on a different installed version, Docker mode uses the matching image, `check`/`fidelity` use its data, and the GitHub Action installs it (or its new `emulator-version` input).
 
 ## v0.9 — Proxy: see the calls and inject faults
 

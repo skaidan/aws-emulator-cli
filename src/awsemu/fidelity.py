@@ -27,6 +27,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ._service_names import BOTO_TO_SCORE
 from .paths import cli_root
 
 REPO = "aws/aws-emulator"
@@ -70,15 +71,20 @@ def tag_for(release: str) -> str:
 # --------------------------------------------------------------------------- download
 
 
-def _get(url: str, accept: str = "application/vnd.github+json") -> bytes:
+def _get(url: str, accept: str = "application/vnd.github+json", gzip_ok: bool = False) -> bytes:
     headers = {"Accept": accept, "User-Agent": "awsemu"}
+    if gzip_ok:
+        headers["Accept-Encoding"] = "gzip"
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token and "api.github.com" in url:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return resp.read()
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = resp.read()
+            if resp.headers.get("Content-Encoding") == "gzip":
+                data = gzip.decompress(data)
+            return data
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             raise FidelityError(f"not found: {url}") from exc
@@ -109,6 +115,7 @@ def fetch(release: str = "latest", refresh: bool = False) -> tuple[str, dict]:
             raise FidelityError(f"no release '{tag}' in {REPO}") from exc
         raise
     tag = meta["tag_name"]
+    _save_release_info(tag, meta)
     cached = cache_dir() / f"{tag}.json.gz"
     if cached.exists() and not refresh:
         return tag, _load_gz(cached.read_bytes())
@@ -122,6 +129,44 @@ def fetch(release: str = "latest", refresh: bool = False) -> tuple[str, dict]:
     tmp.write_bytes(data)
     shutil.move(str(tmp), str(cached))
     return tag, scores
+
+
+SUITE_PATTERNS = [
+    re.compile(r"aws-emulator-evaluation-suite/(?:tree|releases/tag|blob)/(v?\d+\.\d+\.\d+)"),
+    re.compile(r"(?i)(?:fidelity tests?|evaluation[- ]suite)\b[^\n]{0,80}?\b(v?\d+\.\d+\.\d+)"),
+]
+
+
+def parse_suite_version(body: str) -> str | None:
+    """The fidelity tests version a release says it was scored with (``v1.0.0``), if any."""
+    for rx in SUITE_PATTERNS:
+        m = rx.search(body or "")
+        if m:
+            v = m.group(1)
+            return v if v.startswith("v") else f"v{v}"
+    return None
+
+
+def _save_release_info(tag: str, meta: dict) -> None:
+    info = {"tag": tag, "published_at": meta.get("published_at"),
+            "suite": parse_suite_version(meta.get("body") or "")}
+    cache_dir().mkdir(parents=True, exist_ok=True)
+    (cache_dir() / f"{tag}.release.json").write_text(json.dumps(info), encoding="utf-8")
+
+
+def suite_version(tag: str) -> str | None:
+    """Fidelity tests version for a release fetched earlier (None if unknown)."""
+    path = cache_dir() / f"{tag}.release.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("suite")
+    except (OSError, ValueError):
+        return None
+
+
+def list_releases(limit: int = 30) -> list[str]:
+    """Most recent release tags, newest first."""
+    data = json.loads(_get(f"{API}?per_page={min(limit, 100)}"))
+    return [r["tag_name"] for r in data if not r.get("draft")][:limit]
 
 
 def _load_gz(data: bytes) -> dict:
@@ -182,9 +227,9 @@ def summarize(scores: dict) -> dict[str, ServiceScore]:
 
 
 ALIASES = {
-    # boto3 / CLI names that differ from the API namespace in the score file
-    "stepfunctions": "states", "sfn": "states", "eventbridge": "events",
-    "cloudwatchlogs": "logs", "secrets": "secretsmanager", "ddb": "dynamodb",
+    # names people type that differ from the API namespace in the score file
+    **BOTO_TO_SCORE, "states": "sfn", "secrets": "secretsmanager", "ddb": "dynamodb",
+    "cognito": "cognitoidentityprovider",
 }
 
 
@@ -217,3 +262,62 @@ def describe_failure(unit: dict) -> dict[str, str]:
     return {"test": unit.get("unitId", ""), "operation": d.get("operation", ""),
             "mismatch": d.get("mismatch", ""), "expected": fmt(expected), "actual": fmt(actual),
             "step": step}
+
+
+# --------------------------------------------------------------------------- compare
+
+
+@dataclass
+class ServiceChange:
+    service: str
+    before: tuple[int, int] = (0, 0)  # single-service (passed, total), as in the score
+    after: tuple[int, int] = (0, 0)
+    fixed: list[str] = field(default_factory=list)  # failed before, passes now
+    regressed: list[str] = field(default_factory=list)  # passed before, fails now
+    added_passing: list[str] = field(default_factory=list)
+    added_failing: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.fixed or self.regressed or self.added_passing or self.added_failing
+                    or self.removed or self.before != self.after)
+
+
+def _outcomes(scores: dict) -> dict[str, tuple[str, list[str]]]:
+    out = {}
+    for unit in scores.get("units", []):
+        if unit.get("outcome") in ("pass", "fail"):
+            services = sorted({service_name(s) for s in unit.get("services", [])})
+            out[unit.get("unitId", "")] = (unit["outcome"], services)
+    return out
+
+
+def compare(before: dict, after: dict) -> dict[str, ServiceChange]:
+    """Per service, what changed between two scores files (test by test, by unitId)."""
+    a, b = _outcomes(before), _outcomes(after)
+    sa, sb = summarize(before), summarize(after)
+    changes: dict[str, ServiceChange] = {}
+
+    def get(name: str) -> ServiceChange:
+        return changes.setdefault(name, ServiceChange(name))
+
+    for uid in sorted(set(a) | set(b)):
+        old, new = a.get(uid), b.get(uid)
+        for name in (new or old)[1]:
+            c = get(name)
+            if old and not new:
+                c.removed.append(uid)
+            elif new and not old:
+                (c.added_passing if new[0] == "pass" else c.added_failing).append(uid)
+            elif old[0] == "fail" and new[0] == "pass":
+                c.fixed.append(uid)
+            elif old[0] == "pass" and new[0] == "fail":
+                c.regressed.append(uid)
+    for name in set(sa) | set(sb) | set(changes):
+        c = get(name)
+        if name in sa:
+            c.before = (sa[name].passed, sa[name].total)
+        if name in sb:
+            c.after = (sb[name].passed, sb[name].total)
+    return changes

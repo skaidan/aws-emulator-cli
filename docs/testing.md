@@ -5,7 +5,7 @@ The emulator is ideal for integration tests: no AWS account needed, it starts in
 | Where | How |
 | --- | --- |
 | pytest | [Plugin](#pytest-plugin): `aws_emulator` fixture, no setup |
-| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.7.0` |
+| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.8.0` |
 | Anywhere else | [Scripts](#scripts) with `awsemu start`/`exec`/`stop`, or [Docker Compose](#docker-compose) |
 
 In every case, starting data goes in a [seed](seeds.md).
@@ -77,7 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: skaidan/aws-emulator-cli@v0.7.0
+      - uses: skaidan/aws-emulator-cli@v0.8.0
         with:
           seed: tests/seed.yaml
       - run: pytest tests/integration      # AWS_ENDPOINT_URL & co. are already set
@@ -85,13 +85,14 @@ jobs:
 
 The Action:
 
-1. Downloads the official emulator package, **verifies its GPG signature** (and the key fingerprint) and installs it.
+1. Downloads the official emulator package (the version in `emulator-version`, else `emulator_version` from your `awsemu.toml`, else the latest), **verifies its GPG signature** (and the key fingerprint) and installs it.
 2. Installs `awsemu` (the Action's own version).
 3. Starts the emulator (`--no-telemetry` by default, a one-hour `idle_timeout`) and applies the seed.
 4. Exports the emulator's variables for the following steps (`AWS_ENDPOINT_URL`, `AWS_CA_BUNDLE`, `AWS_CONFIG_FILE`, `AWS_SHARED_CREDENTIALS_FILE`, region…) and `AWSEMU_PORT`, so `awsemu` and the AWS CLI work without `--port` too.
 
 | Input | Default | |
 | --- | --- | --- |
+| `emulator-version` | — | Emulator version, like `1.0.385`. Empty: `emulator_version` from `awsemu.toml`, else the latest |
 | `seed` | — | Path of the seed in your repository |
 | `port` | `9297` | |
 | `auth` | `true` | `false` accepts unsigned requests |
@@ -101,6 +102,7 @@ The Action:
 
 | Output | |
 | --- | --- |
+| `emulator-version` | The version installed |
 | `port` | Port |
 | `endpoint-url` | `https://127.0.0.1:PORT` |
 | `ca-bundle` | Path of the certificate |
@@ -116,7 +118,9 @@ Notes:
         run: awsemu logs -n 200
   ```
 
-The `action` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) tests the Action on every change.
+To also check that your code doesn't rely on known emulator differences, add `- run: awsemu check --strict` ([details](compatibility.md#in-ci)).
+
+The `action` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) tests the Action on every change, including installing a pinned version.
 
 ## Scripts
 

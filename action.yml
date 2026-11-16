@@ -8,6 +8,12 @@ branding:
   color: orange
 
 inputs:
+  emulator-version:
+    description: >
+      AWS Emulator version to install, like 1.0.385. Empty: emulator_version from
+      awsemu.toml in the repository if it has one, else the latest release.
+    required: false
+    default: ""
   seed:
     description: Seed file to apply (path in your repository).
     required: false
@@ -36,6 +42,9 @@ inputs:
     default: "true"
 
 outputs:
+  emulator-version:
+    description: AWS Emulator version that was installed.
+    value: ${{ steps.install.outputs.version }}
   port:
     description: Port the emulator listens on.
     value: ${{ steps.start.outputs.port }}
@@ -57,15 +66,30 @@ runs:
         exit 1
 
     - name: Install AWS Emulator (verified package)
+      id: install
       shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.emulator-version }}
       run: |
         set -euo pipefail
+        VERSION="${INPUT_VERSION#v}"
+        if [ -z "$VERSION" ] && [ -f "$GITHUB_WORKSPACE/awsemu.toml" ]; then
+          VERSION=$(sed -nE 's/^[[:space:]]*emulator_version[[:space:]]*=[[:space:]]*"v?([0-9.]+)".*/\1/p' "$GITHUB_WORKSPACE/awsemu.toml" | head -1)
+          [ -n "$VERSION" ] && echo "Using emulator_version $VERSION from awsemu.toml"
+        fi
         case "${{ runner.arch }}" in
-          X64) DEB=aws-emulator_amd64.deb ;;
-          ARM64) DEB=aws-emulator_arm64.deb ;;
+          X64) ARCH=amd64 ;;
+          ARM64) ARCH=arm64 ;;
           *) echo "::error::Unsupported runner architecture ${{ runner.arch }}"; exit 1 ;;
         esac
-        BASE=https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest
+        if [ -n "$VERSION" ]; then
+          case "$VERSION" in *[!0-9.]*) echo "::error::emulator-version '$VERSION' isn't a version like 1.0.385"; exit 1 ;; esac
+          BASE=https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS
+          DEB="aws-emulator_${VERSION}-1_${ARCH}.deb"
+        else
+          BASE=https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest
+          DEB="aws-emulator_${ARCH}.deb"
+        fi
         TMP=$(mktemp -d)
         curl -fsSL -o "$TMP/$DEB" "$BASE/$DEB"
         curl -fsSL -o "$TMP/$DEB.sig" "$BASE/$DEB.sig"
@@ -77,8 +101,9 @@ runs:
           echo "::error::Unexpected signing key fingerprint: $FPR"; exit 1
         fi
         gpg --quiet --verify "$TMP/$DEB.sig" "$TMP/$DEB"
-        sudo apt-get install -y -qq "$TMP/$DEB" >/dev/null
+        sudo apt-get install -y -qq --allow-downgrades "$TMP/$DEB" >/dev/null
         aws-emulator -v
+        echo "version=$(aws-emulator -v | sed -nE 's/^Version:[[:space:]]*v?//p')" >> "$GITHUB_OUTPUT"
 
     - name: Install awsemu
       shell: bash

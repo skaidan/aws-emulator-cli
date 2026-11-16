@@ -10,8 +10,9 @@ The emulator itself is a single binary with no subcommands: it runs in the foreg
 - **Work with S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis and Step Functions** through short commands and readable tables: DynamoDB with plain JSON, `lambda deploy` from a folder, EventBridge rules with their target and permissions in one step, and `describe` for any ARN.
 - **Always start with the same data** using a YAML *seed*: `awsemu start --seed seed.yaml`, `awsemu reset --seed seed.yaml`, and `seed export` to save the current state.
 - **Configure it per project** with `awsemu.toml` (`awsemu init`, `awsemu up`, `awsemu down`): its own port, mode, seed…
-- **Use it in tests and CI**: a pytest plugin (`aws_emulator` fixture), a GitHub Action (`uses: skaidan/aws-emulator-cli@v0.7.0`) and `awsemu compose` for Docker Compose.
+- **Use it in tests and CI**: a pytest plugin (`aws_emulator` fixture), a GitHub Action (`uses: skaidan/aws-emulator-cli@v0.8.0`) and `awsemu compose` for Docker Compose.
 - **Explore it**: a terminal UI (`awsemu ui`), live changes (`awsemu watch`), completion of your resource names, and the **per-service fidelity** of your emulator version (`awsemu fidelity`).
+- **Know whether your project will work** before you start: `awsemu check` finds the AWS operations your code and infrastructure use and lists the known emulator differences for them; `awsemu fidelity --compare` shows what an upgrade changes; `awsemu install VERSION --pin` gives your team and CI the same emulator version.
 - **Diagnose** common problems (`awsemu doctor`).
 
 ```
@@ -36,6 +37,7 @@ DynamoDB tables  1      users
 
 - [Getting started](docs/getting-started.md): install, start the emulator and connect your tools.
 - [Exploring the emulator](docs/explore.md): `ui`, `watch`, `fidelity` and shell completion.
+- [Will my project work?](docs/compatibility.md): `check`, `fidelity --compare`, `install` and the version pin.
 - [Project settings](docs/project-config.md): `awsemu.toml`, `init`, `up` and `down`.
 - [Seeds](docs/seeds.md): reproducible starting data (format, validation, `apply` and `export`).
 - [Services guide](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions and `describe`, with examples.
@@ -49,13 +51,13 @@ DynamoDB tables  1      users
 
 Requirements: Python 3.10+ and **one** of these two ways to run the emulator:
 
-- **Linux**: the AWS Emulator `.rpm` or `.deb` package (puts `aws-emulator` on your `PATH`).
-- **macOS, Windows or Linux**: Docker. AWS doesn't publish an image, but `awsemu image build` builds one with the official recipe.
+- **Linux**: the AWS Emulator `.rpm` or `.deb` package (puts `aws-emulator` on your `PATH`). Once `awsemu` is installed, `awsemu install` installs it for you, signature checked.
+- **macOS, Windows or Linux**: Docker. AWS doesn't publish an image, but `awsemu image build` (or `awsemu install --docker`) builds one with the official recipe.
 
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
 # or a specific release (any tag from the Releases page):
-pipx install git+https://github.com/skaidan/aws-emulator-cli@v0.7.0
+pipx install git+https://github.com/skaidan/aws-emulator-cli@v0.8.0
 ```
 
 All versions: [Releases](https://github.com/skaidan/aws-emulator-cli/releases). For the terminal UI (`awsemu ui`), install the `ui` extra: `pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'`.
@@ -64,7 +66,7 @@ Then:
 
 ```bash
 awsemu doctor          # checks what you have and what's missing
-awsemu image build     # only if you'll use Docker
+awsemu install         # the emulator: Linux package (verified), or a Docker image elsewhere
 ```
 
 ## Usage
@@ -182,6 +184,17 @@ eval "$(awsemu completion bash)"   # completion, including resource names
 
 More in [docs/explore.md](docs/explore.md).
 
+### Will my project work?
+
+```bash
+awsemu check                              # operations you use + known differences for them
+awsemu check --strict                     # the same, failing the CI job if there are any
+awsemu fidelity --compare latest --mine   # what upgrading changes for your services
+awsemu install 1.0.385 --pin              # install a version and pin it in awsemu.toml
+```
+
+More in [docs/compatibility.md](docs/compatibility.md).
+
 ### Per project
 
 ```bash
@@ -200,7 +213,7 @@ def test_upload(aws_emulator):           # pytest plugin: own emulator, seed and
 ```
 
 ```yaml
-- uses: skaidan/aws-emulator-cli@v0.7.0   # GitHub Actions: verified package, seed and variables
+- uses: skaidan/aws-emulator-cli@v0.8.0   # GitHub Actions: verified package, seed and variables
   with:
     seed: tests/seed.yaml
 ```
@@ -250,7 +263,7 @@ awsemu start --no-telemetry        # just for this run
 
 ## Roadmap
 
-Done: native and Docker lifecycle, validation against the real emulator on Linux, macOS and Windows (v0.2), 10 services with their own commands plus `describe` (v0.3), seeds for reproducible starting data (v0.4), `awsemu.toml`, pytest plugin, GitHub Action and Docker Compose (v0.5), `ui`, `watch`, `fidelity` and completion (v0.6), and getting ready to publish: English, stable output and an easy rename (v0.7). Coming next: `awsemu check` to know whether your project will work, and safe upgrades (v0.8), a proxy to see calls and inject faults (v0.9), more seed coverage, snapshots and other languages (v0.10), an MCP server for agents (v0.11), and the final name with PyPI, Homebrew and standalone binaries (v1.0). Details in [ROADMAP.md](ROADMAP.md), changes per version in [CHANGELOG.md](CHANGELOG.md).
+Done: native and Docker lifecycle, validation against the real emulator on Linux, macOS and Windows (v0.2), 10 services with their own commands plus `describe` (v0.3), seeds for reproducible starting data (v0.4), `awsemu.toml`, pytest plugin, GitHub Action and Docker Compose (v0.5), `ui`, `watch`, `fidelity` and completion (v0.6), getting ready to publish: English, stable output and an easy rename (v0.7), and `awsemu check`, `fidelity --compare` and version pinning to know whether your project will work and upgrade safely (v0.8). Coming next: a proxy to see calls and inject faults (v0.9), more seed coverage, snapshots and other languages (v0.10), an MCP server for agents (v0.11), and the final name with PyPI, Homebrew and standalone binaries (v1.0). Details in [ROADMAP.md](ROADMAP.md), changes per version in [CHANGELOG.md](CHANGELOG.md).
 
 ## Development
 

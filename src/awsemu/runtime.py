@@ -32,7 +32,7 @@ IS_WINDOWS = os.name == "nt"
 
 DOCKERFILE_TEMPLATE = """\
 FROM public.ecr.aws/amazonlinux/amazonlinux:2023-minimal
-ADD {package_base}/aws-emulator-{arch}.rpm /tmp/aws-emulator.rpm
+ADD {package_url} /tmp/aws-emulator.rpm
 RUN rpm -i /tmp/aws-emulator.rpm && rm /tmp/aws-emulator.rpm \\
     && mkdir -p /home/emulator && chown 1000 /home/emulator
 USER 1000
@@ -250,8 +250,14 @@ def detect_arch(machine: str | None = None) -> str:
     return "aarch64" if machine in ("arm64", "aarch64", "armv8", "armv8l") else "x86_64"
 
 
-def dockerfile(arch: str | None = None) -> str:
-    return DOCKERFILE_TEMPLATE.format(package_base=PACKAGE_BASE, arch=arch or detect_arch())
+def dockerfile(arch: str | None = None, version: str | None = None) -> str:
+    """The official recipe; ``version`` pins the package (default: the latest one)."""
+    arch = arch or detect_arch()
+    if version:
+        url = f"{PACKAGE_BASE.rsplit('/', 1)[0]}/aws-emulator-{version}-1-{arch}.rpm"
+    else:
+        url = f"{PACKAGE_BASE}/aws-emulator-{arch}.rpm"
+    return DOCKERFILE_TEMPLATE.format(package_url=url)
 
 
 def tail(path: Path, lines: int = 20) -> list[str]:
@@ -500,9 +506,9 @@ def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
     return f"{how} pid {pid}" + (" (removed files it left behind)" if cleaned else "")
 
 
-def build_image(image: str = DEFAULT_IMAGE, arch: str | None = None) -> int:
+def build_image(image: str = DEFAULT_IMAGE, arch: str | None = None, version: str | None = None) -> int:
     with tempfile.TemporaryDirectory() as tmp:
-        Path(tmp, "Dockerfile").write_text(dockerfile(arch), encoding="utf-8")
+        Path(tmp, "Dockerfile").write_text(dockerfile(arch, version), encoding="utf-8")
         return subprocess.call(["docker", "build", "-t", image, tmp])
 
 

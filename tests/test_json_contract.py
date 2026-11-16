@@ -179,3 +179,51 @@ def test_every_listing_has_json():
             missing.append(" ".join(path))
     walk(cli, [])
     assert missing == []
+
+
+def test_check(runner, monkeypatch, tmp_path):
+    from tests.test_check import FILES, MANIFEST, SCORES
+    from awsemu import fidelity as fid
+
+    d = fid.cache_dir()
+    d.mkdir(parents=True)
+    (d / "v1.0.385.json.gz").write_bytes(gzip.compress(json.dumps(SCORES).encode()))
+    (d / "v1.0.385.release.json").write_text(json.dumps({"suite": "v1.0.0"}))
+    (d / "manifest-v1.0.0.jsonl.gz").write_bytes(
+        gzip.compress("\n".join(json.dumps(r) for r in MANIFEST).encode()))
+    monkeypatch.setattr(fid, "installed_version", lambda binary=None: "1.0.385")
+    for name, text in FILES.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text)
+    data = run_json(runner, "check", str(tmp_path), "--json")
+    assert set(data) == {"release", "suite", "scanned_files", "sources", "operations", "uncovered",
+                         "services", "summary"}
+    op = data["operations"][0]
+    assert set(op) == {"operation", "service", "locations", "tests", "passed", "differences",
+                       "other_failing"}
+    assert set(op["locations"][0]) == {"file", "line", "source"}
+    assert set(op["differences"][0]) == {"test", "kind", "operation", "mismatch", "expected", "actual",
+                                         "step", "at_operation", "matches_usage", "url"}
+    svc = next(s for s in data["services"] if s["cloudformation"])
+    assert set(svc) == {"service", "sources", "tests", "passed", "resources", "cloudformation"}
+    assert set(svc["cloudformation"]) == {"tests", "passed", "failing"}
+    assert set(svc["resources"][0]) == {"type", "file", "line", "source"}
+    assert set(data["summary"]) == {"operations", "services", "operations_with_differences", "differences"}
+
+    fid.cache_dir().joinpath("v1.0.390.json.gz").write_bytes(gzip.compress(json.dumps(SCORES).encode()))
+    cmp = run_json(runner, "fidelity", "--compare", "1.0.390", "sqs", "--json")
+    assert set(cmp) == {"from", "to", "services"}
+    assert set(cmp["from"]) == {"release", "suite"}
+    assert set(cmp["services"]["sqs"]) == {"from", "to", "fixed", "regressed", "added_passing",
+                                           "added_failing", "removed"}
+    assert set(cmp["services"]["sqs"]["from"]) == {"passed", "total"}
+
+
+def test_install_list(runner, monkeypatch):
+    from awsemu import fidelity as fid
+    from awsemu import install as inst
+
+    monkeypatch.setattr(inst, "list_versions", lambda: ["1.0.390"])
+    monkeypatch.setattr(fid, "installed_version", lambda binary=None: None)
+    assert run_json(runner, "install", "--list", "--json") == {
+        "versions": ["1.0.390"], "installed": None, "pinned": None}

@@ -14,7 +14,7 @@ Everything on this page is a stable interface: scripts can rely on it.
 | Code | Name | Meaning |
 | --- | --- | --- |
 | `0` | OK | The command did what was asked. |
-| `1` | FAILED | It ran, but something failed: an AWS error, a Lambda function or Step Functions execution that failed, a resource not found (`ddb get`, `ssm rm`), a seed resource that couldn't be applied, the emulator not starting, `doctor` finding a problem. |
+| `1` | FAILED | It ran, but something failed: an AWS error, a Lambda function or Step Functions execution that failed, a resource not found (`ddb get`, `ssm rm`), a seed resource that couldn't be applied, the emulator not starting, `doctor` finding a problem, `check --strict` finding known differences. |
 | `2` | USAGE | Nothing was done: wrong arguments or options, invalid JSON in an argument, an invalid seed or `awsemu.toml`. |
 | `3` | NOT_HEALTHY | Only `awsemu status`: the emulator isn't running or isn't healthy. |
 
@@ -29,7 +29,7 @@ awsemu seed validate seed.yaml; [ $? -eq 2 ] && echo "fix the seed"
 ## JSON conventions
 
 - `--json` prints one JSON document to standard output (`kinesis read --json` prints one object per line, see below). Warnings and errors go to standard error.
-- **awsemu's own summaries** (`status`, `overview`, `doctor`, `fidelity`, `sqs ls`, `sns ls`, `ddb ls`, `kinesis read`) use `snake_case` keys.
+- **awsemu's own summaries** (`status`, `overview`, `doctor`, `fidelity`, `check`, `install --list`, `sqs ls`, `sns ls`, `ddb ls`, `kinesis read`) use `snake_case` keys.
 - **AWS resources passed through** keep AWS's own field names (`PascalCase` or `camelCase`, as the AWS API returns them): buckets, objects, messages, functions, state machines, executions, rules, buses, subscriptions, secrets, parameters, streams.
 - Dates are ISO 8601 strings (`2026-11-16T12:00:00+00:00`). Numbers stored by DynamoDB come out as JSON numbers; binary data as base64.
 - `null` means "not known" or "doesn't apply" (for example `pid` when awsemu didn't start the emulator).
@@ -101,6 +101,63 @@ An object keyed by AWS service name (`s3`, `sqs`, `dynamodb`, `sns`, `lambda`, `
     }
   }
 }
+```
+
+### `awsemu fidelity --compare VERSION --json`
+
+```json
+{
+  "from": {"release": "v1.0.385", "suite": "v1.0.0"},   // suite: fidelity tests version, null if unknown
+  "to": {"release": "v1.0.390", "suite": "v1.0.0"},
+  "services": {
+    "sqs": {
+      "from": {"passed": 284, "total": 335}, "to": {"passed": 285, "total": 336},
+      "fixed": ["..."], "regressed": ["sqs-send-1"],       // test ids
+      "added_passing": [], "added_failing": ["..."], "removed": []
+    }
+  }
+}
+```
+
+### `awsemu check --json`
+
+```json
+{
+  "release": "v1.0.385",
+  "suite": "v1.0.0",                // fidelity tests version, "main", or the --manifest file name
+  "scanned_files": 42,
+  "sources": ["python", "terraform"],
+  "operations": [
+    {
+      "operation": "dynamodb:TransactWriteItems", "service": "dynamodb",
+      "locations": [{"file": "app/orders.py", "line": 41, "source": "python"}],
+      "tests": 104, "passed": 94,
+      "differences": [              // the first 3, or all with --all
+        {"test": "...", "kind": "wire",            // wire | behavioral
+         "operation": "TransactWriteItems", "mismatch": "status",
+         "expected": "400 ValidationException", "actual": "200", "step": "6/15",
+         "at_operation": true, "matches_usage": false,
+         "url": null}               // link to the test file, when known
+      ],
+      "other_failing": 8
+    }
+  ],
+  "uncovered": ["dynamodb:DescribeTimeToLive"],   // operations with no fidelity tests
+  "services": [
+    {"service": "dynamodb", "sources": ["python", "terraform"], "tests": 1481, "passed": 1172,
+     "resources": [{"type": "aws_dynamodb_table", "file": "main.tf", "line": 1, "source": "terraform"}],
+     "cloudformation": null}        // {"tests", "passed", "failing": [ids]} with CloudFormation/SAM/CDK
+  ],
+  "summary": {"operations": 3, "services": 2, "operations_with_differences": 3, "differences": 14}
+}
+```
+
+With `--strict`, the exit code is 1 when `operations_with_differences` isn't 0.
+
+### `awsemu install --list --json`
+
+```json
+{"versions": ["1.0.390", "1.0.385"], "installed": "1.0.385", "pinned": null}
 ```
 
 ### `awsemu sqs ls --json`

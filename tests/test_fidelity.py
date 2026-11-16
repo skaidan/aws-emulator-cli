@@ -56,11 +56,22 @@ def test_summarize_counts_single_service_tests_only():
 
 
 def test_match_services_aliases_and_partial():
-    available = ["dynamodb", "dynamodbstreams", "s3", "s3control", "sfn", "states"]
+    available = ["cloudwatchevents", "cloudwatchlogs", "dynamodb", "dynamodbstreams", "eventbridge",
+                 "s3", "s3control", "sfn"]
     assert fid.match_services(["s3"], available) == (["s3"], [])
     assert fid.match_services(["dynamo"], available) == (["dynamodb", "dynamodbstreams"], [])
-    assert fid.match_services(["stepfunctions"], available) == (["states"], [])
+    assert fid.match_services(["stepfunctions"], available) == (["sfn"], [])
+    assert fid.match_services(["events"], available) == (["eventbridge"], [])
+    assert fid.match_services(["logs"], available) == (["cloudwatchlogs"], [])
     assert fid.match_services(["nope"], available) == ([], ["nope"])
+
+
+def test_parse_suite_version():
+    assert fid.parse_suite_version("Scored with fidelity tests v1.2.0 (abc)") == "v1.2.0"
+    assert fid.parse_suite_version(
+        "see https://github.com/aws/aws-emulator-evaluation-suite/tree/v1.0.0") == "v1.0.0"
+    assert fid.parse_suite_version("Evaluation suite: 1.1.0") == "v1.1.0"
+    assert fid.parse_suite_version("Bug fixes.") is None
 
 
 def test_describe_failure():

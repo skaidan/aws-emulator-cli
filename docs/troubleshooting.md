@@ -52,6 +52,12 @@ It checks Python, the binary, Docker and the image, the AWS CLI, boto3, the emul
 | `The terminal UI needs Textual` | The `ui` extra is missing. | `pipx install --force 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'` |
 | `couldn't reach GitHub` / `rate limit?` in `fidelity` | No connection, or GitHub's limit on anonymous requests. | Retry, or set `GITHUB_TOKEN`. What was already downloaded stays cached. |
 | `these scores are for vX, your emulator is vY` | You asked for another release, or there's no binary installed and the latest was used. | `--release` with your version (`aws-emulator -v`). |
+| `no manifest.jsonl at '…'` in `check` | That version of the fidelity tests doesn't exist, or GitHub can't be reached and there's no cached copy. | `--manifest main`, or `--manifest path/to/manifest.jsonl` from a clone of the tests repository. |
+| `check` finds no operations | It only reads boto3, the JavaScript/Java/Go SDKs, Terraform, CloudFormation/SAM and CDK, and skips `node_modules`, virtual environments and build folders. | Point it at your code (`awsemu check src`). See [what it reads](compatibility.md#what-it-reads). |
+| `this project pins emulator X, but Y is installed` | `emulator_version` in `awsemu.toml` differs from `aws-emulator -v`. | `awsemu install` (installs the pinned version), or update the pin with `awsemu install Y --pin`. |
+| `gpg isn't installed` in `install` | The package signature can't be checked without GnuPG. | Install `gnupg` (`apt-get install gnupg` / `dnf install gnupg2`). |
+| `… doesn't exist` in `install` | No package for that version (or processor). | `awsemu install --list`. |
+| `this machine can't install the emulator's Linux packages` | Not Linux, or no `apt`/`rpm`. | `awsemu install --docker`. |
 | `watch` doesn't show the API calls | The emulator doesn't log them; `watch` shows their effect on resources. | That's by design; see [Exploring the emulator](explore.md#awsemu-watch-live-changes). |
 | Completion doesn't suggest names | The emulator isn't running on that port, or the script isn't loaded. | `awsemu status`; open a new shell after adding `awsemu completion` to your `~/.bashrc`/`~/.zshrc`. |
 

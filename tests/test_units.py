@@ -159,7 +159,8 @@ def test_docker_command_windows_mount():
 
 
 def test_dockerfile_arch():
-    assert "aws-emulator-aarch64.rpm" in runtime.dockerfile("aarch64")
+    assert "LTS/latest/aws-emulator-aarch64.rpm" in runtime.dockerfile("aarch64")
+    assert "LTS/aws-emulator-1.0.385-1-x86_64.rpm" in runtime.dockerfile("x86_64", "1.0.385")
     assert runtime.detect_arch("arm64") == "aarch64"
     assert runtime.detect_arch("AMD64") == "x86_64"
 

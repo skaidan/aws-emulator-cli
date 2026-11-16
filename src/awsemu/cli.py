@@ -95,7 +95,9 @@ def _start_options(port, docker, native, auth, telemetry, idle_timeout, image, m
         auth=_pick(auth, proj and proj.auth, True),
         telemetry=_pick(telemetry, proj and proj.telemetry, None),
         idle_timeout=_pick(idle_timeout, proj and proj.idle_timeout, None),
-        image=_pick(image, proj and proj.image, runtime.DEFAULT_IMAGE),
+        image=_pick(image, proj and proj.image,
+                    f"{runtime.DEFAULT_IMAGE}:{proj.emulator_version}" if proj and proj.emulator_version
+                    else runtime.DEFAULT_IMAGE),
         memory=_pick(memory, proj and proj.memory, "2g"),
         extra_args=list(extra))
 
@@ -127,6 +129,31 @@ def start_params(fn):
     return click.argument("extra", nargs=-1, type=click.UNPROCESSED)(fn)
 
 
+def pin_mismatch() -> tuple[str, str] | None:
+    """``(pinned, installed)`` when the project pins another emulator version than the binary's."""
+    from .fidelity import installed_version
+
+    try:
+        proj = project.load()
+    except project.ProjectError:
+        return None
+    if not proj or not proj.emulator_version:
+        return None
+    installed = installed_version()
+    if installed and installed != proj.emulator_version:
+        return proj.emulator_version, installed
+    return None
+
+
+def _warn_version_pin(mode: str) -> None:
+    if mode != "native":
+        return
+    mismatch = pin_mismatch()
+    if mismatch:
+        ui.warn(f"this project pins emulator {mismatch[0]}, but {mismatch[1]} is installed. "
+                f"Install it with: awsemu install")
+
+
 def _do_start(port, docker, native, auth, telemetry, idle_timeout, image, memory, wait,
               foreground, extra, seed_file=None, seed=None):
     if docker and native:
@@ -143,6 +170,7 @@ def _do_start(port, docker, native, auth, telemetry, idle_timeout, image, memory
         sys.exit(runtime.run_foreground(opts))
 
     mode = runtime.resolve_mode(opts.mode, opts.binary)
+    _warn_version_pin(mode)
     where = "a free port" if port == 0 else f"port {port}"
     ui.info(f"Starting AWS Emulator ({mode}) on {where}…")
     state, status = runtime.start(opts, wait=wait)
@@ -569,14 +597,23 @@ def doctor(c: Ctx, as_json: bool):
         add("aws-emulator", True, f"{shown}  {out.splitlines()[0] if out else ''}".strip())
     else:
         add("aws-emulator", None, "binary not on PATH",
-            "Linux: install the .rpm/.deb package; macOS/Windows: use Docker")
+            "Linux: awsemu install (or the .rpm/.deb package); macOS/Windows: use Docker")
+
+    pinned = proj.emulator_version if proj else None
+    if pinned and binary:
+        mismatch = pin_mismatch()
+        add("emulator version", None if mismatch else True,
+            f"project pins {pinned}, installed {mismatch[1]}" if mismatch else f"{pinned}, as pinned",
+            f"awsemu install {pinned}")
 
     if runtime.docker_available():
-        has_image = runtime.docker_image_exists(runtime.DEFAULT_IMAGE)
+        image_name = proj.image if proj and proj.image else (
+            f"{runtime.DEFAULT_IMAGE}:{pinned}" if pinned else runtime.DEFAULT_IMAGE)
+        has_image = runtime.docker_image_exists(image_name)
         add("docker", True, "found")
         add("docker image", has_image or None,
-            f"'{runtime.DEFAULT_IMAGE}' {'found' if has_image else 'not built'}",
-            "awsemu image build")
+            f"'{image_name}' {'found' if has_image else 'not built'}",
+            f"awsemu install --docker{f' {pinned}' if pinned else ''}")
     else:
         add("docker", None, "not found", "only needed if you don't use the native binary")
 
@@ -652,14 +689,19 @@ def image():
 @click.option("--tag", default=runtime.DEFAULT_IMAGE, show_default=True, help="Image name to build.")
 @click.option("--arch", type=click.Choice(["x86_64", "aarch64"]), default=None,
               help="Package architecture (default: this machine's).")
+@click.option("--version", "version", metavar="VERSION",
+              help="Emulator version to put in the image (default: latest). See 'awsemu install --docker'.")
 @handle_errors
-def image_build(tag: str, arch: str | None):
+def image_build(tag: str, arch: str | None, version: str | None):
     """Build the image from the official Dockerfile recipe."""
+    from . import install as inst
+
     if not runtime.docker_available():
         raise runtime.RuntimeErrorWithHint("Docker not found on PATH.")
     arch = arch or runtime.detect_arch()
-    ui.info(f"Building '{tag}' with the {arch} package…")
-    code = runtime.build_image(tag, arch)
+    version = inst.normalize(version)
+    ui.info(f"Building '{tag}' with the {arch} package{f' {version}' if version else ''}…")
+    code = runtime.build_image(tag, arch, version)
     if code == 0:
         ui.success(f"Image '{tag}' is ready. Start it with 'awsemu start --docker'.")
     sys.exit(code)
@@ -668,9 +710,13 @@ def image_build(tag: str, arch: str | None):
 @image.command(name="dockerfile")
 @click.option("--arch", type=click.Choice(["x86_64", "aarch64"]), default=None,
               help="Package architecture (default: this machine's).")
-def image_dockerfile(arch: str | None):
+@click.option("--version", "version", metavar="VERSION", help="Emulator version (default: latest).")
+@handle_errors
+def image_dockerfile(arch: str | None, version: str | None):
     """Print the Dockerfile awsemu builds from."""
-    click.echo(runtime.dockerfile(arch), nl=False)
+    from . import install as inst
+
+    click.echo(runtime.dockerfile(arch, inst.normalize(version)), nl=False)
 
 
 @cli.group(cls=AliasedGroup)
@@ -699,6 +745,7 @@ def config_show():
         ("project file", proj.path), ("port", proj.port), ("mode", proj.mode), ("auth", proj.auth),
         ("telemetry", proj.telemetry), ("idle_timeout", proj.idle_timeout), ("seed", proj.seed),
         ("sdk", ", ".join(proj.sdk) or None), ("image", proj.image), ("memory", proj.memory),
+        ("emulator_version", proj.emulator_version),
     ) if v is not None])
 
 
@@ -723,11 +770,13 @@ def config_path():
 
 # =========================================================================== services
 
+from .commands import check as _check  # noqa: E402
 from .commands import compose as _compose  # noqa: E402
 from .commands import describe as _describe  # noqa: E402
 from .commands import dynamodb as _dynamodb  # noqa: E402
 from .commands import events as _events  # noqa: E402
 from .commands import fidelity as _fidelity  # noqa: E402
+from .commands import install as _install  # noqa: E402
 from .commands import kinesis as _kinesis  # noqa: E402
 from .commands import overview as _overview  # noqa: E402
 from .commands import lambda_ as _lambda  # noqa: E402
@@ -754,6 +803,8 @@ cli.add_command(_describe.describe)
 cli.add_command(_seed.seed)
 cli.add_command(_compose.compose)
 cli.add_command(_fidelity.fidelity)
+cli.add_command(_check.check)
+cli.add_command(_install.install)
 cli.add_command(_watch.watch)
 
 

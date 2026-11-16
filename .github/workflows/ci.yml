@@ -128,3 +128,27 @@ jobs:
         run: awsemu logs -n 50 || true
       - if: always()
         run: awsemu stop
+      - name: The action installs a pinned version (the same one, by number)
+        id: pinned
+        uses: ./
+        with:
+          emulator-version: ${{ steps.emu.outputs.emulator-version }}
+          port: "9304"
+      - name: Versions, install --pin and check against the real data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WANT: ${{ steps.emu.outputs.emulator-version }}
+        run: |
+          set -x
+          test -n "$WANT"
+          test "${{ steps.pinned.outputs.emulator-version }}" = "$WANT"
+          awsemu stop
+          awsemu install --list | head -5
+          awsemu install --list --json | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['installed'] == '$WANT', d"
+          mkdir -p /tmp/proj && cd /tmp/proj
+          awsemu install "$WANT" --pin --yes
+          grep -x "emulator_version = \"$WANT\"" awsemu.toml
+          awsemu doctor --json | python3 -c "import json,sys; c={x['check']: x for x in json.load(sys.stdin)['checks']}; assert c['emulator version']['result'] == 'ok', c"
+          awsemu check "$GITHUB_WORKSPACE/examples/check-demo"
+          awsemu check "$GITHUB_WORKSPACE/examples/check-demo" --json | python3 -c "import json,sys; d=json.load(sys.stdin); ops={o['operation'] for o in d['operations']}; assert {'dynamodb:TransactWriteItems','dynamodb:GetItem','sqs:SendMessage'} <= ops, ops"
+          cd "$GITHUB_WORKSPACE/examples/check-demo" && awsemu fidelity --mine
