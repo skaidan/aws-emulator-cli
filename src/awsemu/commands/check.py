@@ -47,7 +47,7 @@ def _difference_line(d: chk.Difference) -> str:
                    "(default: emulator_version in awsemu.toml, else your installed one).")
 @click.option("--manifest", "manifest_ref", metavar="FILE|REF",
               help="manifest.jsonl to use: a local file, or a tag/branch of the fidelity tests "
-                   "repository (default: the version the release was scored with).")
+                   "repository (default: the version the release names, else the newest one).")
 @click.option("--all", "show_all", is_flag=True, help="List every known difference, not the first 3 per operation.")
 @click.option("--strict", is_flag=True,
               help="Exit with code 1 when an operation you use has known differences (for CI).")
@@ -70,7 +70,7 @@ def check(paths, release, manifest_ref, show_all, strict, refresh, as_json):
     it fails at an operation you call, or calls only operations you call.
     """
     tag, scores, installed = pick_release(release, refresh)
-    suite = fid.suite_version(tag) or "main"
+    suite = fid.suite_version(tag) or (None if manifest_ref else chk.latest_suite_version()) or "main"
     try:
         if manifest_ref and Path(manifest_ref).is_file():
             manifest = chk.read_manifest_file(Path(manifest_ref))

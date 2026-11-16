@@ -21,10 +21,10 @@ awsemu check --strict           # exit code 1 if there are known differences (CI
 awsemu check --json             # for scripts (format: scripting.md)
 ```
 
-Try it with the example in this repository: `awsemu check examples/check-demo`. Output with real data: the scores AWS published on 2026-11-16 (shown as v1.0.385) and the fidelity tests v1.0.0. The tests and numbers change with each release:
+Try it with the example in this repository: `awsemu check examples/check-demo`. Real output, for release v1.0.471 and the fidelity tests v1.0.0 (the tests and numbers change with each release):
 
 ```
-release         v1.0.385
+release         v1.0.471
 fidelity tests  v1.0.0
 scanned         2 file(s): python, terraform
 
@@ -87,7 +87,7 @@ For infrastructure, the **Services** table gives each service's score and, when 
 ### Where the data comes from
 
 - The test results: `scores.json.gz` of the release, as in `awsemu fidelity`.
-- Which operations each test calls: `manifest.jsonl` of the [fidelity tests repository](https://github.com/aws/aws-emulator-evaluation-suite), at the version the release says it was scored with (`main` if it doesn't say). Pick another with `--manifest v1.0.0`, or use a file from a clone with `--manifest path/to/manifest.jsonl`.
+- Which operations each test calls: `manifest.jsonl` of the [fidelity tests repository](https://github.com/aws/aws-emulator-evaluation-suite), at the version the release names in its notes; when it doesn't name one (the case so far), the newest published version (a `vX.Y.Z` tag, today `v1.0.0`), and `main` if that can't be looked up. Tests added since only show up in later releases, so the newest version is the closest match. Pick another with `--manifest v1.0.0`, or use a file from a clone with `--manifest path/to/manifest.jsonl`.
 - Both are cached in `~/.aws/emulator-cli/fidelity/` (`main` is refreshed once a day; `--refresh` forces it).
 - The release: `--release`, else `emulator_version` in your `awsemu.toml`, else the emulator you have installed, else the latest.
 

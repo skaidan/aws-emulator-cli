@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,6 +37,29 @@ IGNORED_OPS = {"sts:GetCallerIdentity"}  # in many tests, never the point of the
 
 
 # --------------------------------------------------------------------------- manifest
+
+
+def latest_suite_version() -> str | None:
+    """Newest ``vX.Y.Z`` tag of the fidelity tests repository (cached for a day), or None.
+
+    Releases don't always say which version of the fidelity tests scored them; then the
+    newest published version is the best match (``main`` may have tests added since).
+    """
+    cached = fid.cache_dir() / "suite-tags.json"
+    try:
+        if time.time() - cached.stat().st_mtime < MAIN_MAX_AGE:
+            return json.loads(cached.read_text(encoding="utf-8")).get("latest")
+    except (OSError, ValueError):
+        pass
+    try:
+        tags = [t["name"] for t in json.loads(fid._get(f"https://api.github.com/repos/{SUITE_REPO}/tags"))]
+    except (fid.FidelityError, ValueError, KeyError, TypeError):
+        return None
+    versions = [t for t in tags if re.match(r"^v\d+\.\d+\.\d+$", t)]
+    latest = max(versions, key=lambda t: tuple(map(int, t[1:].split("."))), default=None)
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_text(json.dumps({"latest": latest}), encoding="utf-8")
+    return latest
 
 
 def manifest_path(ref: str) -> Path:

@@ -254,6 +254,23 @@ def test_manifest_download_and_cache(isolated_home, monkeypatch):
         chk.load_manifest("main")
 
 
+def test_latest_suite_version(isolated_home, monkeypatch):
+    calls = []
+
+    def fake_get(url, accept="", gzip_ok=False):
+        calls.append(url)
+        return json.dumps([{"name": "v1.2.0"}, {"name": "v1.10.0"}, {"name": "nightly"}]).encode()
+
+    monkeypatch.setattr(fid, "_get", fake_get)
+    assert chk.latest_suite_version() == "v1.10.0"
+    assert chk.latest_suite_version() == "v1.10.0"  # cached for a day
+    assert len(calls) == 1
+
+    (fid.cache_dir() / "suite-tags.json").unlink()
+    monkeypatch.setattr(fid, "_get", lambda *a, **k: (_ for _ in ()).throw(fid.FidelityError("offline")))
+    assert chk.latest_suite_version() is None  # the command then falls back to main
+
+
 def test_bad_manifest_is_reported():
     with pytest.raises(fid.FidelityError, match="line 2"):
         chk.parse_manifest(b'{"check_id": "a", "operations": []}\nnot json\n')
@@ -320,14 +337,14 @@ def test_release_defaults_to_the_project_pin(runner, cached, project, monkeypatc
     d = fid.cache_dir()
     other = {**SCORES, "units": [u for u in SCORES["units"] if u["unitId"] != "ddb-tx-1"]}
     (d / "v1.0.390.json.gz").write_bytes(gzip.compress(json.dumps(other).encode()))
-    (d / "manifest-main.jsonl.gz").write_bytes((d / "manifest-v1.0.0.jsonl.gz").read_bytes())
+    (d / "suite-tags.json").write_text(json.dumps({"latest": "v1.0.0"}))
     (project / "awsemu.toml").write_text('emulator_version = "1.0.390"\n')
     monkeypatch.chdir(project)
     result = runner.invoke(cli, ["check", "--json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["release"] == "v1.0.390"
-    assert data["suite"] == "main"  # release info unknown -> the tests repository's main
+    assert data["suite"] == "v1.0.0"  # the release doesn't say -> the newest tests version
     ids = {d["test"] for o in data["operations"] for d in o["differences"]}
     assert "ddb-tx-1" not in ids
 

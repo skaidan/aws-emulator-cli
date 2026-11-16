@@ -35,6 +35,9 @@ def test_normalize():
     {"versions": ["v1.0.2", "1.0.10", "1.0.3"]},
     {"versions": [{"version": "1.0.2", "date": "2026-11-01"}, {"version": "1.0.10"}, {"version": "1.0.3"}]},
     {"1.0.2": {}, "1.0.10": {}, "1.0.3": {}, "latest": "1.0.10"},
+    {"versions": [{"productId": "aws-emulator", "releaseStream": "LTS", "version": "1.0.2.1"},
+                  {"productId": "aws-emulator", "releaseStream": "LTS", "version": "1.0.10.1"},
+                  {"productId": "aws-emulator", "releaseStream": "LTS", "version": "1.0.3.1"}]},
 ])
 def test_parse_versions_any_shape(doc):
     assert inst.parse_versions(json.dumps(doc).encode()) == ["1.0.10", "1.0.3", "1.0.2"]

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1 — 2026-11-16
+
+Fixes found by running v0.8.0 against AWS's real data in CI.
+
+- `awsemu install --list` now reads AWS's `versions.json`, whose versions have four parts (`1.0.471.1`, the last being the package release). Before, it always fell back to the GitHub releases list.
+- `awsemu check`: emulator releases don't name the fidelity tests version in their notes, so `check` used the tests repository's `main`. It now uses the newest published version of the fidelity tests (today `v1.0.0`), and `main` only if that can't be looked up.
+
 ## 0.8.0 — 2026-11-16
 
 Will my project work with the emulator? Answers before you start, and upgrades without surprises. Guide: `docs/compatibility.md`.

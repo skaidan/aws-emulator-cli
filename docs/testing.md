@@ -5,7 +5,7 @@ The emulator is ideal for integration tests: no AWS account needed, it starts in
 | Where | How |
 | --- | --- |
 | pytest | [Plugin](#pytest-plugin): `aws_emulator` fixture, no setup |
-| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.8.0` |
+| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.8.1` |
 | Anywhere else | [Scripts](#scripts) with `awsemu start`/`exec`/`stop`, or [Docker Compose](#docker-compose) |
 
 In every case, starting data goes in a [seed](seeds.md).
@@ -77,7 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: skaidan/aws-emulator-cli@v0.8.0
+      - uses: skaidan/aws-emulator-cli@v0.8.1
         with:
           seed: tests/seed.yaml
       - run: pytest tests/integration      # AWS_ENDPOINT_URL & co. are already set

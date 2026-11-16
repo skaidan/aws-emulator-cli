@@ -26,6 +26,7 @@ KEY_URL = "https://downloads.aws.com/keys/gpg/current.asc"
 KEY_UID = "ssm-publishing@amazon.com"
 KEY_FINGERPRINT = "98BCF336A3BE53B734E967C52E5BF49BD940F624"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+LISTED_RE = re.compile(r"^v?(\d+\.\d+\.\d+)(?:\.\d+)?$")  # versions.json says "1.0.471.1"
 
 DEB_ARCH = {"x86_64": "amd64", "aarch64": "arm64"}
 
@@ -71,7 +72,12 @@ def package_kind() -> str | None:
 
 
 def parse_versions(data: bytes) -> list[str]:
-    """Versions in ``versions.json``, newest first, whatever its exact shape."""
+    """Versions in ``versions.json``, newest first.
+
+    Today it is ``{"versions": [{"productId": "aws-emulator", "releaseStream": "LTS",
+    "version": "1.0.191.1"}, ...]}``, the last number being the package release (the
+    ``-1`` in the file names); any other shape with version strings works too.
+    """
     try:
         doc = json.loads(data)
     except ValueError as exc:
@@ -80,8 +86,9 @@ def parse_versions(data: bytes) -> list[str]:
 
     def walk(x) -> None:
         if isinstance(x, str):
-            if VERSION_RE.match(x.lstrip("v")):
-                found.add(x.lstrip("v"))
+            m = LISTED_RE.match(x)
+            if m:
+                found.add(m.group(1))
         elif isinstance(x, dict):
             for k, v in x.items():
                 walk(k)

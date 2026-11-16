@@ -75,7 +75,7 @@ awsemu check [OPTIONS] [PATHS]...
 | Option | Description |
 | --- | --- |
 | `--release VERSION` | Emulator release to check against: 1.0.385 or latest (default: emulator_version in awsemu.toml, else your installed one). |
-| `--manifest FILE|REF` | manifest.jsonl to use: a local file, or a tag/branch of the fidelity tests repository (default: the version the release was scored with). |
+| `--manifest FILE|REF` | manifest.jsonl to use: a local file, or a tag/branch of the fidelity tests repository (default: the version the release names, else the newest one). |
 | `--all` | List every known difference, not the first 3 per operation. |
 | `--strict` | Exit with code 1 when an operation you use has known differences (for CI). |
 | `--refresh` | Download scores and manifest again instead of using the cache. |
