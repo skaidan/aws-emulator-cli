@@ -1,0 +1,77 @@
+name: Diagnose (temporary)
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/diagnose.yml]
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Latest AWS Emulator release and its assets
+        run: |
+          gh api repos/aws/aws-emulator/releases?per_page=2 --jq '.[] | {tag: .tag_name, date: .published_at, assets: [.assets[] | {name, size, url: .browser_download_url}]}'
+          echo "### BODY (first 60 lines)"
+          gh api repos/aws/aws-emulator/releases/latest --jq '.body' | head -60
+
+      - name: Score files (first lines and structure)
+        run: |
+          mkdir scores && cd scores
+          gh api repos/aws/aws-emulator/releases/latest --jq '.assets[] | .browser_download_url' | while read -r url; do
+            case "$url" in
+              *.json|*.jsonl|*.csv|*.tsv|*.md|*.txt|*.yaml|*.yml)
+                f=$(basename "$url"); curl -fsSL -o "$f" "$url"
+                echo "### $f ($(wc -c < "$f") bytes, $(wc -l < "$f") lines)"; head -c 1500 "$f"; echo; echo ;;
+              *) echo "### skipping $url" ;;
+            esac
+          done
+          for f in *.json; do [ -f "$f" ] && python3 -c "
+          import json,sys
+          d=json.load(open('$f'))
+          def shape(x, depth=0):
+              if depth>3: return '...'
+              if isinstance(x, dict): return {k: shape(v, depth+1) for k, v in list(x.items())[:8]}
+              if isinstance(x, list): return [shape(x[0], depth+1)] if x else []
+              return type(x).__name__
+          print('### SHAPE', '$f', json.dumps(shape(d), indent=1)[:2500])"; done; true
+
+      - name: Install AWS Emulator
+        run: |
+          curl -fsSLO https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest/aws-emulator_amd64.deb
+          sudo apt-get install -y -qq ./aws-emulator_amd64.deb >/dev/null
+          aws-emulator -v
+          echo "### HELP"; aws-emulator --help || aws-emulator -h || true
+
+      - name: Does the log show API requests?
+        run: |
+          for level in "" "info" "debug"; do
+            echo "### RUST_LOG='$level'"
+            if [ -n "$level" ]; then export RUST_LOG=$level; else unset RUST_LOG; fi
+            aws-emulator -p 9400 -t off > log.txt 2>&1 &
+            PID=$!
+            for i in $(seq 30); do [ -f ~/.aws/emulator/9400/ca.pem ] && curl -s --cacert ~/.aws/emulator/9400/ca.pem https://127.0.0.1:9400/__admin/health | grep -q ok && break; sleep 1; done
+            export AWS_ENDPOINT_URL=https://127.0.0.1:9400 AWS_CA_BUNDLE=~/.aws/emulator/9400/ca.pem AWS_CONFIG_FILE=~/.aws/emulator/9400/config AWS_SHARED_CREDENTIALS_FILE=~/.aws/emulator/9400/emulator_credentials AWS_REGION=us-east-1
+            aws s3api create-bucket --bucket diag-bucket >/dev/null
+            aws sqs list-queues >/dev/null || true
+            aws dynamodb describe-table --table-name nope >/dev/null 2>&1 || true
+            kill -TERM $PID; wait $PID || true
+            echo "lines: $(wc -l < log.txt)"
+            grep -iE "CreateBucket|ListQueues|DescribeTable|diag-bucket|request|operation" log.txt | head -15 | cut -c1-600
+            echo "### distinct messages:"
+            python3 -c "
+          import json
+          seen = {}
+          for line in open('log.txt'):
+              try: d = json.loads(line)
+              except Exception: continue
+              f = d.get('fields', {})
+              m = f.get('message', '')
+              key = (d.get('level'), d.get('target'), m[:60])
+              if key not in seen: seen[key] = sorted(f.keys())
+          for k, v in list(seen.items())[:40]: print(k, v)
+          "
+            ls ~/.aws/emulator/ ~/.aws/emulator/9400 2>/dev/null || true
+          done
