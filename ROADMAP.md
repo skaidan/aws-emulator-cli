@@ -84,7 +84,7 @@ Aprendido en CI: el emulador no registra las llamadas a la API (ni con `RUST_LOG
 
 Objetivo: decidir lo que es difícil de cambiar una vez que otros instalan y usan `awsemu`.
 
-- ⬜ **Nombre definitivo.** "aws-emulator-cli" usa la marca AWS; para un proyecto no oficial publicado en PyPI y Homebrew puede causar problemas o confundirse con algo oficial. Elegir nombre de paquete (y, si cambia, de comando), comprobar que está libre en PyPI, Homebrew y GitHub, y renombrar con un periodo de transición.
+- ⬜ **Preparar el cambio de nombre** (el nombre se decide al final, en v1.0): hoy "aws-emulator-cli" aparece 37 veces en 13 ficheros. Reunirlo en pocos sitios y añadir un script que lo cambie de una vez (paquete, repositorio, URLs de la documentación y de la GitHub Action) y compruebe que no queda ninguna referencia antigua.
 - ⬜ **Documentación en inglés.** README y guías principales en inglés, con la versión en español enlazada (o al revés), para llegar a más gente. Los mensajes del CLI ya están en inglés.
 - ⬜ **Salida estable.** Fijar y documentar el formato de `--json` de cada comando y los códigos de salida (0, 1, 2, 3), con tests que detecten cambios accidentales; después de publicar, cambiarlos rompería scripts ajenos.
 - ⬜ Revisión general de mensajes, ayudas y valores por defecto antes de congelarlos.
@@ -125,6 +125,7 @@ Objetivo: que un agente de programación pruebe su código contra el emulador si
 
 Objetivo: instalar y actualizar en cualquier sitio con un comando.
 
+- ⬜ **Nombre definitivo, justo antes de publicar.** "aws-emulator-cli" usa la marca AWS; para un proyecto no oficial en PyPI y Homebrew puede causar problemas o confundirse con algo oficial. Elegir el nombre, comprobar que está libre en PyPI, Homebrew y GitHub, aplicarlo con el script de v0.7 y publicar enseguida, para que no lo ocupe nadie entre medias.
 - ✅ Releases automáticas en GitHub desde `CHANGELOG.md` (wheel y sdist adjuntos).
 - ⬜ Publicación en **PyPI** (`pipx install aws-emulator-cli`).
 - ⬜ **Homebrew tap** y binarios autónomos (PyInstaller) para quien no tenga Python.

@@ -249,7 +249,7 @@ awsemu start --no-telemetry        # solo para esta ejecución
 
 ## Roadmap
 
-Hecho: ciclo de vida nativo y Docker, validación contra el emulador real en Linux, macOS y Windows (v0.2), y 10 servicios con comandos propios más `describe` (v0.3), seeds para arrancar con datos reproducibles (v0.4), `awsemu.toml`, plugin de pytest, GitHub Action y Docker Compose (v0.5), y `ui`, `watch`, `fidelity` y autocompletado (v0.6). Lo que viene: preparar la publicación (nombre, inglés, salida estable; v0.7), `awsemu check` para saber si tu proyecto funcionará y actualizaciones seguras (v0.8), un proxy para ver llamadas e inyectar fallos (v0.9), completar seeds, snapshots y otros lenguajes (v0.10), un servidor MCP para agentes (v0.11), y PyPI, Homebrew y binarios autónomos (v1.0). Detalles en [ROADMAP.md](ROADMAP.md) y cambios por versión en [CHANGELOG.md](CHANGELOG.md).
+Hecho: ciclo de vida nativo y Docker, validación contra el emulador real en Linux, macOS y Windows (v0.2), y 10 servicios con comandos propios más `describe` (v0.3), seeds para arrancar con datos reproducibles (v0.4), `awsemu.toml`, plugin de pytest, GitHub Action y Docker Compose (v0.5), y `ui`, `watch`, `fidelity` y autocompletado (v0.6). Lo que viene: preparar la publicación (inglés, salida estable y un cambio de nombre fácil; v0.7), `awsemu check` para saber si tu proyecto funcionará y actualizaciones seguras (v0.8), un proxy para ver llamadas e inyectar fallos (v0.9), completar seeds, snapshots y otros lenguajes (v0.10), un servidor MCP para agentes (v0.11), y el nombre definitivo con PyPI, Homebrew y binarios autónomos (v1.0). Detalles en [ROADMAP.md](ROADMAP.md) y cambios por versión en [CHANGELOG.md](CHANGELOG.md).
 
 ## Desarrollo
 
