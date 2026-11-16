@@ -101,6 +101,11 @@ def rename(new_dist: str, new_repo: str, dry_run: bool) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Files contain non-ASCII text (e.g. emoji in ROADMAP.md); Windows consoles
+    # default to a legacy code page that can't print it.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true", help="List where the current names appear.")
     ap.add_argument("--package", help="New distribution name, e.g. my-emu-cli.")
