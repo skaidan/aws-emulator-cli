@@ -17,26 +17,27 @@ jobs:
           echo "### BODY (first 60 lines)"
           gh api repos/aws/aws-emulator/releases/latest --jq '.body' | head -60
 
-      - name: Score files (first lines and structure)
+      - name: scores.json.gz structure (second pass)
         run: |
-          mkdir scores && cd scores
-          gh api repos/aws/aws-emulator/releases/latest --jq '.assets[] | .browser_download_url' | while read -r url; do
-            case "$url" in
-              *.json|*.jsonl|*.csv|*.tsv|*.md|*.txt|*.yaml|*.yml)
-                f=$(basename "$url"); curl -fsSL -o "$f" "$url"
-                echo "### $f ($(wc -c < "$f") bytes, $(wc -l < "$f") lines)"; head -c 1500 "$f"; echo; echo ;;
-              *) echo "### skipping $url" ;;
-            esac
-          done
-          for f in *.json; do [ -f "$f" ] && python3 -c "
-          import json,sys
-          d=json.load(open('$f'))
+          gh release download --repo aws/aws-emulator --pattern scores.json.gz --dir scores
+          gunzip scores/scores.json.gz
+          ls -la scores
+          head -c 1200 scores/scores.json; echo
+          python3 - <<'PY'
+          import json
+          d = json.load(open("scores/scores.json"))
           def shape(x, depth=0):
-              if depth>3: return '...'
-              if isinstance(x, dict): return {k: shape(v, depth+1) for k, v in list(x.items())[:8]}
-              if isinstance(x, list): return [shape(x[0], depth+1)] if x else []
-              return type(x).__name__
-          print('### SHAPE', '$f', json.dumps(shape(d), indent=1)[:2500])"; done; true
+              if depth > 4: return "..."
+              if isinstance(x, dict): return {k: shape(v, depth + 1) for k, v in list(x.items())[:12]}
+              if isinstance(x, list): return [shape(x[0], depth + 1), f"len={len(x)}"] if x else []
+              return f"{type(x).__name__}: {str(x)[:60]}"
+          print("### SHAPE", json.dumps(shape(d), indent=1)[:4000])
+          if isinstance(d, dict):
+              print("### TOP KEYS", list(d.keys())[:30])
+          PY
+          echo "### evaluation-suite manifest (first 3 lines)"
+          gh api repos/aws/aws-emulator-evaluation-suite/contents/manifest.jsonl --jq '.download_url' 2>/dev/null | xargs -r curl -fsSL | head -3 | cut -c1-800 || echo "no manifest at root"
+          gh api repos/aws/aws-emulator-evaluation-suite/contents --jq '.[].name' | head -30
 
       - name: Install AWS Emulator
         run: |
