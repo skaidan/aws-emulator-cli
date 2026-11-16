@@ -45,6 +45,16 @@ Revisa Python, el binario, Docker y la imagen, el AWS CLI, boto3, el estado del 
 | `This action needs a Linux runner` | La GitHub Action solo funciona en Linux. | `runs-on: ubuntu-latest`. |
 | Los comandos usan otro puerto del que esperas | `awsemu.toml` en esta carpeta o en una superior, o `AWSEMU_PORT`. | `awsemu config show` dice qué fichero se usa; `--port` siempre gana. |
 
+## Exploración
+
+| Mensaje / síntoma | Causa | Solución |
+| --- | --- | --- |
+| `The terminal UI needs Textual` | Falta el extra `ui`. | `pipx install --force 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'` |
+| `couldn't reach GitHub` / `rate limit?` en `fidelity` | Sin conexión, o límite de peticiones anónimas de GitHub. | Reintenta, o define `GITHUB_TOKEN`. Lo ya descargado queda en caché. |
+| `these scores are for vX, your emulator is vY` | Has pedido otra release, o no hay binario instalado y se usó la última. | `--release` con tu versión (`aws-emulator -v`). |
+| `watch` no muestra las llamadas a la API | El emulador no las registra; `watch` muestra su efecto sobre los recursos. | Es así por diseño; ver [Explorar el emulador](explore.md#awsemu-watch-cambios-en-directo). |
+| El autocompletado no sugiere nombres | El emulador no está en marcha en ese puerto, o el script no se ha cargado. | `awsemu status`; abre una shell nueva tras añadir `awsemu completion` a tu `~/.bashrc`/`~/.zshrc`. |
+
 ## Problemas típicos
 
 **Mis tests llegan a AWS real.** `AWS_ENDPOINT_URL` no estaba definida en la shell que ejecuta los tests. Usa `awsemu exec -- <comando>`, o ejecuta `awsemu whoami` al principio del script: falla si la cuenta no es `000000000000`.

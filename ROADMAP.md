@@ -69,14 +69,16 @@ Objetivo: que un proyecto declare su emulador y cualquiera lo levante con `awsem
 
 Aprendido en CI: el modo Docker funcionó a la primera; el plugin tenía un bug de orden con `HOME` que solo se veía con el emulador real (corregido y cubierto por un test).
 
-## v0.6 — Experiencia interactiva
+## v0.6 — Experiencia interactiva ✅
 
 Objetivo: explorar el emulador sin recordar comandos.
 
-- ⬜ **Autocompletado** de shell (`awsemu completion bash|zsh|fish`), con nombres de buckets, colas y tablas.
-- ⬜ **TUI** (`awsemu ui`, con Textual): árbol de servicios y recursos, vista de items y mensajes, logs en vivo y acciones rápidas (crear, borrar, purgar).
-- ⬜ **`awsemu watch`**: muestra en directo las llamadas a la API que recibe el emulador, a partir de su log.
-- ⬜ **Información de fidelidad**: mostrar la puntuación de fidelidad por servicio que publica cada release del emulador, para saber de antemano qué está bien soportado.
+- ✅ **Autocompletado** (`awsemu completion bash|zsh|fish`), con los nombres reales de buckets (y rutas), colas, tablas, temas, funciones, secretos, parámetros, streams, máquinas de estados y reglas.
+- ✅ **Interfaz en la terminal** (`awsemu ui`, con Textual, extra `ui`): árbol de servicios y recursos, detalle de cada uno (sin mostrar valores secretos), refresco manual y automático.
+- ✅ **`awsemu watch`**: cambios en directo de los recursos (creados, borrados, mensajes, items, objetos).
+- ✅ **`awsemu fidelity`**: puntuación por servicio publicada con cada release del emulador, para tu versión instalada, y detalle de las pruebas que fallan.
+
+Aprendido en CI: el emulador no registra las llamadas a la API (ni con `RUST_LOG=debug`), así que `watch` muestra el efecto en los recursos en lugar de las llamadas. Las puntuaciones están en un `scores.json.gz` adjunto a cada release, con el resultado de cada prueba y los servicios que llama.
 
 ## v1.0 — Distribución estable
 

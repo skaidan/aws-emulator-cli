@@ -11,6 +11,7 @@ El emulador en sí es un único binario sin subcomandos: se ejecuta en primer pl
 - **Arrancar siempre con los mismos datos** con un *seed* en YAML: `awsemu start --seed seed.yaml`, `awsemu reset --seed seed.yaml`, y `seed export` para guardar el estado actual.
 - **Configurarlo por proyecto** con `awsemu.toml` (`awsemu init`, `awsemu up`, `awsemu down`): puerto propio, modo, seed…
 - **Usarlo en tests y CI**: plugin de pytest (fixture `aws_emulator`), GitHub Action (`uses: skaidan/aws-emulator-cli@v0.5.0`) y `awsemu compose` para Docker Compose.
+- **Explorarlo**: interfaz en la terminal (`awsemu ui`), cambios en directo (`awsemu watch`), autocompletado con los nombres de tus recursos y la **fidelidad por servicio** de tu versión del emulador (`awsemu fidelity`).
 - **Diagnosticar** problemas típicos (`awsemu doctor`).
 
 ```
@@ -34,6 +35,7 @@ DynamoDB tables  1      usuarios
 ## Documentación
 
 - [Primeros pasos](docs/getting-started.md): instalar, arrancar y conectar tus herramientas.
+- [Explorar el emulador](docs/explore.md): `ui`, `watch`, `fidelity` y autocompletado.
 - [Configuración por proyecto](docs/project-config.md): `awsemu.toml`, `init`, `up` y `down`.
 - [Seeds](docs/seeds.md): datos de partida reproducibles (formato, validación, `apply` y `export`).
 - [Guía de servicios](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions y `describe`, con ejemplos.
@@ -52,10 +54,10 @@ Requisitos: Python 3.10+ y **una** de estas dos opciones para ejecutar el emulad
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
 # o una versión concreta, desde las releases:
-pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.5.0/aws_emulator_cli-0.5.0-py3-none-any.whl
+pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.6.0/aws_emulator_cli-0.6.0-py3-none-any.whl
 ```
 
-Todas las versiones: [Releases](https://github.com/skaidan/aws-emulator-cli/releases).
+Todas las versiones: [Releases](https://github.com/skaidan/aws-emulator-cli/releases). Para la interfaz en la terminal (`awsemu ui`), instala el extra `ui`: `pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'`.
 
 Después:
 
@@ -167,6 +169,18 @@ Y además `awsemu secrets`, `ssm`, `events`, `kinesis`, `sfn` y `describe ARN`: 
 
 Para cualquier otro servicio u operación: `awsemu aws <servicio> <operación> ...`.
 
+### Explorar
+
+```bash
+awsemu ui                          # interfaz en la terminal (extra 'ui')
+awsemu watch                       # cambios en directo mientras tu app trabaja
+awsemu fidelity s3 sqs dynamodb    # cuánto se parece a AWS, para tu versión
+awsemu fidelity lambda --failures  # qué pruebas fallan y por qué
+eval "$(awsemu completion bash)"   # autocompletado, también de nombres de recursos
+```
+
+Más en [docs/explore.md](docs/explore.md).
+
 ### Por proyecto
 
 ```bash
@@ -235,7 +249,7 @@ awsemu start --no-telemetry        # solo para esta ejecución
 
 ## Roadmap
 
-Hecho: ciclo de vida nativo y Docker, validación contra el emulador real en Linux, macOS y Windows (v0.2), y 10 servicios con comandos propios más `describe` (v0.3), seeds para arrancar con datos reproducibles (v0.4), y `awsemu.toml`, plugin de pytest, GitHub Action y Docker Compose (v0.5). Lo que viene: autocompletado y una TUI (v0.6), y PyPI y Homebrew (v1.0). Detalles en [ROADMAP.md](ROADMAP.md) y cambios por versión en [CHANGELOG.md](CHANGELOG.md).
+Hecho: ciclo de vida nativo y Docker, validación contra el emulador real en Linux, macOS y Windows (v0.2), y 10 servicios con comandos propios más `describe` (v0.3), seeds para arrancar con datos reproducibles (v0.4), `awsemu.toml`, plugin de pytest, GitHub Action y Docker Compose (v0.5), y `ui`, `watch`, `fidelity` y autocompletado (v0.6). Lo que viene: PyPI, Homebrew y binarios autónomos (v1.0). Detalles en [ROADMAP.md](ROADMAP.md) y cambios por versión en [CHANGELOG.md](CHANGELOG.md).
 
 ## Desarrollo
 

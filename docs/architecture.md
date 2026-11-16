@@ -41,11 +41,15 @@ src/awsemu/
   seed.py         formato de seed: parseo YAML con mapa de líneas y validación (sin llamadas a AWS)
   project.py      awsemu.toml / [tool.awsemu]: búsqueda hacia arriba, validación, caché por fichero
   pytest_plugin.py  plugin de pytest (entry point pytest11): fixtures aws_emulator y aws_emulator_fresh
+  fidelity.py     descarga y caché de scores.json.gz de las releases del emulador; puntuación por servicio
+  completion.py   completado de nombres de recursos (silencioso y rápido si el emulador no responde)
+  browse.py       datos de awsemu ui (listar y describir), sin dependencias de Textual
+  tui.py          la app de Textual (extra opcional 'ui')
   paths.py        rutas y constantes (puerto, región, cuenta 000000000000)
   ui.py           salida con Rich, o texto plano si no está o con --plain
   commands/       un módulo por servicio: overview, s3, sqs, dynamodb, sns, lambda_,
                   secrets (secrets + ssm), events, kinesis, sfn, describe,
-                  seed (apply idempotente, export), compose
+                  seed (apply idempotente, export), compose, fidelity, watch
 action.yml        GitHub Action compuesta (paquete verificado, awsemu, seed, variables)
   commands/_common.py  roles de servicio, políticas de cola, permisos de Lambda, códigos de error
 ```
@@ -67,6 +71,12 @@ action.yml        GitHub Action compuesta (paquete verificado, awsemu, seed, var
 **Precedencia única.** Flag > variable de entorno > `awsemu.toml` > valor por defecto, en todos los comandos. Por eso las opciones de `start` no tienen valor por defecto en Click: `None` significa "no lo has dicho" y deja paso al proyecto.
 
 **El plugin de pytest no hace nada si no se usa.** Se registra para todo el que instale `awsemu`, así que solo añade opciones y fixtures; el emulador arranca únicamente cuando un test pide `aws_emulator`, y en un puerto libre para no interferir con nada.
+
+**`watch` consulta en lugar de escuchar.** El emulador no registra las peticiones (comprobado en CI, también con `RUST_LOG=debug`), así que `watch` compara fotos del estado. Guarda el estado por servicio para que un fallo puntual de uno no se interprete como que sus recursos han desaparecido.
+
+**Fidelidad de tu versión, no de la última.** `fidelity` lee la versión de `aws-emulator -v` y descarga las puntuaciones de esa release, porque comparar con otra versión llevaría a conclusiones erróneas.
+
+**La interfaz es opcional.** Textual es una dependencia grande para quien no la usa, así que va en el extra `ui`; la lógica de datos (`browse.py`) no depende de ella y se prueba siempre.
 
 **No escribir en la carpeta del emulador.** El estado propio va en `~/.aws/emulator-cli/`. La única excepción es borrar, tras comprobar que el puerto está libre, los ficheros documentados que el emulador dejó al no poder pararse limpiamente.
 

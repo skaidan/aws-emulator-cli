@@ -7,7 +7,14 @@ Necesitas Python 3.10 o superior.
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
 # o, desde una release concreta:
-pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.5.0/aws_emulator_cli-0.5.0-py3-none-any.whl
+pipx install https://github.com/skaidan/aws-emulator-cli/releases/download/v0.6.0/aws_emulator_cli-0.6.0-py3-none-any.whl
+```
+
+Opcional: autocompletado (también de los nombres de tus buckets, colas, tablas…) y la interfaz en la terminal:
+
+```bash
+echo 'eval "$(awsemu completion bash)"' >> ~/.bashrc    # zsh: completion zsh; fish: ver docs/explore.md
+pipx install --force 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'
 ```
 
 Comprueba qué tienes y qué falta:
@@ -119,7 +126,7 @@ awsemu s3 mb fotos
 awsemu sqs create trabajos
 ```
 
-Sigue con la [guía de servicios](services.md).
+Sigue con la [guía de servicios](services.md), o explora con `awsemu ui`, `awsemu watch` y `awsemu fidelity` ([Explorar el emulador](explore.md)).
 
 ## En un proyecto
 

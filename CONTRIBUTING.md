@@ -5,11 +5,11 @@
 ```bash
 git clone https://github.com/skaidan/aws-emulator-cli && cd aws-emulator-cli
 python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+pip install -e ".[dev,ui]"
 pytest
 ```
 
-`[dev]` instala pytest y `cryptography` (la usa el emulador falso para generar su certificado).
+`[dev]` instala pytest y `cryptography` (la usa el emulador falso para generar su certificado); `[ui]` instala Textual para probar `awsemu ui` (sin él, esos tests se saltan).
 
 ## Tests
 
@@ -17,6 +17,7 @@ pytest
 | --- | --- | --- |
 | Unitarios | `tests/test_units.py`, `tests/test_seed.py`, `tests/test_project.py` | `pytest` |
 | Plugin de pytest | `tests/test_pytest_plugin.py` (sesiones reales con `pytester`) | `pytest` |
+| Exploración | `tests/test_fidelity.py`, `tests/test_watch.py`, `tests/test_completion.py`, `tests/test_browse_ui.py` (con Textual: pilot de la app) | `pytest` |
 | Ciclo de vida con el emulador falso | `tests/test_lifecycle.py` | `pytest` (Linux, macOS y Windows) |
 | Servicios con cliente simulado | `tests/test_services.py`, `tests/test_sns_lambda.py`, `tests/test_more_services.py` | `pytest` |
 | Contra el emulador real | `tests/test_real.py` | `AWSEMU_REAL_TESTS=1 pytest -m real -v` |

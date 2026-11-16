@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 — 2026-11-16
+
+Explorar el emulador.
+
+- `awsemu fidelity [SERVICIO...]`: puntuaciones de fidelidad por servicio de la release que tienes instalada (`--release` para otra), `--failures` con la operación y la diferencia de cada prueba que falla, `--sort score`, `--json`. Descarga `scores.json.gz` de las releases del emulador y lo guarda en caché.
+- `awsemu watch`: recursos creados, borrados y cambiados en directo (objetos, mensajes, items), con `-s`, `-i` y `--once`.
+- `awsemu completion bash|zsh|fish`, que también completa nombres de recursos del emulador en marcha.
+- `awsemu ui`: interfaz en la terminal con Textual (extra opcional `ui`).
+- Guía nueva: `docs/explore.md`.
+
 ## 0.5.0 — 2026-11-15
 
 Integración con proyectos y CI.
