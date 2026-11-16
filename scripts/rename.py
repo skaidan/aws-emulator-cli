@@ -79,7 +79,7 @@ def rename(new_dist: str, new_repo: str, dry_run: bool) -> int:
             new = new.replace(old, rep)
         if new != text:
             changed += 1
-            print(f"  {'would change' if dry_run else 'changed'} {f.relative_to(ROOT)}")
+            print(f"  {'would change' if dry_run else 'changed'} {f.relative_to(ROOT).as_posix()}")
             if not dry_run:
                 f.write_text(new, encoding="utf-8")
     if dry_run:
@@ -90,7 +90,7 @@ def rename(new_dist: str, new_repo: str, dry_run: bool) -> int:
         print("Old names still present:", file=sys.stderr)
         for f, lines in left.items():
             for n, line in lines:
-                print(f"  {f.relative_to(ROOT)}:{n}: {line}", file=sys.stderr)
+                print(f"  {f.relative_to(ROOT).as_posix()}:{n}: {line}", file=sys.stderr)
         return 1
     dist, repo = current()
     assert (dist, repo) == (new_dist, new_repo), (dist, repo)
@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         total = sum(len(v) for v in found.values())
         for f, lines in found.items():
             for n, line in lines:
-                print(f"{f.relative_to(ROOT)}:{n}: {line[:120]}")
+                print(f"{f.relative_to(ROOT).as_posix()}:{n}: {line[:120]}")
         print(f"\n'{dist}' / '{repo}': {total} line(s) in {len(found)} file(s) "
               f"(CHANGELOG.md not counted).")
         return 0
