@@ -314,6 +314,14 @@ class ProxyServer(ThreadingHTTPServer):
             self._ctx.load_cert_chain(self.files.cert, self.files.key)
         super().__init__((DEFAULT_HOST, listen_port), _Handler)
 
+    def server_bind(self):
+        # HTTPServer.server_bind() looks up the host's FQDN (reverse DNS), which can take
+        # tens of seconds on some machines (macOS CI runners). We know the name.
+        import socketserver
+
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
     # TLS handshake in the worker thread, not in the accept loop
     def finish_request(self, request, client_address):
         if self._ctx:
@@ -516,16 +524,24 @@ def start_detached(emulator_port: int, listen_port: int, specs: list[str], tls: 
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(filter(None, [package_root, env.get("PYTHONPATH")]))
     proc = _popen_detached(cmd, files.log, env=env)
+
+    def log_tail() -> str:
+        try:
+            return files.log.read_text(encoding="utf-8", errors="replace")[-1500:].strip()
+        except OSError:
+            return ""
+
     deadline = time.monotonic() + wait
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            tail = files.log.read_text(encoding="utf-8", errors="replace")[-800:] if files.log.exists() else ""
-            raise ProxyError(f"the proxy exited with code {proc.returncode}:\n{tail.strip()}")
+            raise ProxyError(f"the proxy exited with code {proc.returncode}:\n{log_tail()}")
         state = running(emulator_port)
         if state:
             return state
         time.sleep(0.15)
-    raise ProxyError(f"the proxy didn't start within {wait:.0f} s (log: {files.log})")
+    state = read_state(emulator_port)
+    detail = f"state: {state}" if state else "it never wrote its state file"
+    raise ProxyError(f"the proxy didn't answer within {wait:.0f} s ({detail}; log: {files.log})\n{log_tail()}")
 
 
 def stop(emulator_port: int, timeout: float = 10.0) -> bool:

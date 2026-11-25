@@ -574,6 +574,7 @@ def test_proxy_against_real_emulator(emu):
         ddb.create_table(TableName="via-proxy", BillingMode="PAY_PER_REQUEST",
                          AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
                          KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}])
+        ddb.get_waiter("table_exists").wait(TableName="via-proxy", WaiterConfig={"Delay": 1, "MaxAttempts": 30})
         ddb.put_item(TableName="via-proxy", Item={"id": {"S": "1"}})
         with pytest.raises(ClientError) as exc:
             ddb.put_item(TableName="via-proxy", Item={"id": {"S": "1"}}, ConditionExpression="attribute_not_exists(id)")
