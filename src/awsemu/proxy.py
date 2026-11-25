@@ -226,9 +226,10 @@ class _Handler(BaseHTTPRequestHandler):
             status, h, data = faults.error_response(
                 code, status, ident.protocol, f"Injected by awsemu proxy ({rule.spec})",
                 headers.get("content-type", ""))
-            self._send(status, list(h.items()), data, head=self.command == "HEAD")
+            # Recorded before answering: once the client has its answer, the call is in the log.
             self.server.record(ident, self, status, code, started, h.get("x-amzn-RequestId"),
                                decision.label, len(body), len(data))
+            self._send(status, list(h.items()), data, head=self.command == "HEAD")
             return
         try:
             status, resp_headers, data = self.server.forward(self.command, self.path, self.headers.items(), body)
@@ -237,14 +238,14 @@ class _Handler(BaseHTTPRequestHandler):
                 "EmulatorUnreachable", 502, ident.protocol,
                 f"awsemu proxy: the emulator on port {self.server.emulator_port} didn't answer ({exc})",
                 headers.get("content-type", ""))
-            self._send(status, list(h.items()), data, head=self.command == "HEAD")
             self.server.record(ident, self, 502, "EmulatorUnreachable", started, None, decision.label,
                                len(body), len(data))
+            self._send(status, list(h.items()), data, head=self.command == "HEAD")
             return
-        self._send(status, resp_headers, data, head=self.command == "HEAD")
         lower = {k.lower(): v for k, v in resp_headers}
         self.server.record(ident, self, status, awscalls.error_code(status, lower, data), started,
                            awscalls.request_id(lower), decision.label, len(body), len(data))
+        self._send(status, resp_headers, data, head=self.command == "HEAD")
 
     def _reset(self) -> None:
         self.close_connection = True
