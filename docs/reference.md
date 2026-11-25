@@ -27,6 +27,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`lambda`](#awsemu-lambda) — Lambda: deploy, invoke and inspect functions.
 - [`logs`](#awsemu-logs) — Show the emulator's log, prettified (also after it stopped).
 - [`overview`](#awsemu-overview) — What's inside the emulator, across common services.
+- [`proxy`](#awsemu-proxy) — See every API call, and inject faults (throttling, errors, latency).
 - [`restart`](#awsemu-restart) — Restart the emulator, which empties its state (it's all in memory).
 - [`s3`](#awsemu-s3) — S3: buckets and objects.
 - [`secrets`](#awsemu-secrets) — Secrets Manager: store and read secrets.
@@ -47,6 +48,8 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 ## `awsemu aws`
 
 Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
+
+Goes through the proxy when awsemu.toml has proxy = true and it's running.
 
 ```
 awsemu aws [OPTIONS] [ARGS]...
@@ -296,6 +299,7 @@ awsemu env [OPTIONS]
 | `--sdk [node|java|rust|dotnet]` | Also trust the certificate for SDKs that ignore AWS_CA_BUNDLE. Repeatable. |
 | `--unset` | Print the commands that undo 'awsemu env'. |
 | `--keep-real-creds` | Don't unset AWS_ACCESS_KEY_ID & co. (requests will then fail auth). |
+| `--proxy / --no-proxy` | Go through the running proxy (default: yes when awsemu.toml has proxy = true and it's running). |
 
 ## `awsemu events`
 
@@ -390,6 +394,7 @@ Run COMMAND with the environment pointed at the emulator.
 awsemu exec -- pytest -k integration
 awsemu exec -- terraform apply
 awsemu exec --sdk node -- npm test
+awsemu exec --proxy -- pytest       # through the proxy (calls log, faults)
 ```
 
 ```
@@ -399,6 +404,7 @@ awsemu exec [OPTIONS] COMMAND...
 | Option | Description |
 | --- | --- |
 | `--sdk [node|java|rust|dotnet]` | Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable. |
+| `--proxy / --no-proxy` | Go through the running proxy (default: yes when awsemu.toml has proxy = true and it's running). |
 
 ## `awsemu fidelity`
 
@@ -690,6 +696,112 @@ awsemu overview [OPTIONS]
 | `-s, --service [s3|sqs|dynamodb|sns|lambda|secretsmanager|ssm|kinesis|events|stepfunctions|logs|iam]` | Only these services. Repeatable. |
 | `--all` | Also list services with nothing in them. |
 | `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
+## `awsemu proxy`
+
+See every API call, and inject faults (throttling, errors, latency).
+
+```bash
+awsemu proxy start -d                     # in the background
+awsemu exec --proxy -- pytest             # your code goes through it
+awsemu watch --calls                      # every call, live
+awsemu proxy faults add 'dynamodb=throttle@10%'
+awsemu proxy stop
+```
+The proxy listens on https://127.0.0.1:<emulator port + 1> with its own
+certificate, and forwards everything to the emulator. Guide: docs/proxy.md.
+
+### `awsemu proxy calls`
+
+Calls that went through the proxy (same as 'awsemu watch --calls').
+
+With --json: a list; with --follow --json, one JSON object per line.
+
+```
+awsemu proxy calls [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `-n, --last INTEGER` | How many of the latest calls to show.  [default: 20] |
+| `-f, --follow` | Keep printing new calls (like tail -f). |
+| `--service NAME` | Only this service. Repeatable. |
+| `--errors` | Only calls that failed (including injected faults). |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
+### `awsemu proxy faults`
+
+List the fault rules of the running proxy (add, set, clear them).
+
+```bash
+awsemu proxy faults add 'dynamodb=throttle@10%' 's3=latency:500ms'
+awsemu proxy faults set 'sqs:SendMessage=503@50%'   # replace them all
+awsemu proxy faults clear
+```
+Rule syntax: TARGET=EFFECT[,EFFECT][@RATE][xTIMES]; see docs/proxy.md.
+
+#### `awsemu proxy faults add`
+
+Add fault rules (they apply to the next calls).
+
+```
+awsemu proxy faults add [OPTIONS] RULES...
+```
+
+#### `awsemu proxy faults clear`
+
+Remove every fault rule.
+
+```
+awsemu proxy faults clear [OPTIONS]
+```
+
+#### `awsemu proxy faults set`
+
+Replace every fault rule with these.
+
+```
+awsemu proxy faults set [OPTIONS] [RULES]...
+```
+
+### `awsemu proxy start`
+
+Start the proxy in front of the emulator on --port.
+
+In the foreground it prints each call until Ctrl-C; with -d it runs in the
+background. Calls are logged in ~/.aws/emulator-cli/proxy/<port>/calls.jsonl.
+
+```
+awsemu proxy start [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--listen PORT` | Port for the proxy (default: proxy_port in awsemu.toml, else the emulator's + 1; 0 = free). |
+| `--fault RULE` | Fault rule, like 'dynamodb=throttle@10%' or 's3=latency:500ms'. Repeatable (default: faults in awsemu.toml). |
+| `-d, --detach` | Run in the background ('awsemu proxy stop' stops it). |
+| `--quiet` | Don't print each call (they're still logged). |
+| `--no-tls` | Plain HTTP instead of HTTPS (no certificate to trust). |
+
+### `awsemu proxy status`
+
+Is the proxy running, where, and with which faults.
+
+```
+awsemu proxy status [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
+### `awsemu proxy stop`
+
+Stop the background proxy.
+
+```
+awsemu proxy stop [OPTIONS]
+```
 
 ## `awsemu restart`
 
@@ -1006,6 +1118,7 @@ awsemu shell [OPTIONS]
 | Option | Description |
 | --- | --- |
 | `--sdk [node|java|rust|dotnet]` | Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable. |
+| `--proxy / --no-proxy` | Go through the running proxy (default: yes when awsemu.toml has proxy = true and it's running). |
 
 ## `awsemu sns`
 
@@ -1342,7 +1455,11 @@ their items, so you can see your app working.
 ```bash
 awsemu watch
 awsemu watch -s sqs -s dynamodb -i 1
+awsemu watch --calls            # API calls, through 'awsemu proxy'
+awsemu watch --calls --errors -s dynamodb
 ```
+The emulator doesn't log API calls, so --calls needs the proxy
+('awsemu proxy start -d', and your code going through it).
 
 ```
 awsemu watch [OPTIONS]
@@ -1350,9 +1467,11 @@ awsemu watch [OPTIONS]
 
 | Option | Description |
 | --- | --- |
-| `-s, --service [dynamodb|events|kinesis|lambda|s3|secrets|sfn|sns|sqs|ssm]` | Only these services. Repeatable (default: all). |
+| `-s, --service NAME` | Only these services. Repeatable (default: all; resources: dynamodb, events, kinesis, lambda, s3, secrets, sfn, sns, sqs, ssm). |
 | `-i, --interval SECONDS` | Time between looks.  [default: 2; 0.5<=x<=3600] |
 | `--once` | Print the current state and exit. |
+| `--calls` | Show every API call instead (service, operation, result, latency), through the proxy. |
+| `--errors` | With --calls: only failed calls. |
 
 ## `awsemu whoami`
 

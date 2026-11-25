@@ -6,6 +6,7 @@ Tools to see what's inside the emulator, what's happening, and how far you can t
 | --- | --- |
 | Get a snapshot of what's there | `awsemu overview` |
 | Browse services and resources | `awsemu ui` |
+| See every API call as it happens | `awsemu watch --calls` ([the proxy](proxy.md)) |
 | See live changes while my app works | `awsemu watch` |
 | Know how well a service is emulated | `awsemu fidelity` |
 | Know whether my project will work, or what an upgrade changes | `awsemu check`, `awsemu fidelity --compare` ([guide](compatibility.md)) |
@@ -26,6 +27,7 @@ awsemu ui
 | Arrows, Enter | Move, open a service, show a resource |
 | `r` | Refresh |
 | `w` | Turn auto-refresh on or off (every 5 s) |
+| `c` | API calls through [the proxy](proxy.md), live (`e` only errors, `c`/Esc back) |
 | `q` | Quit |
 
 What each resource shows:
@@ -67,6 +69,14 @@ Watching dynamodb, sqs every 2s. Ctrl+C to stop.
 - If a service fails during one look, its last state is kept: a one-off failure doesn't show up as "everything deleted".
 
 **Why it polls instead of showing the calls:** the emulator doesn't log the requests it receives. We checked in CI: even with `RUST_LOG=debug`, its log only shows startup, shutdown and the TLS handshake. So `watch` compares the state every few seconds: you see the effect of the calls, not the calls.
+
+To see the calls themselves, send your code through [the proxy](proxy.md) and use `awsemu watch --calls`:
+
+```bash
+awsemu proxy start -d
+awsemu exec --proxy -- python app.py
+awsemu watch --calls                    # --errors, -s dynamodb, --once
+```
 
 ## `awsemu fidelity`: how far you can trust each service
 

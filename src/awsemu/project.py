@@ -48,6 +48,9 @@ TYPES: dict[str, tuple] = {
     "image": (str,),
     "memory": (str,),
     "emulator_version": (str,),
+    "proxy": (bool,),
+    "proxy_port": (int,),
+    "faults": (list,),
 }
 
 TEMPLATE = """\
@@ -65,6 +68,8 @@ idle_timeout = 3600        # stop after an hour without API calls
 # image = "aws-emulator"   # Docker image (awsemu image build)
 # memory = "2g"            # Docker memory limit
 # emulator_version = "1.0.385"  # pin the emulator: awsemu install, warnings at start
+# proxy = true             # awsemu up also starts the proxy (calls log, faults); env/exec use it
+# faults = ["dynamodb=throttle@5%"]  # fault rules for that proxy (docs: proxy.md)
 """
 
 
@@ -85,6 +90,9 @@ class Project:
     image: str | None = None
     memory: str | None = None
     emulator_version: str | None = None
+    proxy: bool = False
+    proxy_port: int | None = None
+    faults: list[str] = field(default_factory=list)
 
     @property
     def root(self) -> Path:
@@ -146,6 +154,15 @@ def parse(path: Path) -> Project:
         version = data.get("emulator_version")
         if version is not None and not VERSION_RE.match(version):
             problems.append(f"'emulator_version' must be a version like 1.0.385 (got '{version}')")
+        if "proxy_port" in data and not (0 <= data["proxy_port"] < 65536):
+            problems.append("'proxy_port' must be between 0 and 65535")
+        for spec in data.get("faults", []):
+            from . import faults as _faults
+
+            try:
+                _faults.parse(str(spec))
+            except _faults.FaultError as exc:
+                problems.append(f"'faults': {exc}")
         bad_sdk = [s for s in data.get("sdk", []) if s not in SDKS]
         if bad_sdk:
             problems.append(f"'sdk' accepts {', '.join(SDKS)} (got {', '.join(map(str, bad_sdk))})")
@@ -164,6 +181,9 @@ def parse(path: Path) -> Project:
         image=data.get("image"),
         memory=data.get("memory"),
         emulator_version=data["emulator_version"].lstrip("v") if data.get("emulator_version") else None,
+        proxy=bool(data.get("proxy", False)),
+        proxy_port=data.get("proxy_port"),
+        faults=[str(x) for x in data.get("faults", [])],
     )
 
 

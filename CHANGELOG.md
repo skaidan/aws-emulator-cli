@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0 — 2026-11-25
+
+The proxy: see every API call, and inject faults. Guide: `docs/proxy.md`.
+
+- `awsemu proxy start [-d] [--listen PORT] [--fault RULE]... [--no-tls]`, `stop`, `status`: a local HTTPS proxy in front of the emulator (port + 1 by default) with its own certificate, which stays the same across restarts. It forwards every request untouched (SigV4 signatures and Host-based URLs keep working) and logs each call: service, operation, resource, status, AWS error code, latency, request id. Calls are recognised from botocore's service models, for every protocol.
+- `awsemu proxy calls [-n N] [--follow] [--service S] [--errors] [--json]` and `awsemu watch --calls [--errors]`: the calls, from `~/.aws/emulator-cli/proxy/<port>/calls.jsonl`. `awsemu ui`: press `c` for a live calls view.
+- Fault injection: rules `TARGET=EFFECT[,EFFECT][@RATE][xTIMES]` with latency, `throttle` (the right throttling error per API), any error code, HTTP 4xx/5xx and `reset`. Set them with `--fault`, `awsemu proxy faults add/set/clear` while the proxy runs, or `faults` in `awsemu.toml`. Injected errors use each API's protocol, so SDKs raise the real exception and retry as they would against AWS.
+- `awsemu env`, `exec`, `shell`: `--proxy/--no-proxy`. `awsemu.toml`: `proxy = true` (`up` starts the proxy, `env`/`exec`/`shell`/`aws` use it, `down`/`stop` stop it), `proxy_port`, `faults`.
+- pytest plugin: `aws_faults` and `aws_calls` fixtures (calls of one test through an in-process proxy, with `.add()`, `.calls`, `.operations()`, `.errors()`, `.client()`), `aws_proxy`, and `--awsemu-proxy` / `awsemu_proxy = true` for every test.
+- `cryptography` is now a dependency (the proxy's certificate).
+
 ## 0.8.1 — 2026-11-16
 
 Fixes found by running v0.8.0 against AWS's real data in CI.

@@ -22,6 +22,8 @@ sdk = ["node"]             # node | java | rust | dotnet: trust the certificate 
 image = "aws-emulator"     # Docker image
 memory = "2g"              # Docker memory limit
 emulator_version = "1.0.385"  # the emulator version the team and CI use (awsemu install)
+proxy = true               # awsemu up also starts the proxy; env/exec/shell go through it
+faults = ["dynamodb=throttle@5%"]  # fault rules for that proxy
 ```
 
 Every key is optional.
@@ -37,6 +39,9 @@ Every key is optional.
 | `sdk` | list | Certificate extras in `env`, `exec` and `shell` | none |
 | `image` | text | Docker image | `aws-emulator` |
 | `memory` | text | Docker memory limit | `2g` |
+| `proxy` | true/false | `awsemu up` also starts [the proxy](proxy.md) (calls log, faults); `env`, `exec`, `shell` and `aws` go through it when it's running; `down`/`stop` stop it; pytest sends every test through one | `false` |
+| `proxy_port` | number | The proxy's port (0 = any free one) | the emulator's + 1 |
+| `faults` | list of rules | [Fault rules](proxy.md#fault-rules) for that proxy and for pytest with `proxy = true` | none |
 | `emulator_version` | text (`1.0.385`) | The emulator version for this project: `start`/`up` warn if the installed one differs, Docker mode uses `aws-emulator:<version>`, `check`/`fidelity` use its data, the GitHub Action installs it. Set it with `awsemu install VERSION --pin`; see [compatibility.md](compatibility.md#awsemu-install-and-emulator_version) | none |
 
 ### In `pyproject.toml`

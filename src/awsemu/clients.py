@@ -57,7 +57,9 @@ def _session(port: int):
     return _session_for(*read_credentials(port))
 
 
-def client(service: str, port: int):
+def client(service: str, port: int, endpoint_url: str | None = None, ca: str | None = None):
+    """A boto3 client for the emulator on ``port`` (or, with ``endpoint_url``/``ca``, the
+    proxy in front of it: same credentials, another address and certificate)."""
     files = ensure_running(port)
     from botocore.config import Config
 
@@ -68,8 +70,8 @@ def client(service: str, port: int):
         connect_timeout=3,
         read_timeout=30,
     )
-    return _session(port).client(service, endpoint_url=files.endpoint_url,
-                                 verify=str(files.ca), config=config)
+    return _session(port).client(service, endpoint_url=endpoint_url or files.endpoint_url,
+                                 verify=ca or str(files.ca), config=config)
 
 
 def error_code(exc: Exception) -> tuple[str, str]:

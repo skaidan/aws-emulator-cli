@@ -16,7 +16,7 @@ Everything on this page is a stable interface: scripts can rely on it.
 | `0` | OK | The command did what was asked. |
 | `1` | FAILED | It ran, but something failed: an AWS error, a Lambda function or Step Functions execution that failed, a resource not found (`ddb get`, `ssm rm`), a seed resource that couldn't be applied, the emulator not starting, `doctor` finding a problem, `check --strict` finding known differences. |
 | `2` | USAGE | Nothing was done: wrong arguments or options, invalid JSON in an argument, an invalid seed or `awsemu.toml`. |
-| `3` | NOT_HEALTHY | Only `awsemu status`: the emulator isn't running or isn't healthy. |
+| `3` | NOT_HEALTHY | Only `awsemu status` (the emulator isn't running or isn't healthy) and `awsemu proxy status` (no proxy running). |
 
 Commands that run another program return **that program's** exit code: `exec`, `aws`, `shell`, `start -f` (the emulator in the foreground) and `image build` (Docker).
 
@@ -29,7 +29,7 @@ awsemu seed validate seed.yaml; [ $? -eq 2 ] && echo "fix the seed"
 ## JSON conventions
 
 - `--json` prints one JSON document to standard output (`kinesis read --json` prints one object per line, see below). Warnings and errors go to standard error.
-- **awsemu's own summaries** (`status`, `overview`, `doctor`, `fidelity`, `check`, `install --list`, `sqs ls`, `sns ls`, `ddb ls`, `kinesis read`) use `snake_case` keys.
+- **awsemu's own summaries** (`status`, `overview`, `doctor`, `fidelity`, `check`, `install --list`, `proxy status`, `proxy calls`, `proxy faults`, `sqs ls`, `sns ls`, `ddb ls`, `kinesis read`) use `snake_case` keys.
 - **AWS resources passed through** keep AWS's own field names (`PascalCase` or `camelCase`, as the AWS API returns them): buckets, objects, messages, functions, state machines, executions, rules, buses, subscriptions, secrets, parameters, streams.
 - Dates are ISO 8601 strings (`2026-11-16T12:00:00+00:00`). Numbers stored by DynamoDB come out as JSON numbers; binary data as base64.
 - `null` means "not known" or "doesn't apply" (for example `pid` when awsemu didn't start the emulator).
@@ -153,6 +153,36 @@ An object keyed by AWS service name (`s3`, `sqs`, `dynamodb`, `sns`, `lambda`, `
 ```
 
 With `--strict`, the exit code is 1 when `operations_with_differences` isn't 0.
+
+### `awsemu proxy calls --json`
+
+A list of calls, oldest first (`--follow --json`: one object per line, as they happen):
+
+```json
+[
+  {"id": 12, "time": "2026-11-25T10:42:01.140+00:00",
+   "service": "dynamodb", "operation": "PutItem", "resource": "orders",   // "" when unknown
+   "method": "POST", "path": "/", "status": 400,
+   "error": "ThrottlingException",          // AWS error code, null when it succeeded
+   "latency_ms": 1.1, "request_id": "…",
+   "fault": "dynamodb=throttle@10%",        // the fault rule(s) that changed it, else null
+   "bytes_in": 52, "bytes_out": 98}
+]
+```
+
+The same objects are in `~/.aws/emulator-cli/proxy/<port>/calls.jsonl`, and in `.calls` of the pytest fixtures.
+
+### `awsemu proxy status --json`
+
+```json
+{"running": true, "emulator_port": 9297, "port": 9298, "endpoint_url": "https://127.0.0.1:9298",
+ "pid": 4242, "ca": "/home/me/.aws/emulator-cli/proxy/ca.pem", "calls": 12,
+ "faults": ["dynamodb=throttle@10%"], "calls_file": "…/calls.jsonl"}
+```
+
+Not running: `{"running": false, "emulator_port": 9297}` and exit code 3.
+
+`awsemu proxy faults --json`: `[{"rule": "dynamodb=throttle@10%", "hits": 3}]`.
 
 ### `awsemu install --list --json`
 

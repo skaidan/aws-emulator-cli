@@ -58,3 +58,10 @@ def handle_errors(fn):
             raise
 
     return wrapper
+
+
+def proxy_option(fn):
+    """``--proxy/--no-proxy`` for commands that point a program at the emulator."""
+    return click.option("--proxy/--no-proxy", "use_proxy", default=None,
+                        help="Go through the running proxy (default: yes when awsemu.toml has proxy = true "
+                             "and it's running).")(fn)

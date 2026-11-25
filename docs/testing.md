@@ -5,7 +5,7 @@ The emulator is ideal for integration tests: no AWS account needed, it starts in
 | Where | How |
 | --- | --- |
 | pytest | [Plugin](#pytest-plugin): `aws_emulator` fixture, no setup |
-| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.8.1` |
+| GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.9.0` |
 | Anywhere else | [Scripts](#scripts) with `awsemu start`/`exec`/`stop`, or [Docker Compose](#docker-compose) |
 
 In every case, starting data goes in a [seed](seeds.md).
@@ -34,6 +34,15 @@ def test_with_clean_state(aws_emulator_fresh):
 pytest --awsemu-seed tests/seed.yaml
 ```
 
+To test retries and error handling, `aws_faults` sends the test's calls through [the proxy](proxy.md#in-pytest) and injects faults; `aws_calls` lets you assert on the calls your code made:
+
+```python
+def test_retries_throttled_writes(aws_faults):
+    aws_faults.add("dynamodb:PutItem=throttle x2")
+    save_order({"id": "1"})
+    assert aws_faults.operations().count("dynamodb:PutItem") == 3
+```
+
 ### What `aws_emulator` does
 
 Once per pytest session:
@@ -56,6 +65,8 @@ The fixture returns an object with:
 
 `aws_emulator_fresh` is the same emulator, restarted before each test that asks for it. It's slower (a few seconds per test), so use it only where you need to start from scratch.
 
+`aws_faults`, `aws_calls` and `aws_proxy` put [a proxy](proxy.md#in-pytest) between the test and the emulator: to inject faults and to see the calls.
+
 ### Options
 
 | Command line | `pytest.ini` / `[tool.pytest.ini_options]` | What for |
@@ -64,6 +75,7 @@ The fixture returns an object with:
 | `--awsemu-port N` | `awsemu_port = 9350` | A fixed port instead of a free one |
 | `--awsemu-reuse` | `awsemu_reuse = true` | Use an emulator that's already running (`awsemu up`) instead of starting one; it isn't stopped at the end |
 | `--awsemu-docker` | `awsemu_mode = docker` | Run it in Docker |
+| `--awsemu-proxy` | `awsemu_proxy = true` | Send every test's calls through [the proxy](proxy.md#in-pytest) (with the `faults` of `awsemu.toml`) |
 
 If you don't set anything, whatever is in [`awsemu.toml`](project-config.md) is used (`seed`, `mode`, `auth`, `telemetry`, `sdk`…).
 
@@ -77,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: skaidan/aws-emulator-cli@v0.8.1
+      - uses: skaidan/aws-emulator-cli@v0.9.0
         with:
           seed: tests/seed.yaml
       - run: pytest tests/integration      # AWS_ENDPOINT_URL & co. are already set

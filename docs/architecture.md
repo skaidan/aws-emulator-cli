@@ -53,6 +53,11 @@ src/awsemu/
   check.py          manifest.jsonl download and cache; index of fidelity tests by operation;
                     the report of known differences
   install.py        versioned packages, versions.json, GPG verification, apt/rpm install plan
+  awscalls.py       recognise an AWS call from its HTTP request (service, operation, resource,
+                    error code), from botocore's service models
+  faults.py         fault rules (parse, decide) and AWS errors in each protocol's format
+  proxy.py          the HTTPS proxy: certificates, forwarding, calls log, admin API, background
+                    process (state.json), client environment
   completion.py     resource-name completion (silent and fast when the emulator doesn't answer)
   browse.py         data for awsemu ui (list and describe), with no Textual dependency
   tui.py            the Textual app (optional 'ui' extra)
@@ -60,7 +65,7 @@ src/awsemu/
   ui.py             output with Rich, or plain text if it's missing or with --plain
   commands/         one module per service: overview, s3, sqs, dynamodb, sns, lambda_,
                     secrets (secrets + ssm), events, kinesis, sfn, describe,
-                    seed (idempotent apply, export), compose, fidelity, watch, check, install
+                    seed (idempotent apply, export), compose, fidelity, watch, check, install, proxy
   commands/_common.py  service roles, queue policies, Lambda permissions, error codes
 action.yml          composite GitHub Action (verified package, awsemu, seed, variables)
 scripts/            gen_reference.py (docs/reference.md), rename.py (package/repository rename)

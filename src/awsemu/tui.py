@@ -1,7 +1,7 @@
 """``awsemu ui``: browse the emulator in the terminal (needs the ``ui`` extra: Textual).
 
 Left: services and their resources. Right: details of the selected resource.
-Keys: r refresh, w toggle auto-refresh, q quit.
+Keys: r refresh, w toggle auto-refresh, c API calls (through 'awsemu proxy'), q quit.
 """
 
 from __future__ import annotations
@@ -15,7 +15,8 @@ from rich.json import JSON
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
-from textual.widgets import Footer, Header, Static, Tree
+from textual.screen import Screen
+from textual.widgets import DataTable, Footer, Header, Static, Tree
 
 from . import browse, health
 
@@ -32,6 +33,66 @@ def _to_json(data: Any) -> str:
     return json.dumps(data, default=default, ensure_ascii=False)
 
 
+class CallsScreen(Screen):
+    """Every API call that went through the proxy, newest at the bottom, live."""
+
+    BINDINGS = [
+        Binding("c,escape", "app.pop_screen", "Resources"),
+        Binding("e", "toggle_errors", "Only errors"),
+        Binding("q", "app.quit", "Quit"),
+    ]
+    COLUMNS = ("time", "service", "operation", "resource", "result", "ms", "fault")
+
+    def __init__(self, port: int, interval: float = 1.0):
+        super().__init__()
+        self.port = port
+        self.interval = interval
+        self.position = 0
+        self.calls: list[dict] = []
+        self.errors_only = False
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=False)
+        yield Static("", id="calls-status")
+        yield DataTable(id="calls", zebra_stripes=True, cursor_type="row")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one(DataTable).add_columns(*self.COLUMNS)
+        self.poll()
+        self.set_interval(self.interval, self.poll)
+
+    def _row(self, call: dict) -> tuple:
+        result = call["error"] or str(call["status"])
+        style = "yellow" if call.get("fault") else "red" if call["error"] else ""
+        return (call["time"][11:23], call["service"], call["operation"] or call["method"],
+                call["resource"][:40], f"[{style}]{result}[/{style}]" if style else result,
+                f"{call['latency_ms']:.0f}", call.get("fault") or "")
+
+    def poll(self) -> None:
+        new, self.position, running = browse.proxy_calls(self.port, self.position)
+        self.calls = (self.calls + new)[-2000:]
+        table = self.query_one(DataTable)
+        if new:
+            for call in new:
+                if not self.errors_only or call["error"]:
+                    table.add_row(*self._row(call))
+            table.move_cursor(row=table.row_count - 1)
+        status = (f"{len(self.calls)} call(s) via the proxy in front of port {self.port}"
+                  + ("" if running else " · no proxy running: start it with 'awsemu proxy start -d'")
+                  + (" · only errors" if self.errors_only else ""))
+        self.query_one("#calls-status", Static).update(status)
+
+    def action_toggle_errors(self) -> None:
+        self.errors_only = not self.errors_only
+        table = self.query_one(DataTable)
+        table.clear()
+        for call in self.calls:
+            if not self.errors_only or call["error"]:
+                table.add_row(*self._row(call))
+        self.poll()
+
+
 class EmulatorApp(App):
     CSS = """
     #tree { width: 40%; min-width: 30; border-right: solid $primary; }
@@ -40,6 +101,7 @@ class EmulatorApp(App):
     BINDINGS = [
         Binding("r", "refresh", "Refresh"),
         Binding("w", "toggle_auto", "Auto-refresh"),
+        Binding("c", "calls", "API calls"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -114,6 +176,9 @@ class EmulatorApp(App):
     def action_refresh(self) -> None:
         self.load_tree()
         self.notify("Refreshed", timeout=1)
+
+    def action_calls(self) -> None:
+        self.push_screen(CallsScreen(self.port))
 
     def action_toggle_auto(self) -> None:
         self.auto = not self.auto

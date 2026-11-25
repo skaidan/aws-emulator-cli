@@ -311,10 +311,11 @@ def is_running(port: int) -> bool:
     return health.port_open(port)
 
 
-def _popen_detached(cmd: list[str], log_file: Path, append: bool = False) -> subprocess.Popen:
+def _popen_detached(cmd: list[str], log_file: Path, append: bool = False,
+                    env: dict[str, str] | None = None) -> subprocess.Popen:
     log_file.parent.mkdir(parents=True, exist_ok=True)
     with log_file.open("a" if append else "w", encoding="utf-8") as fh:
-        kwargs: dict = {"stdout": fh, "stderr": subprocess.STDOUT, "stdin": subprocess.DEVNULL}
+        kwargs: dict = {"stdout": fh, "stderr": subprocess.STDOUT, "stdin": subprocess.DEVNULL, "env": env}
         if IS_WINDOWS:  # pragma: no cover
             # Own process group, so Ctrl+Break can be sent to it (and only to it).
             kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]

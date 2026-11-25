@@ -547,3 +547,76 @@ def test_json_listings_against_real_emulator(emu):
     assert any(c["check"] == f"emulator :{emu}" and c["result"] == "ok" for c in doctor["checks"])
     run(emu, "ddb", "drop", "awsemu-json", "--yes")
     run(emu, "sqs", "rm", "awsemu-json-q", "--yes")
+
+
+def test_proxy_against_real_emulator(emu):
+    """Every protocol through the proxy: signatures, Host-based URLs, identification, faults."""
+    from botocore.exceptions import ClientError
+
+    from awsemu import proxy as px
+    from awsemu.clients import client
+
+    server = px.ProxyServer(emu, 0)
+    server.start_thread()
+    try:
+        def c(service):
+            return client(service, emu, endpoint_url=server.endpoint_url, ca=str(server.files.ca))
+
+        s3 = c("s3")
+        s3.create_bucket(Bucket="via-proxy")
+        s3.put_object(Bucket="via-proxy", Key="dir/a.txt", Body=b"hello")
+        assert s3.get_object(Bucket="via-proxy", Key="dir/a.txt")["Body"].read() == b"hello"
+        assert s3.head_object(Bucket="via-proxy", Key="dir/a.txt")["ContentLength"] == 5
+        url = c("sqs").create_queue(QueueName="via-proxy")["QueueUrl"]
+        c("sqs").send_message(QueueUrl=url, MessageBody="m")
+        assert c("sqs").receive_message(QueueUrl=url, WaitTimeSeconds=1)["Messages"][0]["Body"] == "m"
+        ddb = c("dynamodb")
+        ddb.create_table(TableName="via-proxy", BillingMode="PAY_PER_REQUEST",
+                         AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
+                         KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}])
+        ddb.put_item(TableName="via-proxy", Item={"id": {"S": "1"}})
+        with pytest.raises(ClientError) as exc:
+            ddb.put_item(TableName="via-proxy", Item={"id": {"S": "1"}}, ConditionExpression="attribute_not_exists(id)")
+        assert exc.value.response["Error"]["Code"] == "ConditionalCheckFailedException"
+        c("sns").create_topic(Name="via-proxy")
+        c("sts").get_caller_identity()
+        c("lambda").list_functions()
+
+        calls = server.calls_after(0)
+        print("\n" + "\n".join(f"{x['service']}:{x['operation']} {x['resource']} {x['status']} {x['error']}"
+                               for x in calls))
+        ops = [f"{x['service']}:{x['operation']}" for x in calls]
+        for expected in ("s3:CreateBucket", "s3:PutObject", "s3:GetObject", "s3:HeadObject", "sqs:CreateQueue",
+                         "sqs:SendMessage", "sqs:ReceiveMessage", "dynamodb:CreateTable", "dynamodb:PutItem",
+                         "sns:CreateTopic", "sts:GetCallerIdentity", "lambda:ListFunctions"):
+            assert expected in ops, expected
+        assert not [x for x in calls if x["status"] in (401, 403, 502)], "signature or forwarding problem"
+        failed = [x for x in calls if x["error"]]
+        assert [x["error"] for x in failed] == ["ConditionalCheckFailedException"]
+        assert next(x for x in calls if x["operation"] == "PutObject")["resource"] == "via-proxy/dir/a.txt"
+
+        server.faults.add(px.faults.parse("dynamodb:GetItem=throttle x1"),
+                          px.faults.parse("s3:GetObject=InternalError x1"))
+        assert ddb.get_item(TableName="via-proxy", Key={"id": {"S": "1"}})["Item"]
+        assert s3.get_object(Bucket="via-proxy", Key="dir/a.txt")["Body"].read() == b"hello"
+        tail = [(x["operation"], x["error"]) for x in server.calls_after(len(calls))]
+        assert tail == [("GetItem", "ThrottlingException"), ("GetItem", None),
+                        ("GetObject", "InternalError"), ("GetObject", None)]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_proxy_commands_against_real_emulator(emu, tmp_path):
+    """awsemu proxy start -d, exec --proxy with the AWS CLI-free boto3, calls, stop."""
+    run(emu, "proxy", "start", "-d", "--listen", "0", "--fault", "sqs:ListQueues=latency:200ms")
+    try:
+        script = tmp_path / "use.py"
+        script.write_text("import boto3\nboto3.client('sqs').list_queues()\nprint('ok')\n")
+        result = run(emu, "exec", "--proxy", "--", sys.executable, str(script))
+        assert result.exit_code == 0
+        calls = json.loads(run(emu, "proxy", "calls", "--json").output)
+        assert [(x["service"], x["operation"]) for x in calls][-1] == ("sqs", "ListQueues")
+        assert calls[-1]["latency_ms"] >= 200 and calls[-1]["fault"] == "sqs:ListQueues=latency:200ms"
+    finally:
+        run(emu, "proxy", "stop")

@@ -122,3 +122,68 @@ def test_to_json_handles_aws_types():
 
     data = json.loads(tui._to_json({"d": datetime(2026, 1, 1), "n": Decimal("1.5"), "b": b"x"}))
     assert data == {"d": "2026-01-01T00:00:00", "n": 1.5, "b": "x"}
+
+
+def _write_calls(port, calls):
+    import json
+
+    from awsemu import proxy as px
+
+    files = px.ProxyFiles(port)
+    files.dir.mkdir(parents=True, exist_ok=True)
+    with files.calls.open("a", encoding="utf-8") as fh:
+        for c in calls:
+            fh.write(json.dumps(c) + "\n")
+    return files
+
+
+def _call(op, error=None, fault=None, n=1):
+    return {"id": n, "time": "2026-11-25T10:00:00.123+00:00", "service": "dynamodb", "operation": op,
+            "resource": "orders", "method": "POST", "path": "/", "status": 400 if error else 200,
+            "error": error, "latency_ms": 3.2, "request_id": None, "fault": fault, "bytes_in": 1, "bytes_out": 2}
+
+
+def test_proxy_calls_tail():
+    from awsemu import browse
+
+    assert browse.proxy_calls(9297) == ([], 0, False)
+    files = _write_calls(9297, [_call("PutItem"), _call("GetItem")])
+    calls, pos, running = browse.proxy_calls(9297)
+    assert [c["operation"] for c in calls] == ["PutItem", "GetItem"] and not running
+    assert browse.proxy_calls(9297, pos) == ([], pos, False)
+    _write_calls(9297, [_call("Query")])
+    calls, pos2, _ = browse.proxy_calls(9297, pos)
+    assert [c["operation"] for c in calls] == ["Query"] and pos2 > pos
+    files.calls.write_text("")  # rotated
+    assert browse.proxy_calls(9297, pos2)[0] == []
+    assert [c["operation"] for c in browse.proxy_calls(9297, last=1)[0]] == []
+
+
+def test_textual_calls_screen(monkeypatch):
+    pytest.importorskip("textual")
+    from textual.widgets import DataTable, Static
+
+    from awsemu import tui
+
+    monkeypatch.setattr(tui.health, "check", lambda port: type("H", (), {"healthy": False})())
+    _write_calls(9297, [_call("PutItem"), _call("GetItem", "ThrottlingException", "dynamodb=throttle")])
+
+    async def scenario():
+        app = tui.EmulatorApp(port=9297)
+        async with app.run_test() as pilot:
+            await pilot.press("c")
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, tui.CallsScreen)
+            table = screen.query_one(DataTable)
+            assert table.row_count == 2
+            assert "no proxy running" in str(screen.query_one("#calls-status", Static).render())
+            _write_calls(9297, [_call("Query", n=3)])
+            screen.poll()
+            assert table.row_count == 3
+            await pilot.press("e")
+            assert table.row_count == 1
+            await pilot.press("escape")
+            assert not isinstance(app.screen, tui.CallsScreen)
+
+    asyncio.run(scenario())

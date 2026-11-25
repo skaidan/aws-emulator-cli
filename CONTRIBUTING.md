@@ -72,6 +72,12 @@ Variables to trigger odd cases: `FAKE_EMULATOR_CRASH=1` (exits with code 1) and 
 
 They're a stable interface (`docs/scripting.md`). Adding a field is fine. Renaming, removing or changing the type of one, or changing an exit code, is a breaking change: update `tests/test_json_contract.py` and `docs/scripting.md`, and list it under **Breaking** in the CHANGELOG.
 
+## The proxy
+
+- `awscalls.py` recognises calls from botocore's service models (signing names, `X-Amz-Target` prefixes, REST URI templates), so it needs no table of services. Add a case to `tests/test_awscalls.py` (it builds the exact request botocore sends) when a service isn't recognised.
+- Injected errors must be read by the SDKs as the real thing: `tests/test_faults.py` feeds each protocol's error to botocore's parser and its retry rules. Keep it passing when you touch `faults.error_response`.
+- `tests/test_proxy.py` runs boto3 → proxy → a fake AWS over HTTPS (also the CLI and the pytest fixtures); `tests/test_real.py` does it against the real emulator in CI.
+
 ## Fidelity data and `awsemu check`
 
 - `check` and `fidelity` work with two public files: `scores.json.gz` (attached to each [emulator release](https://github.com/aws/aws-emulator/releases)) and `manifest.jsonl` (in the [fidelity tests repository](https://github.com/aws/aws-emulator-evaluation-suite)). Tests use small synthetic files with the same shape (`tests/test_check.py`, `tests/test_fidelity.py`); CI runs `check` against the real ones.

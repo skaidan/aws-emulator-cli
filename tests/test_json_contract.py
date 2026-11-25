@@ -227,3 +227,37 @@ def test_install_list(runner, monkeypatch):
     monkeypatch.setattr(fid, "installed_version", lambda binary=None: None)
     assert run_json(runner, "install", "--list", "--json") == {
         "versions": ["1.0.390"], "installed": None, "pinned": None}
+
+
+CALL_KEYS = {"id", "time", "service", "operation", "resource", "method", "path", "status", "error",
+             "latency_ms", "request_id", "fault", "bytes_in", "bytes_out"}
+
+
+def test_proxy(runner, monkeypatch):
+    from awsemu import proxy as px
+
+    files = px.ProxyFiles(9297)
+    files.dir.mkdir(parents=True)
+    call = {k: None for k in CALL_KEYS} | {"id": 1, "time": "2026-11-25T10:00:00.000+00:00",
+                                           "service": "s3", "operation": "GetObject", "resource": "b/k",
+                                           "method": "GET", "path": "/b/k", "status": 200, "latency_ms": 1.0,
+                                           "bytes_in": 0, "bytes_out": 5}
+    files.calls.write_text(json.dumps(call) + "\n")
+    calls = run_json(runner, "--port", "9297", "proxy", "calls", "--json")
+    assert len(calls) == 1 and set(calls[0]) == CALL_KEYS
+
+    result = runner.invoke(cli, ["--port", "9297", "proxy", "status", "--json"])
+    assert result.exit_code == 3
+    assert json.loads(result.output) == {"running": False, "emulator_port": 9297}
+
+    state = {"pid": 1, "port": 9298, "endpoint_url": "https://127.0.0.1:9298", "ca": "/ca.pem",
+             "calls": str(files.calls)}
+    monkeypatch.setattr(px, "running", lambda port: state)
+    answers = {"health": {"ok": True, "emulator_port": 9297, "calls": 1},
+               "faults": {"rules": [{"spec": "s3=503", "hits": 2}]}}
+    monkeypatch.setattr(px, "admin", lambda st, method, route, payload=None, timeout=10: answers[route])
+    data = run_json(runner, "--port", "9297", "proxy", "status", "--json")
+    assert set(data) == {"running", "emulator_port", "port", "endpoint_url", "pid", "ca", "calls", "faults",
+                         "calls_file"}
+    assert data["faults"] == ["s3=503"]
+    assert run_json(runner, "--port", "9297", "proxy", "faults", "--json") == [{"rule": "s3=503", "hits": 2}]

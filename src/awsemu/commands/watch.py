@@ -154,14 +154,17 @@ def _print_event(sign: str, kind: str, name: str, detail: str) -> None:
 
 
 @click.command()
-@click.option("-s", "--service", "services", multiple=True, type=click.Choice(sorted(COLLECTORS)),
-              help="Only these services. Repeatable (default: all).")
+@click.option("-s", "--service", "services", multiple=True, metavar="NAME",
+              help=f"Only these services. Repeatable (default: all; resources: {', '.join(sorted(COLLECTORS))}).")
 @click.option("-i", "--interval", type=click.FloatRange(0.5, 3600), default=2, show_default=True,
               metavar="SECONDS", help="Time between looks.")
 @click.option("--once", is_flag=True, help="Print the current state and exit.")
+@click.option("--calls", is_flag=True,
+              help="Show every API call instead (service, operation, result, latency), through the proxy.")
+@click.option("--errors", "errors_only", is_flag=True, help="With --calls: only failed calls.")
 @pass_ctx
 @handle_errors
-def watch(c: Ctx, services, interval: float, once: bool):
+def watch(c: Ctx, services, interval: float, once: bool, calls: bool, errors_only: bool):
     """Show resources being created, deleted or changed, live (Ctrl+C to stop).
 
     Buckets show their object count, queues their visible messages and tables
@@ -170,7 +173,21 @@ def watch(c: Ctx, services, interval: float, once: bool):
     \b
       awsemu watch
       awsemu watch -s sqs -s dynamodb -i 1
+      awsemu watch --calls            # API calls, through 'awsemu proxy'
+      awsemu watch --calls --errors -s dynamodb
+
+    The emulator doesn't log API calls, so --calls needs the proxy
+    ('awsemu proxy start -d', and your code going through it).
     """
+    if calls:
+        from .proxy import show_calls
+
+        show_calls(c.port, 20, follow=not once, services=set(services), errors_only=errors_only, as_json=False)
+        return
+    unknown = [s for s in services if s not in COLLECTORS]
+    if unknown:
+        raise click.BadParameter(f"{', '.join(unknown)} (choose from {', '.join(sorted(COLLECTORS))}, "
+                                 "or use --calls)", param_hint="'--service'")
     h = health.check(c.port)
     if not h.healthy:
         from ..runtime import RuntimeErrorWithHint

@@ -97,14 +97,14 @@ Goal: answer before you start, and upgrade the emulator without surprises.
 - ✅ **`awsemu fidelity --compare VERSION`**: tests fixed, regressed, added and removed between two releases, per service; `--mine` for the services your project uses.
 - ✅ **`awsemu install [VERSION]`**: the Linux package of any published version (GPG signature and key fingerprint checked, downgrades allowed), or a Docker image `aws-emulator:<version>`; `--list`, `--dry-run`, `--pin`. `emulator_version` in `awsemu.toml`: `start`, `up` and `doctor` warn on a different installed version, Docker mode uses the matching image, `check`/`fidelity` use its data, and the GitHub Action installs it (or its new `emulator-version` input).
 
-## v0.9 — Proxy: see the calls and inject faults
+## v0.9 — Proxy: see the calls and inject faults ✅
 
 Goal: what the emulator doesn't provide. It doesn't log API calls (checked in CI, v0.6) and, according to analysts, doesn't simulate throttling or outages.
 
-- ⬜ **`awsemu proxy`**: a local proxy between your application and the emulator, with its own certificate, logging every call (service, operation, resource, latency, error code).
-- ⬜ **`awsemu watch --calls`** and a calls view in `awsemu ui`, fed by the proxy.
-- ⬜ **Fault injection**: rules such as "`ThrottlingException` on 10% of DynamoDB calls" or "500 ms of latency on S3", configurable per command and in `awsemu.toml`, to test retries and resilience.
-- ⬜ pytest plugin integration (a fixture to turn on faults for one test).
+- ✅ **`awsemu proxy`**: a local HTTPS proxy between your code and the emulator, with its own stable certificate, logging every call (service, operation, resource, status, AWS error code, latency) to `calls.jsonl`. Calls are recognised from botocore's service models (every protocol: JSON, REST-JSON, REST-XML, query, EC2, CBOR). `start [-d]`, `stop`, `status`, `calls`; `env`/`exec`/`shell` `--proxy`; `proxy = true` in `awsemu.toml` makes `up` start it and the other commands use it.
+- ✅ **`awsemu watch --calls`** and a calls view in `awsemu ui` (key `c`), fed by the proxy.
+- ✅ **Fault injection**: rules like `dynamodb=throttle@10%`, `s3=latency:500ms`, `sqs:SendMessage=503@5%x3`, `reset`; per command (`--fault`, `awsemu proxy faults add/set/clear` while it runs) and in `awsemu.toml` (`faults`). Errors are written in each API's protocol, so SDKs raise the real exception and retry as they would against AWS (checked against botocore's parsers and retry rules).
+- ✅ pytest plugin integration: `aws_faults` (faults for one test, removed after it), `aws_calls` (assert on the calls your code made), `aws_proxy`, and `--awsemu-proxy` for a whole session.
 
 ## v0.10 — Completing what exists
 

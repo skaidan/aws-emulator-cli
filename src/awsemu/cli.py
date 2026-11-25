@@ -14,7 +14,7 @@ import click
 
 from . import exitcodes
 from . import __version__, _meta, envvars, health, logs, project, runtime, settings, ui
-from .context import Ctx, handle_errors, pass_ctx, json_option
+from .context import Ctx, handle_errors, json_option, pass_ctx, proxy_option
 from .paths import ACCOUNT_ID, InstanceFiles, default_port, emulator_settings_file, known_ports
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"], "max_content_width": 100}
@@ -228,7 +228,11 @@ def stop(c: Ctx, all_: bool, force: bool, timeout: float):
     ports = _all_ports() if all_ else [c.port]
     if not ports:
         ui.echo("No instances found.", "muted")
+    from . import proxy as px
+
     for port in ports:
+        if px.stop(port):
+            ui.echo(f"Port {port}: proxy stopped.", "muted")
         result = runtime.stop(port, timeout=timeout, force=force)
         if result.startswith("not running"):
             ui.echo(f"Port {port}: {result}.", "muted")
@@ -290,9 +294,24 @@ def up(c: Ctx, seed_file: str | None, no_seed: bool, wait: float):
         ui.success(f"AWS Emulator is already running at https://127.0.0.1:{c.port}")
         if seed is not None:
             run_apply(seed, c.port)
+    else:
+        _do_start(c.port, docker=False, native=False, auth=None, telemetry=None, idle_timeout=None,
+                  image=None, memory=None, wait=wait, foreground=False, extra=(), seed=seed)
+    if proj and proj.proxy:
+        _up_proxy(c.port, proj)
+
+
+def _up_proxy(port: int, proj) -> None:
+    from . import proxy as px
+    from .commands.proxy import default_listen
+
+    state = px.running(port)
+    if state:
+        ui.success(f"Proxy already running at {state['endpoint_url']}")
         return
-    _do_start(c.port, docker=False, native=False, auth=None, telemetry=None, idle_timeout=None,
-              image=None, memory=None, wait=wait, foreground=False, extra=(), seed=seed)
+    state = px.start_detached(port, default_listen(port), proj.faults)
+    ui.success(f"Proxy started at {state['endpoint_url']}"
+               + (f" with faults: {', '.join(proj.faults)}" if proj.faults else ""))
 
 
 @cli.command()
@@ -435,9 +454,11 @@ def logs_cmd(c: Ctx, follow: bool, lines: int, raw: bool, grep: str | None):
 @click.option("--unset", is_flag=True, help="Print the commands that undo 'awsemu env'.")
 @click.option("--keep-real-creds", is_flag=True,
               help="Don't unset AWS_ACCESS_KEY_ID & co. (requests will then fail auth).")
+@proxy_option
 @pass_ctx
 @handle_errors
-def env(c: Ctx, shell: str | None, extras: tuple[str, ...], unset: bool, keep_real_creds: bool):
+def env(c: Ctx, shell: str | None, extras: tuple[str, ...], unset: bool, keep_real_creds: bool,
+        use_proxy: bool | None):
     """Print shell commands that point the AWS CLI and SDKs at the emulator.
 
     \b
@@ -449,6 +470,8 @@ def env(c: Ctx, shell: str | None, extras: tuple[str, ...], unset: bool, keep_re
     """
     shell = shell or envvars.detect_shell()
     variables = envvars.emulator_env(c.port, _sdk(extras))
+    if not unset:
+        variables.update(_proxy_env(c.port, use_proxy, _sdk(extras)))
     if unset:
         names = list(variables) + ["NODE_EXTRA_CA_CERTS", "JAVA_TOOL_OPTIONS", "SSL_CERT_FILE"]
         click.echo(envvars.render_unset(dict.fromkeys(names), shell), nl=False)
@@ -464,19 +487,23 @@ def env(c: Ctx, shell: str | None, extras: tuple[str, ...], unset: bool, keep_re
 @click.argument("command", nargs=-1, required=True, type=click.UNPROCESSED)
 @click.option("--sdk", "extras", multiple=True, type=click.Choice(envvars.EXTRAS),
               help="Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable.")
+@proxy_option
 @pass_ctx
 @handle_errors
-def exec_cmd(c: Ctx, command: tuple[str, ...], extras):
+def exec_cmd(c: Ctx, command: tuple[str, ...], extras, use_proxy: bool | None):
     """Run COMMAND with the environment pointed at the emulator.
 
     \b
       awsemu exec -- pytest -k integration
       awsemu exec -- terraform apply
       awsemu exec --sdk node -- npm test
+      awsemu exec --proxy -- pytest       # through the proxy (calls log, faults)
     """
     _require_healthy(c.port)
+    child = envvars.child_env(c.port, extras=_sdk(extras))
+    child.update(_proxy_env(c.port, use_proxy, _sdk(extras)))
     try:
-        code = subprocess.call(list(command), env=envvars.child_env(c.port, extras=_sdk(extras)))
+        code = subprocess.call(list(command), env=child)
     except FileNotFoundError:
         raise runtime.RuntimeErrorWithHint(f"Command not found: {command[0]}")
     sys.exit(code)
@@ -485,9 +512,10 @@ def exec_cmd(c: Ctx, command: tuple[str, ...], extras):
 @cli.command()
 @click.option("--sdk", "extras", multiple=True, type=click.Choice(envvars.EXTRAS),
               help="Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable.")
+@proxy_option
 @pass_ctx
 @handle_errors
-def shell(c: Ctx, extras):
+def shell(c: Ctx, extras, use_proxy: bool | None):
     """Open a sub-shell already pointed at the emulator ('exit' to leave)."""
     _require_healthy(c.port)
     if os.name == "nt":  # pragma: no cover
@@ -495,10 +523,13 @@ def shell(c: Ctx, extras):
     else:
         program = [os.environ.get("SHELL", "/bin/sh")]
     child = envvars.child_env(c.port, extras=_sdk(extras))
+    through = _proxy_env(c.port, use_proxy, _sdk(extras))
+    child.update(through)
     child["AWSEMU_ACTIVE"] = str(c.port)
     if os.path.basename(program[0]) == "bash":
         child["PS1"] = f"(awsemu:{c.port}) " + os.environ.get("PS1", r"\u@\h:\w\$ ")
-    ui.info(f"Sub-shell pointed at https://127.0.0.1:{c.port}. Type 'exit' to leave.")
+    ui.info(f"Sub-shell pointed at {through.get('AWS_ENDPOINT_URL', f'https://127.0.0.1:{c.port}')}"
+            f"{' (the proxy)' if through else ''}. Type 'exit' to leave.")
     code = subprocess.call(program, env=child)
     ui.echo("Left the awsemu shell.", "muted")
     sys.exit(code)
@@ -511,13 +542,41 @@ def shell(c: Ctx, extras):
 @pass_ctx
 @handle_errors
 def aws_cmd(c: Ctx, args: tuple[str, ...]):
-    """Run the AWS CLI against the emulator: 'awsemu aws s3 ls'."""
+    """Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
+
+    Goes through the proxy when awsemu.toml has proxy = true and it's running.
+    """
     if not shutil.which("aws"):
         raise runtime.RuntimeErrorWithHint(
             "The AWS CLI ('aws') is not installed.",
             "Install AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html")
     _require_healthy(c.port)
-    sys.exit(subprocess.call(["aws", *args], env=envvars.child_env(c.port)))
+    child = envvars.child_env(c.port)
+    child.update(_proxy_env(c.port, None, []))
+    sys.exit(subprocess.call(["aws", *args], env=child))
+
+
+def _proxy_env(port: int, use_proxy: bool | None, extras) -> dict[str, str]:
+    """Variables that send the SDKs to the proxy, when asked (or set up in the project)."""
+    from . import proxy as px
+
+    if use_proxy is False:
+        return {}
+    state = px.running(port)
+    if use_proxy is None:
+        proj = project.load()
+        if not (proj and proj.proxy and state):
+            return {}
+    if not state:
+        raise runtime.RuntimeErrorWithHint(f"no proxy is running in front of port {port}",
+                                           "Start one with: awsemu proxy start -d")
+    env = px.client_env(state)
+    if state.get("ca") and "node" in extras:
+        env["NODE_EXTRA_CA_CERTS"] = state["ca"]
+    if state.get("ca") and "java" in extras:
+        ui.warn("Java ignores AWS_CA_BUNDLE: import the proxy's certificate into your truststore "
+                f"(keytool -importcert -file {state['ca']}) or start the proxy with --no-tls")
+    return env
 
 
 def _sdk(extras) -> list[str]:
@@ -777,6 +836,7 @@ from .commands import dynamodb as _dynamodb  # noqa: E402
 from .commands import events as _events  # noqa: E402
 from .commands import fidelity as _fidelity  # noqa: E402
 from .commands import install as _install  # noqa: E402
+from .commands import proxy as _proxy  # noqa: E402
 from .commands import kinesis as _kinesis  # noqa: E402
 from .commands import overview as _overview  # noqa: E402
 from .commands import lambda_ as _lambda  # noqa: E402
@@ -805,6 +865,7 @@ cli.add_command(_compose.compose)
 cli.add_command(_fidelity.fidelity)
 cli.add_command(_check.check)
 cli.add_command(_install.install)
+cli.add_command(_proxy.proxy)
 cli.add_command(_watch.watch)
 
 
