@@ -71,10 +71,15 @@ def tag_for(release: str) -> str:
 # --------------------------------------------------------------------------- download
 
 
-def _get(url: str, accept: str = "application/vnd.github+json", gzip_ok: bool = False) -> bytes:
+def _get(url: str, accept: str = "application/vnd.github+json", gzip_ok: bool = False,
+         first_bytes: int | None = None) -> bytes:
+    """GET ``url``. ``first_bytes`` asks for only the start of the file (a Range request);
+    servers that ignore it send the whole file, which is fine too."""
     headers = {"Accept": accept, "User-Agent": "awsemu"}
     if gzip_ok:
         headers["Accept-Encoding"] = "gzip"
+    if first_bytes:
+        headers["Range"] = f"bytes=0-{first_bytes - 1}"
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token and "api.github.com" in url:
         headers["Authorization"] = f"Bearer {token}"

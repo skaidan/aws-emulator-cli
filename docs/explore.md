@@ -10,6 +10,7 @@ Tools to see what's inside the emulator, what's happening, and how far you can t
 | See live changes while my app works | `awsemu watch` |
 | Know how well a service is emulated | `awsemu fidelity` |
 | Know whether my project will work, or what an upgrade changes | `awsemu check`, `awsemu fidelity --compare` ([guide](compatibility.md)) |
+| See what AWS already knows is wrong in a service | `awsemu issues SERVICE` ([guide](compatibility.md#awsemu-issues)) |
 | See one specific resource | `awsemu describe ARN` |
 | Type less | `awsemu completion` |
 

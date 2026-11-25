@@ -836,6 +836,7 @@ from .commands import dynamodb as _dynamodb  # noqa: E402
 from .commands import events as _events  # noqa: E402
 from .commands import fidelity as _fidelity  # noqa: E402
 from .commands import install as _install  # noqa: E402
+from .commands import issues as _issues  # noqa: E402
 from .commands import proxy as _proxy  # noqa: E402
 from .commands import kinesis as _kinesis  # noqa: E402
 from .commands import overview as _overview  # noqa: E402
@@ -865,6 +866,7 @@ cli.add_command(_compose.compose)
 cli.add_command(_fidelity.fidelity)
 cli.add_command(_check.check)
 cli.add_command(_install.install)
+cli.add_command(_issues.issues)
 cli.add_command(_proxy.proxy)
 cli.add_command(_watch.watch)
 

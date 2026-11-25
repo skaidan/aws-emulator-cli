@@ -222,7 +222,8 @@ def test_analyze_lists_known_differences(project, index):
     assert len(first["differences"]) == 1 and first["differences"][0]["test"] == "ddb-tx-1"
     assert first["differences"][0]["expected"] == "400 ValidationException"
     assert data["summary"] == {"operations": 7, "services": len(report.services),
-                               "operations_with_differences": 2, "differences": 3}
+                               "operations_with_differences": 2, "differences": 2,  # orders-flow is in both
+                               "explained_by_issues": None, "fixed_in_latest": None, "latest": None}
 
 
 def test_differences_link_to_the_tests_version(project, index):
@@ -293,27 +294,27 @@ def cached(isolated_home, monkeypatch):
 
 
 def test_command_text(runner, cached, project):
-    result = runner.invoke(cli, ["check", str(project)])
+    result = runner.invoke(cli, ["check", str(project), "--no-explain"])
     assert result.exit_code == 0, result.output
     out = result.output
     assert "v1.0.385" in out and "fidelity tests  v1.0.0" in out
     assert "dynamodb:TransactWriteItems" in out
     assert "ddb-tx-1  fails here (step 2/2): AWS 400 ValidationException, emulator 200" in out
     assert "dynamodb.orders-flow  fails; calls only operations you use" in out
-    assert "2 of 7 operation(s) you use have known differences" in out
+    assert "2 of 7 operation(s) you use have known differences (2 failing test(s))" in out
     assert "aws_dynamodb_table (infra/main.tf)" in out
 
 
 def test_command_json_and_strict(runner, cached, project):
-    result = runner.invoke(cli, ["check", str(project), "--json"])
+    result = runner.invoke(cli, ["check", str(project), "--json", "--no-explain"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["release"] == "v1.0.385" and data["suite"] == "v1.0.0"
     assert data["summary"]["operations_with_differences"] == 2
 
-    strict = runner.invoke(cli, ["check", str(project), "--strict"])
+    strict = runner.invoke(cli, ["check", str(project), "--strict", "--no-explain"])
     assert strict.exit_code == 1
-    clean = runner.invoke(cli, ["check", str(project / "svc"), "--strict"])
+    clean = runner.invoke(cli, ["check", str(project / "svc"), "--strict", "--no-explain"])
     assert clean.exit_code == 0, clean.output
     assert "No known differences for the 2 operation(s) you use" in clean.output
 
@@ -321,14 +322,14 @@ def test_command_json_and_strict(runner, cached, project):
 def test_command_local_manifest_file(runner, cached, project, tmp_path):
     path = tmp_path / "manifest.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in MANIFEST))
-    result = runner.invoke(cli, ["check", str(project / "app"), "--manifest", str(path), "--json"])
+    result = runner.invoke(cli, ["check", str(project / "app"), "--manifest", str(path), "--json", "--no-explain"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["suite"] == "manifest.jsonl"
 
 
 def test_command_nothing_found(runner, cached, tmp_path):
     (tmp_path / "empty").mkdir()
-    result = runner.invoke(cli, ["check", str(tmp_path / "empty")])
+    result = runner.invoke(cli, ["check", str(tmp_path / "empty"), "--no-explain"])
     assert result.exit_code == 0
     assert "found no AWS SDK calls" in result.output
 
@@ -340,7 +341,7 @@ def test_release_defaults_to_the_project_pin(runner, cached, project, monkeypatc
     (d / "suite-tags.json").write_text(json.dumps({"latest": "v1.0.0"}))
     (project / "awsemu.toml").write_text('emulator_version = "1.0.390"\n')
     monkeypatch.chdir(project)
-    result = runner.invoke(cli, ["check", "--json"])
+    result = runner.invoke(cli, ["check", "--json", "--no-explain"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["release"] == "v1.0.390"

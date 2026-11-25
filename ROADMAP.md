@@ -106,15 +106,15 @@ Goal: what the emulator doesn't provide. It doesn't log API calls (checked in CI
 - ✅ **Fault injection**: rules like `dynamodb=throttle@10%`, `s3=latency:500ms`, `sqs:SendMessage=503@5%x3`, `reset`; per command (`--fault`, `awsemu proxy faults add/set/clear` while it runs) and in `awsemu.toml` (`faults`). Errors are written in each API's protocol, so SDKs raise the real exception and retry as they would against AWS (checked against botocore's parsers and retry rules).
 - ✅ pytest plugin integration: `aws_faults` (faults for one test, removed after it), `aws_calls` (assert on the calls your code made), `aws_proxy`, and `--awsemu-proxy` for a whole session.
 
-## v0.10 — Completing what exists
+## v0.10 — Completing what exists 🚧
 
 Goal: close the known gaps in what's already done.
 
 - ⬜ **CI against every new emulator release**: a scheduled job (daily) that installs the latest emulator and runs the real-emulator tests, opening an issue when something breaks. The emulator ships very often (1.0.471 to 1.0.611 in nine days), and today we only find out on our next commit.
 - ⬜ **Emulator with auth off**: `awsemu env`/`exec` don't set any credentials when `auth = false` (the emulator writes no credentials file), so the SDKs either fail with "unable to locate credentials" or sign with your real default profile from `~/.aws/credentials`. Set placeholder keys in that case, as `awsemu`'s own clients already do.
-- ⬜ **Explain known differences with AWS's own issue files.** The emulator repository tracks every gap it knows in `issues/` (about 3,800 open in `things-that-do-not-work/`, 20,000 fixed in `things-that-now-work/`), each with its severity, the operation, the failing test ids, what AWS does, what the emulator does and the expected fix. Use them:
-  - `awsemu check` shows, for each known difference, the issue that explains it, instead of only "fails here";
-  - `awsemu issues [SERVICE[:Operation]] [--fixed-since VERSION]` to search them, and to see what was fixed since your emulator version (a reason to upgrade).
+- ✅ **Explain known differences with AWS's own issue files.** The emulator repository tracks every gap it knows in `issues/` (about 3,800 open in `things-that-do-not-work/`, 20,000 fixed in `things-that-now-work/`), each with its severity, the operation, the failing test ids, what AWS does, what the emulator does and the expected fix. Use them:
+  - `awsemu check` shows, for each known difference, the issue that explains it, and whether the latest release already fixes it (from its scores);
+  - `awsemu issues [SERVICE[:Operation]] [--fixed] [--severity] [--search] [--show N]` to search them, and see which fixes came after your emulator version.
 - ⬜ **Common setup traps in `awsemu doctor`**: `AWS_ENDPOINT_URL` with `localhost` instead of `127.0.0.1` (the JavaScript, Java and Go SDKs then put the S3 bucket in the host name), real credentials or `AWS_PROFILE` in the environment, a stale `AWS_CA_BUNDLE` from an earlier start, and settings of your own `~/.aws/config` (retries, S3 options) that `AWS_CONFIG_FILE` hides while you use the emulator.
 - ⬜ **Seeds with more services**: Lambda functions (from local code), EventBridge rules, Kinesis streams and Step Functions state machines, in `seed export` too.
 - ⬜ **`awsemu snapshot save/restore`**: save and restore a whole scenario (the emulator has no snapshots), built on `seed export` and `reset --seed`.

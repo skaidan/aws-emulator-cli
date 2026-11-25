@@ -52,9 +52,12 @@ def _difference_line(d: chk.Difference) -> str:
 @click.option("--strict", is_flag=True,
               help="Exit with code 1 when an operation you use has known differences (for CI).")
 @click.option("--refresh", is_flag=True, help="Download scores and manifest again instead of using the cache.")
+@click.option("--no-explain", is_flag=True,
+              help="Don't look up what explains each difference: the emulator's issue files and whether "
+                   "the latest release fixes it (no extra downloads).")
 @json_option
 @handle_errors
-def check(paths, release, manifest_ref, show_all, strict, refresh, as_json):
+def check(paths, release, manifest_ref, show_all, strict, refresh, no_explain, as_json):
     """Find the AWS operations your project uses and the known emulator differences for them.
 
     \b
@@ -85,6 +88,21 @@ def check(paths, release, manifest_ref, show_all, strict, refresh, as_json):
     index = chk.Index(scores, manifest)
     result = sc.scan(list(paths) or [Path(".")], index.known_services)
     report = chk.analyze(result, index, tag, suite)
+    if not no_explain and report.with_differences:
+        from .. import issues as iss
+
+        try:
+            chk.attach_issues(report, refresh=refresh)
+        except iss.IssuesError as exc:
+            if not as_json:
+                ui.warn(f"{exc} (the differences are listed without explanations; --no-explain skips this)")
+        if release != "latest":
+            try:
+                latest_tag, latest_scores = fid.fetch("latest", refresh=refresh)
+                chk.attach_fixes(report, latest_tag, latest_scores)
+            except fid.FidelityError as exc:
+                if not as_json:
+                    ui.warn(f"couldn't compare with the latest release: {exc}")
     limit = None if show_all else 3
     failed = strict and bool(report.with_differences)
 
@@ -121,6 +139,12 @@ def check(paths, release, manifest_ref, show_all, strict, refresh, as_json):
         ui.echo(f"{o.operation}: {len(o.differences)} known difference(s)", "warn")
         for d in o.differences[:limit]:
             ui.echo(f"  ✗ {_difference_line(d)}")
+            if d.fixed_in:
+                ui.echo(f"      ↳ fixed in {d.fixed_in}: awsemu install latest", "ok")
+            for issue in d.issues[:1]:
+                ui.echo(f"      ↳ known issue{f' ({issue.severity})' if issue.severity else ''}: "
+                        f"{issue.title[:140]}", "muted")
+                ui.echo(f"        {issue.file.url}", "muted")
         if limit and len(o.differences) > limit:
             ui.echo(f"  … {len(o.differences) - limit} more (--all)", "muted")
     if report.with_differences:
@@ -144,6 +168,12 @@ def check(paths, release, manifest_ref, show_all, strict, refresh, as_json):
     if report.with_differences:
         ui.warn(f"{summary['operations_with_differences']} of {summary['operations']} operation(s) "
                 f"you use have known differences ({summary['differences']} failing test(s)).")
+        if summary["fixed_in_latest"]:
+            ui.echo(f"{summary['fixed_in_latest']} of them pass in the latest release, {summary['latest']}: "
+                    "upgrading fixes them (awsemu fidelity --compare latest --mine).", "ok")
+        if summary["explained_by_issues"] is not None:
+            ui.echo(f"{summary['explained_by_issues']} of them are explained by an open issue of the emulator "
+                    "(awsemu issues SERVICE to browse them).", "muted")
     elif report.operations:
         ui.success(f"No known differences for the {summary['operations']} operation(s) you use.")
     ui.echo(f"Tests: {chk.SUITE_URL} · details: awsemu fidelity SERVICE --failures"

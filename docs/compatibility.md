@@ -7,6 +7,7 @@ The emulator doesn't behave exactly like AWS everywhere yet, and AWS publishes w
 | Which known differences affect the code I have? | `awsemu check` |
 | What would upgrading the emulator change for me? | `awsemu fidelity --compare VERSION --mine` |
 | How does my whole team (and CI) use the same version? | `awsemu install VERSION --pin` |
+| What does AWS already know is wrong in a service? | `awsemu issues SERVICE` |
 
 ## `awsemu check`
 
@@ -21,7 +22,7 @@ awsemu check --strict           # exit code 1 if there are known differences (CI
 awsemu check --json             # for scripts (format: scripting.md)
 ```
 
-Try it with the example in this repository: `awsemu check examples/check-demo`. Real output, for release v1.0.471 and the fidelity tests v1.0.0 (the tests and numbers change with each release):
+Try it with the example in this repository: `awsemu check examples/check-demo`. Real output, for release v1.0.471, the fidelity tests v1.0.0, and v1.0.611 as the latest release (the tests and numbers change with each release):
 
 ```
 release         v1.0.471
@@ -30,27 +31,39 @@ scanned         2 file(s): python, terraform
 
 Operations your code calls
 operation                    tests  passed  differences  other failing  used in
+---------------------------  -----  ------  -----------  -------------  ------------
 dynamodb:GetItem             925    696     11           218            orders.py:18
 dynamodb:TransactWriteItems  104    94      2            8              orders.py:10
 sqs:SendMessage              527    410     1            116            orders.py:14
 
 dynamodb:GetItem: 11 known difference(s)
   ✗ ddbval-nesting-depth-over-32-levels-rejected  fails here (step 7/15): AWS 200, emulator 400 ValidationException
+      ↳ fixed in v1.0.611: awsemu install latest
   ✗ ddbval-reserved-keyword-in-projection-rejected  fails here (step 7/9): AWS 200, emulator 400 ValidationException
+      ↳ fixed in v1.0.611: awsemu install latest
   ✗ dynamodb-attributes-to-get-duplicate-or-empty-rejected-on-reads  fails here (step 6/13): same 400 ValidationException, different response body
+      ↳ known issue (HIGH): DynamoDB ValidationException envelope diverges: member paths, value rendering and error aggregation
+        https://github.com/aws/aws-emulator/blob/main/issues/things-that-do-not-work/20261120T225636Z-dynamodb-validationexception-envelope-diverges-member-paths-value-rendering.md
   … 8 more (--all)
 dynamodb:TransactWriteItems: 2 known difference(s)
   ✗ dynamodb-transact-duplicate-set-members-rejected  fails here (step 6/15): same 400 ValidationException, different response body
+      ↳ fixed in v1.0.611: awsemu install latest
   ✗ dynamodb-transact-write-items-rejects-exponent-overflow-number  fails here (step 4/16): same 400 ValidationException, different response body
+      ↳ fixed in v1.0.611: awsemu install latest
 sqs:SendMessage: 1 known difference(s)
   ✗ sqs-message-send-receive-delete  fails here (step 7/11): same 400 QueueDoesNotExist, different response body
+      ↳ fixed in v1.0.611: awsemu install latest
 
 Services
 service   found in           service tests  via CloudFormation  infrastructure
+--------  -----------------  -------------  ------------------  ----------------------------
 dynamodb  python, terraform  1172/1481                          aws_dynamodb_table (main.tf)
 sqs       python, terraform  284/335                            aws_sqs_queue (main.tf)
 
 ! 3 of 3 operation(s) you use have known differences (14 failing test(s)).
+10 of them pass in the latest release, v1.0.611: upgrading fixes them (awsemu fidelity --compare latest --mine).
+5 of them are explained by an open issue of the emulator (awsemu issues SERVICE to browse them).
+Tests: https://github.com/aws/aws-emulator-evaluation-suite · details: awsemu fidelity SERVICE --failures · every difference: --all
 ```
 
 ### What it reads
@@ -84,6 +97,17 @@ Operations with no fidelity tests yet are listed at the end: nothing is known ab
 
 For infrastructure, the **Services** table gives each service's score and, when you deploy with CloudFormation, SAM or CDK, how the tests that deploy that service **through CloudFormation** do. Terraform has no fidelity tests of its own: use the service score.
 
+### What explains each difference
+
+Under each known difference, `check` adds what it can find out:
+
+- **`↳ fixed in v1.0.611`**: the test passes in the latest release. Upgrading fixes it (`awsemu install latest`, or `--pin` it for the team). With release v1.0.471, 10 of the 14 differences in the example are fixed in v1.0.611.
+- **`↳ known issue (HIGH): …`**: the emulator's own issue that explains it. AWS keeps one file per known gap in the [emulator repository](https://github.com/aws/aws-emulator/tree/main/issues). Each says what AWS does, what the emulator does and how it should be fixed. Follow the link, or open it with `awsemu issues --show`.
+
+The summary counts both. A difference with neither is new or untracked: worth [reporting](https://github.com/aws/aws-emulator/issues), with the request you sent, the response you got and the one AWS returns.
+
+These lookups download the latest release's scores (once) and the first part of the issue files of the services involved, which are cached by their content. `--no-explain` skips them, for example offline or in a CI job where you only need `--strict`.
+
 ### Where the data comes from
 
 - The test results: `scores.json.gz` of the release, as in `awsemu fidelity`.
@@ -98,6 +122,33 @@ For infrastructure, the **Services** table gives each service's score and, when 
 ```
 
 `--strict` makes known differences fail the job (exit code 1). Without it, `check` only reports and exits 0. A good moment to run it: when you add a new AWS operation, or before you upgrade the emulator.
+
+## `awsemu issues`
+
+The emulator's own list of known gaps, from [AWS's issue files](https://github.com/aws/aws-emulator/tree/main/issues): about 3,800 open (`things-that-do-not-work`) and 20,000 fixed (`things-that-now-work`).
+
+```bash
+awsemu issues dynamodb                          # open issues about DynamoDB, most severe first
+awsemu issues dynamodb:TransactWriteItems sqs   # one operation (globs work: dynamodb:Transact*)
+awsemu issues --mine --severity high            # the services this project uses; HIGH and CRITICAL
+awsemu issues s3 --search multipart
+awsemu issues --show 3                          # row 3 of the last listing, in full
+awsemu issues lambda --fixed                    # fixed issues, marking those your release still fails
+awsemu issues dynamodb --json
+```
+
+```
+Open issues: sqs
+#  severity  since       operation    title
+-  --------  ----------  -----------  ------------------------------------------------------------------------------------------
+1  HIGH      2026-11-12  SendMessage  lambda__scheduler__sqs: 2 net-new causes — a Scheduler dead-letter message carries the bar
+2  HIGH      2026-11-21  SendMessage  3 causes left open by the SQS protocol-layer fix: an anonymous SendMessage never reaches a
+```
+
+- An issue is about the services in its file name (`…-lambda-scheduler-sqs-…` is about all three), and its operations come from its `## Operation` section.
+- `--fixed` lists fixed issues. Those whose tests still fail in your release (`fails in v1.0.471: yes`) were fixed after it, so upgrading brings the fix.
+- `--show` takes the row number of the last listing, a file name or its first characters, or its GitHub URL. It prints the whole issue (rendered Markdown in a terminal).
+- The list of files is cached for 6 hours (`--refresh` reads it again). The files are read once and cached by their content. Listing uses two GitHub API calls, so with many runs from one IP, set `GITHUB_TOKEN`.
 
 ## `awsemu fidelity --compare`
 

@@ -82,6 +82,7 @@ They're a stable interface (`docs/scripting.md`). Adding a field is fine. Renami
 
 - `check` and `fidelity` work with two public files: `scores.json.gz` (attached to each [emulator release](https://github.com/aws/aws-emulator/releases)) and `manifest.jsonl` (in the [fidelity tests repository](https://github.com/aws/aws-emulator-evaluation-suite)). Tests use small synthetic files with the same shape (`tests/test_check.py`, `tests/test_fidelity.py`); CI runs `check` against the real ones.
 - `src/awsemu/_service_names.py` maps boto3 client names to the names in the scores file where they differ by more than hyphens (`logs` → `cloudwatchlogs`). It was generated from both files: pair each single-service test's `service` in the manifest with its `services` in the scores. If AWS adds a service whose names differ, add it there.
+- `src/awsemu/issues.py` reads AWS's issue files through the GitHub API (the list) and raw.githubusercontent.com (the start of each file). `tests/test_issues.py` serves a fake GitHub with files shaped like the real ones; if AWS changes their headers (`Issue-Severity`, `Issue-Trace-Ids`, `## Operation`), update both.
 - New SDKs or infrastructure formats go in `src/awsemu/scan.py`, with a case in `FILES` of `tests/test_check.py`.
 
 ## Renaming the package

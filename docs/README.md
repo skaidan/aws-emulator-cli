@@ -5,7 +5,7 @@
 | [Getting started](getting-started.md) | Install, start the emulator (native or Docker) and connect your tools. |
 | [Exploring the emulator](explore.md) | `ui`, `watch`, `fidelity` and shell completion. |
 | [The proxy](proxy.md) | Every API call logged, and fault injection (throttling, errors, latency): `awsemu proxy`, `watch --calls`, pytest `aws_faults`. |
-| [Will my project work?](compatibility.md) | `check`, `fidelity --compare`, `install` and pinning the emulator version. |
+| [Will my project work?](compatibility.md) | `check`, `issues`, `fidelity --compare`, `install` and pinning the emulator version. |
 | [Project settings](project-config.md) | `awsemu.toml`, `init`, `up` and `down`. |
 | [Seeds](seeds.md) | Always start with the same data: format, validation, `apply`, `export`. |
 | [Services guide](services.md) | The 10 services with their own commands, and `describe ARN`, with end-to-end examples. |

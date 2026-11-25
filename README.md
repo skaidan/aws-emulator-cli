@@ -13,7 +13,7 @@ The emulator itself is a single binary with no subcommands: it runs in the foreg
 - **Use it in tests and CI**: a pytest plugin (`aws_emulator` fixture), a GitHub Action (`uses: skaidan/aws-emulator-cli@v0.9.0`) and `awsemu compose` for Docker Compose.
 - **Explore it**: a terminal UI (`awsemu ui`), live changes (`awsemu watch`), completion of your resource names, and the **per-service fidelity** of your emulator version (`awsemu fidelity`).
 - **See every API call and inject faults**: `awsemu proxy` sits between your code and the emulator, logs each call (`awsemu watch --calls`) and can throttle, fail or slow down the services you pick, to test retries and error handling (also as pytest fixtures: `aws_faults`, `aws_calls`).
-- **Know whether your project will work** before you start: `awsemu check` finds the AWS operations your code and infrastructure use and lists the known emulator differences for them; `awsemu fidelity --compare` shows what an upgrade changes; `awsemu install VERSION --pin` gives your team and CI the same emulator version.
+- **Know whether your project will work** before you start: `awsemu check` finds the AWS operations your code and infrastructure use and lists the known emulator differences for them, each with the emulator issue that explains it and whether the latest release fixes it; `awsemu issues` searches AWS's own list of known gaps; `awsemu fidelity --compare` shows what an upgrade changes; `awsemu install VERSION --pin` gives your team and CI the same emulator version.
 - **Diagnose** common problems (`awsemu doctor`).
 
 ```
@@ -209,6 +209,7 @@ More in [docs/proxy.md](docs/proxy.md).
 ```bash
 awsemu check                              # operations you use + known differences for them
 awsemu check --strict                     # the same, failing the CI job if there are any
+awsemu issues dynamodb                    # what AWS already knows is wrong in a service
 awsemu fidelity --compare latest --mine   # what upgrading changes for your services
 awsemu install 1.0.385 --pin              # install a version and pin it in awsemu.toml
 ```

@@ -23,6 +23,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`image`](#awsemu-image) — Build the Docker image (AWS doesn't publish a prebuilt one).
 - [`init`](#awsemu-init) — Create awsemu.toml in this folder.
 - [`install`](#awsemu-install) — Install a given emulator version: the Linux package, or a Docker image.
+- [`issues`](#awsemu-issues) — The emulator's known gaps, from AWS's own issue files.
 - [`kinesis`](#awsemu-kinesis) — Kinesis: data streams and records.
 - [`lambda`](#awsemu-lambda) — Lambda: deploy, invoke and inspect functions.
 - [`logs`](#awsemu-logs) — Show the emulator's log, prettified (also after it stopped).
@@ -82,6 +83,7 @@ awsemu check [OPTIONS] [PATHS]...
 | `--all` | List every known difference, not the first 3 per operation. |
 | `--strict` | Exit with code 1 when an operation you use has known differences (for CI). |
 | `--refresh` | Download scores and manifest again instead of using the cache. |
+| `--no-explain` | Don't look up what explains each difference: the emulator's issue files and whether the latest release fixes it (no extra downloads). |
 | `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu completion`
@@ -509,6 +511,37 @@ awsemu install [OPTIONS] [VERSION]
 | `--no-verify` | Don't check the package signature with gpg (not recommended). |
 | `--dry-run` | Show what would be downloaded and run, and stop. |
 | `-y, --yes` | Don't ask for confirmation (for scripts). |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
+## `awsemu issues`
+
+The emulator's known gaps, from AWS's own issue files.
+
+```bash
+awsemu issues dynamodb                 # open issues about DynamoDB
+awsemu issues dynamodb:TransactWriteItems sqs
+awsemu issues --mine --severity high   # for the services this project uses
+awsemu issues lambda --fixed           # fixed ones; marks those your release still fails
+awsemu issues --show 3                 # row 3 of the last listing, in full
+```
+AWS keeps them in https://github.com/aws/aws-emulator/tree/main/issues
+('things-that-do-not-work' and 'things-that-now-work'). 'awsemu check' shows the
+one behind each known difference.
+
+```
+awsemu issues [OPTIONS] [SERVICE[:Operation]]...
+```
+
+| Option | Description |
+| --- | --- |
+| `--mine` | The services this project uses (found like 'awsemu check' does). |
+| `--fixed` | Fixed issues instead of open ones, marking those whose tests still fail in your release. |
+| `--severity LEVEL` | Only this severity and worse (CRITICAL, HIGH, MEDIUM, LOW). |
+| `--search TEXT` | Only issues whose title contains TEXT. |
+| `-n, --limit INTEGER` | How many to list (0 = all).  [default: 30] |
+| `--show N|NAME` | Print one issue in full: its row in the last listing, its file name (or a prefix), or its URL. |
+| `--release VERSION` | With --fixed: the release to compare with (default: yours). |
+| `--refresh` | List the issues again instead of using the 6-hour cache. |
 | `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu kinesis`

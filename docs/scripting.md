@@ -29,7 +29,7 @@ awsemu seed validate seed.yaml; [ $? -eq 2 ] && echo "fix the seed"
 ## JSON conventions
 
 - `--json` prints one JSON document to standard output (`kinesis read --json` prints one object per line, see below). Warnings and errors go to standard error.
-- **awsemu's own summaries** (`status`, `overview`, `doctor`, `fidelity`, `check`, `install --list`, `proxy status`, `proxy calls`, `proxy faults`, `sqs ls`, `sns ls`, `ddb ls`, `kinesis read`) use `snake_case` keys.
+- **awsemu's own summaries** (`status`, `overview`, `doctor`, `fidelity`, `check`, `install --list`, `issues`, `proxy status`, `proxy calls`, `proxy faults`, `sqs ls`, `sns ls`, `ddb ls`, `kinesis read`) use `snake_case` keys.
 - **AWS resources passed through** keep AWS's own field names (`PascalCase` or `camelCase`, as the AWS API returns them): buckets, objects, messages, functions, state machines, executions, rules, buses, subscriptions, secrets, parameters, streams.
 - Dates are ISO 8601 strings (`2026-11-16T12:00:00+00:00`). Numbers stored by DynamoDB come out as JSON numbers; binary data as base64.
 - `null` means "not known" or "doesn't apply" (for example `pid` when awsemu didn't start the emulator).
@@ -137,7 +137,9 @@ An object keyed by AWS service name (`s3`, `sqs`, `dynamodb`, `sns`, `lambda`, `
          "operation": "TransactWriteItems", "mismatch": "status",
          "expected": "400 ValidationException", "actual": "200", "step": "6/15",
          "at_operation": true, "matches_usage": false,
-         "url": null}               // link to the test file, when known
+         "url": null,               // link to the test file, when known
+         "issues": [{"title": "…", "severity": "HIGH", "state": "open", "url": "https://github.com/aws/aws-emulator/blob/main/issues/…"}],
+         "fixed_in": "v1.0.611"}    // a newer release where the test passes, else null
       ],
       "other_failing": 8
     }
@@ -148,7 +150,11 @@ An object keyed by AWS service name (`s3`, `sqs`, `dynamodb`, `sns`, `lambda`, `
      "resources": [{"type": "aws_dynamodb_table", "file": "main.tf", "line": 1, "source": "terraform"}],
      "cloudformation": null}        // {"tests", "passed", "failing": [ids]} with CloudFormation/SAM/CDK
   ],
-  "summary": {"operations": 3, "services": 2, "operations_with_differences": 3, "differences": 14}
+  "summary": {"operations": 3, "services": 2, "operations_with_differences": 3,
+              "differences": 14,            // distinct failing tests
+              "explained_by_issues": 5,     // null with --no-explain
+              "fixed_in_latest": 10,        // null when not compared (--no-explain, --release latest)
+              "latest": "v1.0.611"}
 }
 ```
 
@@ -183,6 +189,20 @@ The same objects are in `~/.aws/emulator-cli/proxy/<port>/calls.jsonl`, and in `
 Not running: `{"running": false, "emulator_port": 9297}` and exit code 3.
 
 `awsemu proxy faults --json`: `[{"rule": "dynamodb=throttle@10%", "hits": 3}]`.
+
+### `awsemu issues SERVICE --json`
+
+```json
+[
+  {"title": "DynamoDB ValidationException envelope diverges: …", "severity": "HIGH",   // CRITICAL|HIGH|MEDIUM|LOW|null
+   "state": "open",                       // open | fixed
+   "services": ["dynamodb"], "operations": ["GetItem"], "tests": ["…fidelity test ids…"],
+   "kind": "wire", "created": "2026-11-20", "name": "20261120T225636Z-dynamodb-….md",
+   "url": "https://github.com/aws/aws-emulator/blob/main/issues/things-that-do-not-work/…"}
+]
+```
+
+With `--fixed`, each one also has `"fails_in_release": true|false`. `--show NAME --json` returns one object with the whole file in `"text"`.
 
 ### `awsemu install --list --json`
 

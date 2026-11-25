@@ -187,6 +187,8 @@ class Difference:
     test: Test
     at_operation: bool
     matches_usage: bool
+    issues: list = field(default_factory=list)  # awsemu.issues.Issue, most severe first
+    fixed_in: str | None = None  # a newer release where this test passes
 
     def as_dict(self, suite_ref: str) -> dict:
         d = self.test.detail
@@ -198,6 +200,9 @@ class Difference:
             "step": desc["step"] or None, "at_operation": self.at_operation,
             "matches_usage": self.matches_usage,
             "url": f"{SUITE_URL}/blob/{suite_ref}/{self.test.path}" if self.test.path else None,
+            "issues": [{"title": i.title, "severity": i.severity or None, "state": i.file.state,
+                        "url": i.file.url} for i in self.issues],
+            "fixed_in": self.fixed_in,
         }
 
 
@@ -236,6 +241,15 @@ class Report:
     operations: list[OperationReport]
     uncovered: list[str]
     services: list[ServiceReport]
+    issues_checked: bool = False
+    latest: str | None = None  # the newer release compared with, if any
+
+    def _unique_differences(self) -> list[Difference]:
+        seen: dict[str, Difference] = {}
+        for o in self.operations:
+            for d in o.differences:
+                seen.setdefault(d.test.id, d)
+        return list(seen.values())
 
     @property
     def with_differences(self) -> list[OperationReport]:
@@ -265,7 +279,13 @@ class Report:
             "summary": {
                 "operations": len(self.operations), "services": len(self.services),
                 "operations_with_differences": len(self.with_differences),
-                "differences": sum(len(o.differences) for o in self.operations),
+                # distinct failing tests (one can be a difference for several operations)
+                "differences": len(self._unique_differences()),
+                "explained_by_issues": (sum(bool(d.issues) for d in self._unique_differences())
+                                        if self.issues_checked else None),
+                "fixed_in_latest": (sum(bool(d.fixed_in) for d in self._unique_differences())
+                                    if self.latest else None),
+                "latest": self.latest,
             },
         }
 
@@ -331,3 +351,30 @@ def analyze(result: sc.ScanResult, index: Index, release: str, suite: str) -> Re
         services.append(report)
     return Report(release=release, suite=suite, files=result.files, sources=sorted(result.sources),
                   operations=operations, uncovered=uncovered, services=services)
+
+
+def attach_issues(report: Report, refresh: bool = False) -> None:
+    """Link each known difference to the emulator's open issue that explains it, if any."""
+    from . import issues as iss
+
+    differences = [d for o in report.operations for d in o.differences]
+    if not differences:
+        report.issues_checked = True
+        return
+    services = {svc for d in differences for svc in d.test.services}
+    found = iss.by_test(iss.for_services(services, refresh=refresh))
+    for d in differences:
+        d.issues = found.get(d.test.id, [])
+    report.issues_checked = True
+
+
+def attach_fixes(report: Report, latest_tag: str, latest_scores: dict) -> None:
+    """Mark differences whose test passes in a newer release (an upgrade fixes them)."""
+    if latest_tag == report.release:
+        return
+    passing = {u.get("unitId") for u in latest_scores.get("units", []) if u.get("outcome") == "pass"}
+    for o in report.operations:
+        for d in o.differences:
+            if d.test.id in passing:
+                d.fixed_in = latest_tag
+    report.latest = latest_tag

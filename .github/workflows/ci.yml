@@ -152,3 +152,14 @@ jobs:
           awsemu check "$GITHUB_WORKSPACE/examples/check-demo"
           awsemu check "$GITHUB_WORKSPACE/examples/check-demo" --json | python3 -c "import json,sys; d=json.load(sys.stdin); ops={o['operation'] for o in d['operations']}; assert {'dynamodb:TransactWriteItems','dynamodb:GetItem','sqs:SendMessage'} <= ops, ops"
           cd "$GITHUB_WORKSPACE/examples/check-demo" && awsemu fidelity --mine
+      - name: Emulator issues and explanations, with the real files
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          awsemu issues dynamodb -n 5
+          awsemu issues dynamodb --json -n 5 | python3 -c "import json,sys; d=json.load(sys.stdin); assert d and all(i['severity'] and i['title'] and i['state'] == 'open' for i in d), d"
+          awsemu issues --show 1 | head -20
+          awsemu check examples/check-demo --release 1.0.385 --all
+          awsemu check examples/check-demo --release 1.0.385 --json | python3 -c "import json,sys; s=json.load(sys.stdin)['summary']; print(s); assert s['explained_by_issues'] is not None and s['latest'] and s['fixed_in_latest'] is not None, s"
+          awsemu issues sqs --fixed --release 1.0.385 -n 5

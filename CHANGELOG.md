@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+Towards 0.10.0.
+
+- `awsemu check` explains each known difference. `↳ fixed in vX` means the test passes in the latest release (one more scores download). `↳ known issue (SEVERITY): …` links to the emulator's own issue file that explains it (`issues/` in aws/aws-emulator). The summary counts both. `--no-explain` skips these lookups. JSON: each difference gains `issues` and `fixed_in`; the summary gains `explained_by_issues`, `fixed_in_latest` and `latest`.
+- `awsemu issues [SERVICE[:Operation]]... [--mine] [--fixed] [--severity LEVEL] [--search TEXT] [--show N|NAME] [--json]`: search AWS's list of known emulator gaps (about 3,800 open, 20,000 fixed). Only the start of each file is downloaded, and it's cached by its content. `--fixed` marks the fixes your release doesn't have yet.
+- Fixed: the `check` summary counted a failing test once per operation it affects. `differences` (and "N failing test(s)") now counts distinct tests.
+
 ## 0.9.0 — 2026-11-25
 
 The proxy: see every API call, and inject faults. Guide: `docs/proxy.md`.

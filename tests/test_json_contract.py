@@ -195,7 +195,7 @@ def test_check(runner, monkeypatch, tmp_path):
     for name, text in FILES.items():
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_text(text)
-    data = run_json(runner, "check", str(tmp_path), "--json")
+    data = run_json(runner, "check", str(tmp_path), "--json", "--no-explain")
     assert set(data) == {"release", "suite", "scanned_files", "sources", "operations", "uncovered",
                          "services", "summary"}
     op = data["operations"][0]
@@ -203,12 +203,13 @@ def test_check(runner, monkeypatch, tmp_path):
                        "other_failing"}
     assert set(op["locations"][0]) == {"file", "line", "source"}
     assert set(op["differences"][0]) == {"test", "kind", "operation", "mismatch", "expected", "actual",
-                                         "step", "at_operation", "matches_usage", "url"}
+                                         "step", "at_operation", "matches_usage", "url", "issues", "fixed_in"}
     svc = next(s for s in data["services"] if s["cloudformation"])
     assert set(svc) == {"service", "sources", "tests", "passed", "resources", "cloudformation"}
     assert set(svc["cloudformation"]) == {"tests", "passed", "failing"}
     assert set(svc["resources"][0]) == {"type", "file", "line", "source"}
-    assert set(data["summary"]) == {"operations", "services", "operations_with_differences", "differences"}
+    assert set(data["summary"]) == {"operations", "services", "operations_with_differences", "differences",
+                                    "explained_by_issues", "fixed_in_latest", "latest"}
 
     fid.cache_dir().joinpath("v1.0.390.json.gz").write_bytes(gzip.compress(json.dumps(SCORES).encode()))
     cmp = run_json(runner, "fidelity", "--compare", "1.0.390", "sqs", "--json")
