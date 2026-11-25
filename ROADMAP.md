@@ -113,6 +113,17 @@ Goal: close the known gaps in what's already done.
 - ⬜ **Seeds with more services**: Lambda functions (from local code), EventBridge rules, Kinesis streams and Step Functions state machines, in `seed export` too.
 - ⬜ **`awsemu snapshot save/restore`**: save and restore a whole scenario (the emulator has no snapshots), built on `seed export` and `reset --seed`.
 - ⬜ **Infrastructure tools and other languages, tested in CI**: Terraform, CDK, and the Node, Java and Go SDKs against the emulator, with guides and examples. Today only Python is tested.
+- ⬜ **Emulator with auth off**: `awsemu env`/`exec` don't set any credentials when `auth = false` (the emulator writes no credentials file), so the SDKs either fail with "unable to locate credentials" or sign with your real default profile from `~/.aws/credentials`. Set placeholder keys in that case, as `awsemu`'s own clients already do.
+- ⬜ **A fast Lambda loop**: `awsemu lambda deploy PATH [--watch]` packages local code (Python, Node), creates or updates the function and redeploys on save, so changing a function doesn't mean a zip and three commands.
+- ⬜ **`awsemu call SERVICE OPERATION [--params JSON]`**: any API call through boto3, for the services without their own commands and for machines without the AWS CLI (`awsemu aws` needs it).
+- ⬜ **Testcontainers modules** (Python, Java, Node): an `AwsEmulatorContainer` built on the Docker image, for teams that start their dependencies with Testcontainers rather than pytest fixtures.
+- ⬜ **Proxy, the next step**:
+  - fault rules per resource (`dynamodb:PutItem[orders]=throttle`) and over time (`s3=503 for 30s`, an outage that recovers);
+  - optional request and response bodies in the calls log (`--bodies`), with secrets and credentials masked;
+  - export the calls as HAR, to open them in a browser's developer tools;
+  - `awsemu check --from-calls`: check the operations your tests really called (the proxy's log) instead of the static scan, which can miss calls or match a method by its name;
+  - `--host 0.0.0.0` and `awsemu compose --proxy`, so containers can go through it too;
+  - a token for the admin API (today any local process can change the faults), and a Java truststore for the proxy's certificate.
 
 ## v0.11 — AI agents
 
@@ -120,6 +131,22 @@ Goal: a coding agent tests its code against the emulator without touching AWS.
 
 - ⬜ **`awsemu` MCP server**: tools to start and stop the emulator, apply seeds, query resources, check a service's fidelity and read the proxy's calls.
 - ⬜ A guide to use it with agents, alongside the `aws-emulator` *skill* mentioned in AWS's documentation.
+- ⬜ **Guard rails for agents**: the MCP tools never use real credentials or a real AWS endpoint, refuse anything that isn't `127.0.0.1`, and say so in their answers, so an agent can't test against a production account by mistake.
+- ⬜ **Explain a failure**: given a failing call (from the proxy's log), say whether it matches a known emulator difference (`awsemu check` data) or is probably a bug in the code under test.
+
+## v0.12 — Hardening before 1.0
+
+Goal: what a project people depend on needs, beyond features.
+
+- ⬜ **CI against every new emulator release**: a scheduled job (daily) that installs the latest emulator and runs the real-emulator tests, opening an issue when something breaks. The emulator ships very often (1.0.471 to 1.0.611 in nine days), and today we only find out on our next commit.
+- ⬜ **A compatibility matrix**: the oldest emulator version each awsemu release works with, tested in CI with `awsemu install VERSION`, and shown by `awsemu doctor`.
+- ⬜ **Static checks in CI**: ruff (lint and format) and mypy on `src/`, and test coverage with a minimum. Fix the warnings that exist today (`tests/test_watch.py`).
+- ⬜ **Update notices**: `awsemu doctor` (and, at most once a day, `awsemu start`) says when there's a newer emulator release, or a newer awsemu, without getting in the way in CI.
+- ⬜ **Supply chain**: Dependabot for Python dependencies and Actions, pinned Action versions, signed release artifacts with provenance (Sigstore / GitHub attestations), and an SBOM.
+- ⬜ **Project health**: `SECURITY.md` (how to report a vulnerability, e.g. in the proxy), issue and pull request templates, a code of conduct, and labels for "good first issue".
+- ⬜ **JSON Schemas** for every `--json` output (generated from the contract tests and published with the docs), so scripts can validate what they read.
+- ⬜ **A deprecation policy**: how long a flag, setting or JSON field keeps working after it's replaced, and warnings when it's used, written down before 1.0 promises stability.
+- ⬜ **Lighter installs**: check whether `boto3` and `cryptography` can become extras (for example, `awsemu start`/`env` without them) without making the common case worse.
 
 ## v1.0 — Stable distribution
 
@@ -129,6 +156,8 @@ Goal: install and upgrade anywhere with one command.
 - ✅ Automatic GitHub releases from `CHANGELOG.md` (wheel and sdist attached).
 - ⬜ Publishing on **PyPI** (`pipx install <name>`).
 - ⬜ A **Homebrew tap** and standalone binaries (PyInstaller) for those without Python.
+- ⬜ A **prebuilt Docker image** (multi-arch, on GitHub Container Registry), one tag per emulator version, so macOS and Windows users don't build it themselves. The emulator's source is CC0 (Apache 2.0 in `vendor/`); check the license and notice files in AWS's package before redistributing it.
+- ⬜ **Upgrade notes** for each release in the docs, and a "what changed for me" summary when upgrading awsemu itself.
 - ⬜ Semantic versioning and a stability promise (the output is fixed in v0.7).
 - ✅ Documentation in `docs/`: getting started, services, testing and CI, troubleshooting, architecture and a reference generated from the code.
 - ⬜ A documentation website (MkDocs) with guides: "integration tests with pytest", "CI with GitHub Actions" and "Node and Java against the emulator".
@@ -139,5 +168,13 @@ Goal: install and upgrade anywhere with one command.
 
 - Several regions: the emulator supports one region per instance, so `awsemu` could manage a group of instances, one per region.
 - A named AWS CLI profile (`--profile emulator`) as an alternative to exporting variables.
+- **Shadow mode** in the proxy: send read-only calls to both the emulator and a real AWS account you name explicitly, and report where the answers differ. Your own fidelity test, built from your traffic. It needs great care with credentials and costs, so it would stay opt-in and read-only.
+- **Snapshots per test**: once `snapshot save/restore` exists, restore a snapshot between tests instead of restarting the emulator (`aws_emulator_fresh` takes a few seconds per test).
+- **Load and timing**: `awsemu bench` to measure the emulator's latency and throughput on your machine, to size test suites and timeouts.
+- **Editor integration**: a VS Code extension (start/stop, resources, calls) on top of the JSON output and the MCP server.
+- **A dev container feature** that installs the emulator and awsemu, for Codespaces and dev containers.
+- **More services with their own commands**, by demand: API Gateway (call an API locally), Cognito (create test users and tokens), ECS/ECR.
+- **Plugins**: let other packages add `awsemu` commands (entry points), for company-specific workflows.
+- **Docs in other languages**, starting with Spanish, once the English docs are stable.
 
 Have an idea or need something sooner? Open an issue.
