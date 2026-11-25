@@ -32,7 +32,7 @@ Every key is optional.
 | --- | --- | --- | --- |
 | `port` | integer | The instance's port; every command uses it | 9297 |
 | `mode` | `auto` / `native` / `docker` | How to start it | `auto` (the binary if installed, otherwise Docker) |
-| `auth` | boolean | Require signed requests | `true` |
+| `auth` | boolean | Require signed requests. With `false`, `env`, `exec` and `shell` set placeholder keys (`AWS_ACCESS_KEY_ID=EMULATORAUTHOFF00000`), so the SDKs have something to sign with and never use your real profile | `true` |
 | `telemetry` | boolean | The emulator's telemetry for this instance | whatever the emulator's `config.toml` says |
 | `idle_timeout` | integer (seconds) | Automatic stop when idle | no limit |
 | `seed` | path | Seed applied by `awsemu up` and the pytest plugin | none |

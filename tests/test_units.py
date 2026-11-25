@@ -25,11 +25,38 @@ def test_env_has_documented_variables(isolated_home):
     assert env["AWS_REGION"] == env["AWS_DEFAULT_REGION"] == "us-east-1"
 
 
-def test_env_skips_credentials_when_auth_off(isolated_home):
+def test_env_with_auth_off_uses_placeholder_keys(isolated_home, monkeypatch):
     files = InstanceFiles(9300)
     files.dir.mkdir(parents=True)
     files.ca.write_text("cert")  # running, but no credentials file -> --auth off
-    assert "AWS_SHARED_CREDENTIALS_FILE" not in envvars.emulator_env(9300)
+    env = envvars.emulator_env(9300)
+    assert "AWS_SHARED_CREDENTIALS_FILE" not in env
+    assert (env["AWS_ACCESS_KEY_ID"], env["AWS_SECRET_ACCESS_KEY"]) == envvars.AUTH_OFF_KEYS
+
+    # Real keys in the environment are replaced, not kept
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAREALKEY000000000")
+    monkeypatch.setenv("AWS_PROFILE", "prod")
+    child = envvars.child_env(9300)
+    assert child["AWS_ACCESS_KEY_ID"] == envvars.AUTH_OFF_KEYS[0] and "AWS_PROFILE" not in child
+    script = envvars.render(env, "bash")
+    assert script.index("unset AWS_ACCESS_KEY_ID") < script.index("export AWS_ACCESS_KEY_ID=EMULATORAUTHOFF00000")
+    fish = envvars.render(env, "fish")
+    assert fish.index("set -e AWS_ACCESS_KEY_ID") < fish.index("set -gx AWS_ACCESS_KEY_ID 'EMULATORAUTHOFF00000'")
+    ps = envvars.render(env, "powershell")
+    assert ps.index("Remove-Item") < ps.index("EMULATORAUTHOFF00000")
+
+
+def test_auth_off_sdk_ignores_your_real_profile(isolated_home, monkeypatch):
+    boto3 = pytest.importorskip("boto3")
+    files = InstanceFiles(9300)
+    files.dir.mkdir(parents=True)
+    files.ca.write_text("cert")
+    real = isolated_home / ".aws" / "credentials"
+    real.parent.mkdir(parents=True, exist_ok=True)
+    real.write_text("[default]\naws_access_key_id = AKIAREALKEY000000000\naws_secret_access_key = secret\n")
+    for key, value in envvars.child_env(9300).items():
+        monkeypatch.setenv(key, value)
+    assert boto3.Session().get_credentials().access_key == "EMULATORAUTHOFF00000"
 
 
 def test_env_sdk_extras():

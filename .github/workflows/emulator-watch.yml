@@ -1,0 +1,112 @@
+name: Emulator watch
+
+# AWS Emulator ships very often. Every day, if there's a release we haven't tested yet,
+# install it (with 'awsemu install', signature checked) and run the tests against the
+# real emulator. If they fail, open an issue (or comment on the open one); when a later
+# release passes again, close it. Run it by hand from the Actions tab to force a run.
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/emulator-watch.yml]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: emulator-watch
+  cancel-in-progress: false
+
+jobs:
+  latest-emulator:
+    name: tests against the latest AWS Emulator
+    runs-on: ubuntu-latest
+    env:
+      EMULATOR_TELEMETRY: "off"
+      AWSEMU_PLAIN: "1"
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+      LABEL: emulator-compat
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev,ui]"
+
+      - name: Latest emulator version
+        id: version
+        run: |
+          VERSION=$(awsemu install --list --json | python3 -c "import json,sys; print(json.load(sys.stdin)['versions'][0])")
+          echo "Latest AWS Emulator: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          mkdir -p .tested && echo "$VERSION" > .tested/version
+
+      - name: Already tested?
+        id: tested
+        if: github.event_name == 'schedule'
+        uses: actions/cache/restore@v4
+        with:
+          path: .tested
+          key: emulator-tested-${{ steps.version.outputs.version }}
+          lookup-only: true
+
+      - name: Install it (signature checked)
+        if: steps.tested.outputs.cache-hit != 'true'
+        run: |
+          awsemu install "${{ steps.version.outputs.version }}" --native --yes
+          aws-emulator -v
+
+      - name: Tests against the real emulator
+        id: tests
+        if: steps.tested.outputs.cache-hit != 'true'
+        run: |
+          set -o pipefail
+          AWSEMU_REAL_TESTS=1 pytest -m real -v -rf 2>&1 | tee pytest.log
+
+      - name: Remember it passed
+        if: steps.tested.outputs.cache-hit != 'true' && success()
+        uses: actions/cache/save@v4
+        with:
+          path: .tested
+          key: emulator-tested-${{ steps.version.outputs.version }}
+
+      - name: Close the open issue, it passes again
+        if: steps.tested.outputs.cache-hit != 'true' && success()
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for n in $(gh issue list --label "$LABEL" --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "The tests pass again with AWS Emulator $VERSION ($RUN_URL)."
+          done
+
+      - name: Open or update an issue
+        if: failure() && steps.tests.conclusion == 'failure'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create "$LABEL" --color D93F0B --description "awsemu vs a new AWS Emulator release" --force
+          {
+            echo "The tests against the real emulator fail with **AWS Emulator $VERSION**."
+            echo
+            echo "Run: $RUN_URL"
+            echo
+            echo '```'
+            grep -E "^(FAILED|ERROR) |passed|failed" pytest.log | tail -40
+            echo '```'
+            echo
+            echo "Reproduce: \`awsemu install $VERSION && AWSEMU_REAL_TESTS=1 pytest -m real\`."
+            echo "If the emulator changed (not awsemu), compare with \`awsemu fidelity --compare $VERSION\` and its release notes."
+          } > body.md
+          existing=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file body.md
+          else
+            gh issue create --title "Tests fail with AWS Emulator $VERSION" --label "$LABEL" --body-file body.md
+          fi

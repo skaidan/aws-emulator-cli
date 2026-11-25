@@ -20,6 +20,11 @@ REAL_CREDENTIAL_VARS = (
     "AWS_PROFILE",
 )
 
+# With --auth off the emulator writes no credentials file and accepts any signature,
+# but the SDKs still need keys to sign with: without these they fail ("unable to locate
+# credentials") or, worse, pick up your real default profile from ~/.aws/credentials.
+AUTH_OFF_KEYS = ("EMULATORAUTHOFF00000", "0" * 40)
+
 SHELLS = ("bash", "zsh", "fish", "powershell", "dotenv")
 
 EXTRAS = ("node", "java", "rust", "dotnet")
@@ -45,6 +50,8 @@ def emulator_env(port: int, extras: Iterable[str] = ()) -> dict[str, str]:
     # instance isn't running yet we assume the default (auth on).
     if files.auth_enabled() or not files.exists():
         env["AWS_SHARED_CREDENTIALS_FILE"] = str(files.credentials)
+    else:
+        env["AWS_ACCESS_KEY_ID"], env["AWS_SECRET_ACCESS_KEY"] = AUTH_OFF_KEYS
 
     extras = {e.lower() for e in extras}
     unknown = extras - set(EXTRAS)

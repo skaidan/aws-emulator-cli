@@ -621,3 +621,30 @@ def test_proxy_commands_against_real_emulator(emu, tmp_path):
         assert calls[-1]["latency_ms"] >= 200 and calls[-1]["fault"] == "sqs:ListQueues=latency:200ms"
     finally:
         run(emu, "proxy", "stop")
+
+
+def test_auth_off_exec_signs_with_placeholder_keys(real_home, tmp_path):
+    """With --no-auth, programs run through awsemu work and never sign with your real profile."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    real = real_home / ".aws" / "credentials"
+    real.parent.mkdir(parents=True, exist_ok=True)
+    saved = real.read_text() if real.exists() else None
+    real.write_text("[default]\naws_access_key_id = AKIAREALKEY000000000\naws_secret_access_key = secret\n")
+    run(port, "start", "--native", "--no-auth", "--no-telemetry", "--idle-timeout", "300", "--wait", "60")
+    try:
+        assert not InstanceFiles(port).credentials.exists()  # the emulator writes none with auth off
+        script = tmp_path / "use.py"
+        script.write_text("import boto3\ns = boto3.Session()\n"
+                          "assert s.get_credentials().access_key == 'EMULATORAUTHOFF00000'\n"
+                          "s.client('s3').create_bucket(Bucket='auth-off')\n"
+                          "assert 'auth-off' in [b['Name'] for b in s.client('s3').list_buckets()['Buckets']]\n")
+        result = run(port, "exec", "--", sys.executable, str(script))
+        assert result.exit_code == 0
+    finally:
+        run(port, "stop")
+        if saved is None:
+            real.unlink()
+        else:
+            real.write_text(saved)

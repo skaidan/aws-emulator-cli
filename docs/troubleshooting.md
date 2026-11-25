@@ -29,6 +29,7 @@ It checks Python, the binary, Docker and the image, the AWS CLI, boto3, the emul
 | `AccessDenied: Sign the request with the emulator credentials` | The request was signed with keys the emulator doesn't accept: your real AWS keys, or those of an earlier run (they change on every start). | `eval "$(awsemu env)"` again, or use `awsemu exec` / `awsemu aws`. Make sure `AWS_ACCESS_KEY_ID` isn't set. |
 | `SignatureDoesNotMatch` | The secret key isn't this run's. | The emulator restarted: reload the environment. |
 | `InvalidClientTokenId`, `MissingAuthenticationToken` | Unsigned request. | Configure the emulator's credentials, or start it with `--no-auth`. |
+| `Unable to locate credentials` with `--no-auth` (awsemu 0.9 and earlier) | The emulator writes no credentials file with auth off, and `awsemu env` set no keys. | Upgrade awsemu: `env`/`exec`/`shell` now set placeholder keys with auth off. |
 | `UnknownService` (HTTP 404) | The emulator can't tell which service the request is for: almost always because it isn't signed; otherwise the service isn't emulated. | Sign the request; check [the emulator's issues](https://github.com/aws/aws-emulator/issues). |
 | `RequestTimeTooSkewed`, `Signature expired` | Your clock is more than 15 minutes off. | Sync the time (NTP). |
 | `UnknownOperationException`, `NotImplemented` | That operation isn't emulated yet. | `awsemu fidelity SERVICE --failures`, and the emulator's release notes. |

@@ -11,12 +11,9 @@ import configparser
 from functools import lru_cache
 
 from . import _meta
+from .envvars import AUTH_OFF_KEYS as _AUTH_OFF_KEYS  # used with --auth off
 from .paths import REGION, InstanceFiles
 from .runtime import RuntimeErrorWithHint
-
-# Used when the emulator runs with --auth off: it serves any request, but
-# botocore still wants something to sign with.
-_AUTH_OFF_KEYS = ("EMULATORAUTHOFF00000", "0" * 40)
 
 
 def read_credentials(port: int) -> tuple[str, str]:

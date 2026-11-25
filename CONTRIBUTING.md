@@ -30,6 +30,8 @@ Real tests need the `aws-emulator` binary on your `PATH` (or `AWSEMU_BINARY`) an
 
 CI jobs: `tests` (Linux, macOS and Windows; Python 3.10 and 3.13), `real-emulator`, `docker` (Docker mode and `compose` with the real emulator) and `action` (the GitHub Action in `action.yml`).
 
+The `Emulator watch` workflow (`.github/workflows/emulator-watch.yml`) runs every day: when AWS has published an emulator release we haven't tested, it installs it with `awsemu install` and runs the real-emulator tests. A failure opens an issue labelled `emulator-compat` (or comments on the open one), and the next release that passes closes it. Run it by hand from the Actions tab to test the latest release now.
+
 Don't put `[tool.awsemu]` in this repository's `pyproject.toml`: the tests would pick it up as project settings.
 
 Every test runs with its own temporary `HOME`, so it never touches your `~/.aws`.
