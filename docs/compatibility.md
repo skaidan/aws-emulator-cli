@@ -227,6 +227,20 @@ Fixed (failed before, pass now): 43
 
 AWS's advice: compare scores only between releases measured with the same version of the fidelity tests. `--compare` warns you when they differ.
 
+## Supported emulator versions
+
+Each awsemu release works with emulator releases from `MIN_EMULATOR` on (today **1.0.250**, the first public one). A CI job installs exactly that release with `awsemu install` and runs the tests of what awsemu does itself against it (lifecycle, environment, services, proxy, seeds), so the minimum is tested, not guessed. The `real-emulator` job does the same with the latest release.
+
+`awsemu doctor` shows where you stand:
+
+```
+emulator support  warn  1.0.400 (supported from 1.0.250); 1.0.629 is out
+                        → awsemu install latest
+awsemu            ok    0.12.0, the latest
+```
+
+It fails if your emulator is older than the minimum. `awsemu start` (with the native binary) says when there's a newer emulator or awsemu, at most once a day, and only on a terminal: never in CI (when `CI` is set), and never with `AWSEMU_NO_UPDATE_CHECK=1`. The answers come from GitHub's releases, cached for a day in `~/.aws/emulator-cli/updates.json`; with `AWSEMU_NO_UPDATE_CHECK=1`, `doctor` uses only that cache and nothing is looked up.
+
 ## `awsemu install` and `emulator_version`
 
 AWS publishes every release of the Linux packages by version, and recommends pinning one if new releases change your test results: then a new release only changes them when you decide to upgrade.

@@ -175,7 +175,7 @@ class Shadow:
         from botocore.httpsession import URLLib3Session
 
         service = job.call["service"]
-        model = self.session._session.get_service_model(service)
+        model = self.session._session.get_service_model(service)  # botocore's own model
         signing = model.signing_name or model.endpoint_prefix
         headers = {k: v for k, v in job.headers if k.lower() not in DROP}
         request = AWSRequest(
@@ -203,7 +203,7 @@ class Shadow:
             }
             try:
                 entry.update(compare(job.emulator, self.send(job)))
-            except Exception as exc:
+            except Exception as exc:  # a failed shadow call never affects the proxy
                 entry.update({"differs": None, "failed": f"{type(exc).__name__}: {str(exc)[:200]}"})
             try:
                 with self.log.open("a", encoding="utf-8") as fh:

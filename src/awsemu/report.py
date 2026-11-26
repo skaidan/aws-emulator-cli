@@ -88,7 +88,7 @@ def _model(service: str):
         import botocore.session
 
         return botocore.session.get_session().get_service_model(service)
-    except Exception:
+    except Exception:  # an unknown service still gets a report
         return None
 
 

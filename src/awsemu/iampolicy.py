@@ -115,7 +115,7 @@ def prefix(service: str) -> str:
 
         meta = botocore.session.get_session().get_service_model(service).metadata
         name = meta.get("signingName") or meta.get("endpointPrefix") or service
-    except Exception:
+    except Exception:  # a service botocore doesn't know keeps its own name
         name = service
     return PREFIX_OVERRIDES.get(name, name)
 

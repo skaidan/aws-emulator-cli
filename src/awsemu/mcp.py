@@ -468,7 +468,7 @@ class Server:
                 result = {method.split("/")[0]: []}
             else:
                 return _error(mid, -32601, f"method not found: {method}")
-        except Exception as exc:
+        except Exception as exc:  # one bad request must not end the session
             return _error(mid, -32603, f"internal error: {exc}")
         return {"jsonrpc": "2.0", "id": mid, "result": result}
 

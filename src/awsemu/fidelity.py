@@ -72,7 +72,11 @@ def tag_for(release: str) -> str:
 
 
 def _get(
-    url: str, accept: str = "application/vnd.github+json", gzip_ok: bool = False, first_bytes: int | None = None
+    url: str,
+    accept: str = "application/vnd.github+json",
+    gzip_ok: bool = False,
+    first_bytes: int | None = None,
+    timeout: float = 120,
 ) -> bytes:
     """GET ``url``. ``first_bytes`` asks for only the start of the file (a Range request);
     servers that ignore it send the whole file, which is fine too."""
@@ -86,7 +90,7 @@ def _get(
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read()
             if resp.headers.get("Content-Encoding") == "gzip":
                 data = gzip.decompress(data)

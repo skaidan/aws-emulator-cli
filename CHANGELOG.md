@@ -4,6 +4,7 @@
 
 Towards 0.12.0.
 
+- `awsemu doctor` shows whether your emulator is supported (from 1.0.250, the oldest release CI tests awsemu with) and whether a newer emulator or awsemu is out; `awsemu start` mentions newer releases at most once a day, on a terminal, never in CI or with `AWSEMU_NO_UPDATE_CHECK=1`.
 - Releases come with signed build provenance (Sigstore, GitHub attestations), a CycloneDX SBOM and SHA-256 checksums; `SECURITY.md` says how to verify them. GitHub Actions are pinned to commit SHAs, and Dependabot proposes updates for Python, Actions, npm and Maven dependencies.
 - Project health: `SECURITY.md` (private vulnerability reports, scope), a code of conduct, issue forms (bugs, ideas, links to the emulator's own issues) and a pull request template.
 - Development: ruff (lint and format) and mypy run in CI, the code is formatted and type-checked, and tests have a coverage minimum (65%; 69% today). The proxy now closes every socket and upstream connection when it stops, and the suite runs without resource warnings.

@@ -957,7 +957,7 @@ def _download_code(location: str, dest: Path, port: int) -> None:
     from ..paths import InstanceFiles
 
     ctx = ssl.create_default_context(cafile=str(InstanceFiles(port).ca))
-    with urllib.request.urlopen(location, context=ctx, timeout=60) as resp:
+    with urllib.request.urlopen(location, context=ctx, timeout=60) as resp:  # the emulator's URL
         data = resp.read()
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(data)

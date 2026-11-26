@@ -63,7 +63,7 @@ def _installed_version() -> str | None:
 
     try:
         return installed_version()
-    except Exception:
+    except Exception:  # only informative
         return None
 
 

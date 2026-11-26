@@ -32,6 +32,7 @@ def isolated_home(tmp_path, monkeypatch):
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("AWSEMU_PLAIN", "1")
+    monkeypatch.setenv("AWSEMU_NO_UPDATE_CHECK", "1")  # no GitHub lookups from the tests
     from awsemu import ui
 
     ui.set_plain(True)

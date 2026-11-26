@@ -252,6 +252,28 @@ def _do_start(
     ui.echo("Next steps:", "muted")
     ui.echo(f'  eval "$(awsemu{flag} env)"   # point this shell at the emulator', "muted")
     ui.echo(f"  awsemu{flag} overview          # see what's inside", "muted")
+    if state.mode == "native":
+        _update_notices()
+
+
+def _update_notices() -> None:
+    """At most once a day, on a terminal, never in CI: newer releases (and too-old emulators)."""
+    from . import updates
+    from .fidelity import installed_version
+
+    try:
+        if updates.quiet():
+            return
+        installed = installed_version()
+        if installed and updates.older(installed, updates.MIN_EMULATOR):
+            ui.warn(
+                f"this emulator ({installed}) is older than {updates.MIN_EMULATOR}, the oldest awsemu is "
+                "tested with: awsemu install latest"
+            )
+        for line in updates.notify_once_a_day(installed):
+            ui.echo(line, "info", err=True)
+    except Exception:  # a notice must never break a start  # pragma: no cover
+        pass
 
 
 @cli.command(context_settings={"ignore_unknown_options": True})
@@ -787,6 +809,39 @@ def doctor(c: Ctx, as_json: bool):
             "binary not on PATH",
             "Linux: awsemu install (or the .rpm/.deb package); macOS/Windows: use Docker",
         )
+
+    from . import updates
+    from .fidelity import installed_version
+
+    installed = installed_version() if binary else None
+    newest = updates.latest()
+    if installed:
+        if updates.older(installed, updates.MIN_EMULATOR):
+            add(
+                "emulator support",
+                False,
+                f"{installed} is older than {updates.MIN_EMULATOR}, the oldest release this awsemu is tested with",
+                "awsemu install latest",
+            )
+        elif newest.emulator and updates.older(installed, newest.emulator):
+            add(
+                "emulator support",
+                None,
+                f"{installed} (supported from {updates.MIN_EMULATOR}); {newest.emulator} is out",
+                "awsemu install latest",
+            )
+        else:
+            add(
+                "emulator support",
+                True,
+                f"{installed}, the latest (supported from {updates.MIN_EMULATOR})"
+                if newest.emulator
+                else f"{installed} (supported from {updates.MIN_EMULATOR})",
+            )
+    if newest.awsemu and updates.older(__version__, newest.awsemu):
+        add("awsemu", None, f"{__version__}; {newest.awsemu} is out", f"see {_meta.REPO_URL}/releases")
+    else:
+        add("awsemu", True, __version__ + (", the latest" if newest.awsemu else ""))
 
     pinned = proj.emulator_version if proj else None
     if pinned and binary:

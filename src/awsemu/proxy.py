@@ -270,7 +270,7 @@ class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server: ProxyServer
 
-    def log_message(self, format, *args):
+    def log_message(self, format, *args):  # quiet
         pass
 
     def _body(self) -> bytes:
@@ -314,7 +314,7 @@ class _Handler(BaseHTTPRequestHandler):
         headers = {k.lower(): v for k, v in self.headers.items()}
         try:
             ident = awscalls.identify(self.command, self.path, headers, body)
-        except Exception:
+        except Exception:  # never break a call because we can't name it
             ident = awscalls.Identified()
         decision = self.server.faults.decide(ident.service, ident.operation, ident.resource)
         if decision.latency_ms:

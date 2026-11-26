@@ -62,7 +62,7 @@ def test_only_reads_go_to_aws_signed_with_the_profile(two, profile, tmp_path):
         for _ in range(3):  # reads: the limit is 2
             try:
                 ddb.describe_table(TableName="orders")
-            except Exception:
+            except Exception:  # the fakes don't know DescribeTable: same 404 from both
                 pass
         shadow.close()
     finally:

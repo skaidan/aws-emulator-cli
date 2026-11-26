@@ -100,7 +100,7 @@ def explain(call: dict, index: chk.Index, release: str, suite: str, with_issues:
         if with_issues and op.differences:
             try:
                 chk.attach_issues(report)
-            except Exception:
+            except Exception:  # explanations are a bonus; the verdict doesn't need them
                 pass
         at_op = [d for d in op.differences if d.at_operation]
         out["differences"] = [d.as_dict(suite) for d in at_op]

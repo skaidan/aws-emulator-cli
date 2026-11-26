@@ -143,7 +143,7 @@ def import_seed(sess, sections: set[str]) -> tuple[dict, list[str]]:
         for b in s3.list_buckets().get("Buckets", []):
             try:
                 where = s3.get_bucket_location(Bucket=b["Name"]).get("LocationConstraint") or "us-east-1"
-            except Exception:
+            except Exception:  # a bucket we can't read the location of is skipped
                 notes.append(f"skipped bucket {b['Name']} (couldn't read its Region)")
                 continue
             if where == region:

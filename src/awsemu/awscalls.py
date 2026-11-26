@@ -207,7 +207,7 @@ def _match_rest(
 ) -> tuple[str, dict] | None:
     try:
         ops = _rest_ops(service)
-    except Exception:
+    except Exception:  # no model for this service
         return None
     for op_method, regex, required, _, name in ops:
         if op_method != method:
