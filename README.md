@@ -10,7 +10,7 @@ The emulator itself is a single binary with no subcommands: it runs in the foreg
 - **Work with S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis and Step Functions** through short commands and readable tables: DynamoDB with plain JSON, `lambda deploy` from a folder, EventBridge rules with their target and permissions in one step, and `describe` for any ARN.
 - **Always start with the same data** using a YAML *seed*: `awsemu start --seed seed.yaml`, `awsemu reset --seed seed.yaml`, and `seed export` to save the current state.
 - **Configure it per project** with `awsemu.toml` (`awsemu init`, `awsemu up`, `awsemu down`): its own port, mode, seed…
-- **Use it in tests and CI**: a pytest plugin (`aws_emulator` fixture), a GitHub Action (`uses: skaidan/aws-emulator-cli@v0.9.0`) and `awsemu compose` for Docker Compose.
+- **Use it in tests and CI**: a pytest plugin (`aws_emulator` fixture), a GitHub Action (`uses: skaidan/aws-emulator-cli@v0.11.0`) and `awsemu compose` for Docker Compose.
 - **Explore it**: a terminal UI (`awsemu ui`), live changes (`awsemu watch`), completion of your resource names, and the **per-service fidelity** of your emulator version (`awsemu fidelity`).
 - **See every API call and inject faults**: `awsemu proxy` sits between your code and the emulator, logs each call (`awsemu watch --calls`) and can throttle, fail or slow down the services you pick, to test retries and error handling (also as pytest fixtures: `aws_faults`, `aws_calls`).
 - **Know whether your project will work** before you start: `awsemu check` finds the AWS operations your code and infrastructure use and lists the known emulator differences for them, each with the emulator issue that explains it and whether the latest release fixes it; `awsemu issues` searches AWS's own list of known gaps; `awsemu fidelity --compare` shows what an upgrade changes; `awsemu install VERSION --pin` gives your team and CI the same emulator version.
@@ -61,7 +61,7 @@ Requirements: Python 3.10+ and **one** of these two ways to run the emulator:
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
 # or a specific release (any tag from the Releases page):
-pipx install git+https://github.com/skaidan/aws-emulator-cli@v0.9.0
+pipx install git+https://github.com/skaidan/aws-emulator-cli@v0.11.0
 ```
 
 All versions: [Releases](https://github.com/skaidan/aws-emulator-cli/releases). For the terminal UI (`awsemu ui`), install the `ui` extra: `pipx install 'aws-emulator-cli[ui] @ git+https://github.com/skaidan/aws-emulator-cli'`.
@@ -241,7 +241,7 @@ def test_upload(aws_emulator):           # pytest plugin: own emulator, seed and
 ```
 
 ```yaml
-- uses: skaidan/aws-emulator-cli@v0.9.0   # GitHub Actions: verified package, seed and variables
+- uses: skaidan/aws-emulator-cli@v0.11.0   # GitHub Actions: verified package, seed and variables
   with:
     seed: tests/seed.yaml
 ```

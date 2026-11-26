@@ -106,7 +106,7 @@ Goal: what the emulator doesn't provide. It doesn't log API calls (checked in CI
 - ✅ **Fault injection**: rules like `dynamodb=throttle@10%`, `s3=latency:500ms`, `sqs:SendMessage=503@5%x3`, `reset`; per command (`--fault`, `awsemu proxy faults add/set/clear` while it runs) and in `awsemu.toml` (`faults`). Errors are written in each API's protocol, so SDKs raise the real exception and retry as they would against AWS (checked against botocore's parsers and retry rules).
 - ✅ pytest plugin integration: `aws_faults` (faults for one test, removed after it), `aws_calls` (assert on the calls your code made), `aws_proxy`, and `--awsemu-proxy` for a whole session.
 
-## v0.10 — Completing what exists ✅
+## v0.10 — Completing what exists ✅ (released in 0.11.0)
 
 Goal: close the known gaps in what's already done.
 
@@ -132,7 +132,7 @@ Goal: close the known gaps in what's already done.
   - ✅ a token for the admin API (before it, any local process could change the faults), and a Java truststore for the proxy's certificate;
   - ✅ `awsemu report CALL_ID`: a draft GitHub issue for the emulator with what AWS asks for (the request, the emulator's response and what AWS answers), built from the proxy's log, with credentials removed. What AWS answers is left for whoever files it, with a link to the operation's reference: awsemu doesn't call AWS.
 
-## v0.11 — AI agents ✅
+## v0.11 — AI agents ✅ (0.11.0)
 
 Goal: a coding agent tests its code against the emulator without touching AWS.
 

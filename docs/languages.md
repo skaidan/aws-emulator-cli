@@ -95,7 +95,7 @@ CloudFormation and SAM templates deploy the same way, with the AWS CLI: `awsemu 
 The [GitHub Action](testing.md#github-actions) exports the variables to the rest of the job. For Node or Java, ask for them with the `sdk` input:
 
 ```yaml
-- uses: skaidan/aws-emulator-cli@v0.9.0
+- uses: skaidan/aws-emulator-cli@v0.11.0
   with:
     sdk: node          # or java, or "node,java"
 - run: npm test        # no awsemu exec needed

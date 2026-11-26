@@ -1,14 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 — 2026-11-26
 
-Towards 0.10.0 (the next release also has what was planned for 0.11).
+Everything planned for 0.10 and 0.11, in one release. Coding agents get an MCP server with guard rails (`awsemu mcp`, guide: `docs/agents.md`) and can ask whether a failure is the emulator or the code (`awsemu explain`). The proxy logs bodies, exports HAR, takes faults per resource and over time, serves containers and drafts emulator issues (`awsemu report`). Node, Java, Go, Terraform and CDK are tested in CI, with Testcontainers modules for Python, Java and Node. Plus `awsemu call`, `lambda deploy --watch`, snapshots, four new seed sections, `awsemu issues` and setup-trap detection in `doctor`.
+
+### AI coding agents
 
 - `awsemu mcp`: an MCP server (stdio, no extra dependency) so coding agents test against the emulator: status, start/stop, the environment for the code, seeds, resources, any API call, fidelity, project checks, the proxy's calls and faults, and explaining a failure. Guard rails: no real credentials or endpoint overrides reach the commands, tools refuse an emulator that isn't on 127.0.0.1, no tool takes an endpoint, region or keys, and every answer says it ran on the emulator, not AWS. `awsemu mcp config claude-code|claude-desktop|cursor|vscode` prints how to add it. Guide: `docs/agents.md`.
 - `awsemu explain [CALL]`: whether a failed call from the proxy's log is a known emulator difference, maybe one, an emulator gap, probably the code under test, or unknown, with the fidelity tests that back it.
 
-- Other languages and infrastructure tools, tested in CI against the real emulator: `examples/sdks/node` (AWS SDK for JavaScript v3), `examples/sdks/java` (SDK for Java v2), `examples/sdks/go` (SDK for Go v2), `examples/terraform` and `examples/cdk`, and a guide, `docs/languages.md`, with what each needs.
-- `--sdk java` no longer makes the JVM trust only the emulator, which broke every other HTTPS connection of the process (Maven, Gradle). It builds a truststore with what Java already trusted (your truststore, or the JDK's `cacerts`) plus the emulator's certificate, with `keytool`, and keeps your other `JAVA_TOOL_OPTIONS` (proxy settings, memory), which it used to replace.
+### The proxy
+
 - Proxy fault rules for one resource (`dynamodb:PutItem[orders]=throttle`, `s3[uploads-*]=503`) and for a while (`s3=503 for 30s`, an outage that recovers). `awsemu proxy faults` shows each rule's state and time left; its `--json` adds `active` and `remaining_s`.
 - `awsemu proxy start --bodies` (or `proxy_bodies = true`): the calls log also keeps headers and bodies (64 KB each), with secrets and credentials masked: auth headers, presigned signatures, values of secret-like keys in JSON, XML and form bodies, SSM `SecureString` values. Presigned signatures are now masked in every call's `path`.
 - `awsemu proxy har`: the logged calls as a HAR file, for a browser's developer tools.
@@ -17,20 +19,34 @@ Towards 0.10.0 (the next release also has what was planned for 0.11).
 - The proxy's admin API needs a token, made on each start and kept in its state file (readable only by you), so other local processes or the network can't change the faults or read the calls.
 - `--sdk java` with the proxy builds a truststore with the proxy's certificate too, instead of asking you to import it.
 - `awsemu check --from-calls` (and `--calls-file FILE`): check the operations the proxy saw your tests call, instead of scanning the code.
+
+### Other languages, infrastructure and test frameworks
+
+- Other languages and infrastructure tools, tested in CI against the real emulator: `examples/sdks/node` (AWS SDK for JavaScript v3), `examples/sdks/java` (SDK for Java v2), `examples/sdks/go` (SDK for Go v2), `examples/terraform` and `examples/cdk`, and a guide, `docs/languages.md`, with what each needs.
+- `--sdk java` no longer makes the JVM trust only the emulator, which broke every other HTTPS connection of the process (Maven, Gradle). It builds a truststore with what Java already trusted (your truststore, or the JDK's `cacerts`) plus the emulator's certificate, with `keytool`, and keeps your other `JAVA_TOOL_OPTIONS` (proxy settings, memory), which it used to replace.
 - Testcontainers modules: `AwsEmulatorContainer` for Python (`awsemu.containers`, extra `testcontainers`), Java (`testcontainers/java`) and Node (`testcontainers/node`). They run the image from `awsemu image build` on a random port, read the certificate and keys from the container, and give the endpoint, credentials and a way to trust the certificate only in your clients. Tested in CI against the image; not published yet.
-- `awsemu call SERVICE OPERATION [-p Key=value] [--params JSON]`: any operation of any service through boto3, for the services without their own commands and machines without the AWS CLI. Operations in any spelling (`ListBuckets`, `list_buckets`, `list-buckets`) with suggestions for typos, `--paginate`, `--query` (JMESPath), `--out` for streaming bodies, `-p Body=@file` for bytes, and shell completion of services and operations.
-- A fast Lambda loop: `awsemu lambda deploy ./folder --watch [--invoke JSON]` redeploys the code on every save and runs it, and keeps watching when a deploy fails. `deploy` with only a path names the function after it, and a Python folder's `requirements.txt` is installed into the package (cached until it changes; `--no-deps` to skip, `deps: false` in seeds).
 - Terraform: AWS provider 6.23+ can't read S3 bucket tags from a local emulator (S3 Control puts the account ID in the host name); the example pins `< 6.23`, and the guide and troubleshooting explain it.
 - GitHub Action: new `sdk` input (`node`, `java`…) to export the certificate settings those SDKs need.
+
+### Working with services
+
+- `awsemu call SERVICE OPERATION [-p Key=value] [--params JSON]`: any operation of any service through boto3, for the services without their own commands and machines without the AWS CLI. Operations in any spelling (`ListBuckets`, `list_buckets`, `list-buckets`) with suggestions for typos, `--paginate`, `--query` (JMESPath), `--out` for streaming bodies, `-p Body=@file` for bytes, and shell completion of services and operations.
+- A fast Lambda loop: `awsemu lambda deploy ./folder --watch [--invoke JSON]` redeploys the code on every save and runs it, and keeps watching when a deploy fails. `deploy` with only a path names the function after it, and a Python folder's `requirements.txt` is installed into the package (cached until it changes; `--no-deps` to skip, `deps: false` in seeds).
 - `awsemu snapshot save NAME`, `restore NAME [--no-reset]`, `ls [--json]`, `rm NAME`: save everything in the emulator and come back to it later. A snapshot is a seed export of every section with the files it needs, kept in `~/.aws/emulator-cli/snapshots/` (or `--dir`). `restore` empties the emulator and applies it, and warns when it was saved with another emulator version.
 - Seeds: four new sections. `streams` (Kinesis: shards, retention), `functions` (Lambda from local code: handler and runtime guessed as in `lambda deploy`, `env`, `timeout`, `memory`, and `triggers` from SQS queues and Kinesis streams), `state_machines` (Step Functions, a definition file or inline) and `rules` (EventBridge: a pattern or a schedule, any bus, up to 5 targets among SQS, Lambda, SNS, Step Functions and Kinesis, with the permissions they need). `apply` is still repeatable: a function is only redeployed when its code changed. `seed export` writes them too, and saves functions' code with `--objects-dir`.
 - `awsemu lambda deploy` builds reproducible packages (same files, same zip), so the code's SHA-256 says whether it changed.
+
+### Knowing what to trust
+
 - `awsemu doctor` finds the setup traps that quietly break SDK calls in your shell: an `AWS_ENDPOINT_URL` where nothing answers (or with `http://`), an `AWS_CA_BUNDLE` that's missing, for another port or not the emulator's, an HTTP(S) proxy without `127.0.0.1` in `NO_PROXY`, and settings of your own `~/.aws/config` that the emulator's `AWS_CONFIG_FILE` hides (with the environment variables that do the same). The `localhost` warning now says why.
 - `awsemu env`, `exec` and `shell` add `127.0.0.1,localhost` to `NO_PROXY` when `HTTPS_PROXY`/`HTTP_PROXY` is set, so a company proxy never gets the emulator's calls. `env --unset` leaves your `NO_PROXY` alone.
-- Fixed: with the emulator's auth off (`--no-auth`, `auth = false`), `awsemu env`, `exec`, `shell` and the pytest plugin set no credentials, because the emulator writes no credentials file then. The SDKs failed with "unable to locate credentials", or signed with your real default profile from `~/.aws/credentials`. They now set placeholder keys (`EMULATORAUTHOFF00000`), as awsemu's own clients already did.
 - CI: a daily `Emulator watch` workflow tests every new AWS Emulator release as soon as it's published (installed with `awsemu install`, signature checked). A failure opens an `emulator-compat` issue, and the next release that passes closes it.
 - `awsemu check` explains each known difference. `↳ fixed in vX` means the test passes in the latest release (one more scores download). `↳ known issue (SEVERITY): …` links to the emulator's own issue file that explains it (`issues/` in aws/aws-emulator). The summary counts both. `--no-explain` skips these lookups. JSON: each difference gains `issues` and `fixed_in`; the summary gains `explained_by_issues`, `fixed_in_latest` and `latest`.
 - `awsemu issues [SERVICE[:Operation]]... [--mine] [--fixed] [--severity LEVEL] [--search TEXT] [--show N|NAME] [--json]`: search AWS's list of known emulator gaps (about 3,800 open, 20,000 fixed). Only the start of each file is downloaded, and it's cached by its content. `--fixed` marks the fixes your release doesn't have yet.
+
+### Fixes
+
+- Fixed: with the emulator's auth off (`--no-auth`, `auth = false`), `awsemu env`, `exec`, `shell` and the pytest plugin set no credentials, because the emulator writes no credentials file then. The SDKs failed with "unable to locate credentials", or signed with your real default profile from `~/.aws/credentials`. They now set placeholder keys (`EMULATORAUTHOFF00000`), as awsemu's own clients already did.
 - Fixed: the `check` summary counted a failing test once per operation it affects. `differences` (and "N failing test(s)") now counts distinct tests.
 
 ## 0.9.0 — 2026-11-25
