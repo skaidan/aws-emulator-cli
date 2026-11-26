@@ -1,6 +1,6 @@
 # Seeds: reproducible starting data
 
-The emulator keeps everything in memory: stopping or restarting it loses it all. A **seed** is a YAML file describing what you want inside (buckets with objects, queues, tables with items, topics with subscriptions, secrets and parameters) so you can recreate it with one command.
+The emulator keeps everything in memory: stopping or restarting it loses it all. A **seed** is a YAML file describing what you want inside (buckets with objects, queues, tables with items, topics with subscriptions, secrets, parameters, Kinesis streams, Lambda functions from your local code with their triggers, Step Functions state machines and EventBridge rules) so you can recreate it with one command.
 
 ```bash
 awsemu seed apply seed.yaml          # apply to an emulator that's already running
@@ -64,9 +64,44 @@ parameters:
   - {name: /app/host, value: localhost}
   - {name: /app/key, value: abc, type: SecureString}
   - {name: /app/hosts, value: [a, b, c]}     # a list is a StringList
+
+streams:
+  - name: clicks
+    shards: 2                  # default 1
+    retention_hours: 48        # default 24
+
+functions:
+  - name: resize
+    code: ./functions/resize   # a folder, a single file or a .zip
+    handler: app.handler       # guessed from the code if omitted (like 'awsemu lambda deploy')
+    runtime: python3.12        # guessed too
+    env: {BUCKET: photos}
+    timeout: 30                # seconds (default 3)
+    memory: 256                # MB (default 128)
+    triggers:                  # event source mappings
+      - {sqs: jobs, batch_size: 5}
+      - {kinesis: clicks, starting_position: TRIM_HORIZON}   # TRIM_HORIZON by default
+
+state_machines:
+  - name: order-flow
+    definition: ./flows/order.asl.json   # a .json or .yaml file, or the definition inline
+    express: false                       # EXPRESS instead of STANDARD
+
+rules:
+  - name: orders-created
+    bus: default               # other buses are created if missing
+    pattern: {source: [app.orders]}
+    targets:
+      - sqs: jobs              # sets the queue policy
+      - lambda: resize         # adds the invoke permission
+      - stepfunctions: order-flow
+        input: {from: rule}    # optional: a fixed input instead of the event
+  - name: nightly
+    schedule: rate(1 day)      # instead of a pattern
+    targets: [{kinesis: clicks}, {sns: alerts}]
 ```
 
-Every section is optional. Paths (`from`, `items_from`) are relative to the seed file.
+Every section is optional. Paths (`from`, `items_from`, `code`, `definition`) are relative to the seed file.
 
 ### Fields
 
@@ -80,6 +115,12 @@ Every section is optional. Paths (`from`, `items_from`) are relative to the seed
 | `topics[].subscriptions` | one of `sqs` or `lambda`, `raw`, `filter` | `sqs` or `lambda` |
 | `secrets` | `name`, `value`, `description` | `name`, `value` |
 | `parameters` | `name`, `value`, `type` (`String`, `SecureString`, `StringList`), `description` | `name`, `value` |
+| `streams` | `name`, `shards`, `retention_hours` | `name` |
+| `functions` | `name`, `code`, `handler`, `runtime`, `env`, `timeout`, `memory`, `description`, `triggers` | `name`, `code` |
+| `functions[].triggers` | one of `sqs` or `kinesis`, `batch_size`, `enabled`, `starting_position` (Kinesis) | `sqs` or `kinesis` |
+| `state_machines` | `name`, `definition`, `express` | `name`, `definition` |
+| `rules` | `name`, `bus`, `description`, one of `pattern` or `schedule`, `enabled`, `targets` (at most 5) | `name`, `pattern` or `schedule` |
+| `rules[].targets` | one of `sqs`, `lambda`, `sns`, `stepfunctions` or `kinesis`, `input` | one of the five |
 
 ## Validation
 
@@ -94,7 +135,7 @@ Every section is optional. Paths (`from`, `items_from`) are relative to the seed
 
 Among other things it checks: unknown fields (with a suggestion), types, duplicate names, that items have the table's key attributes with the right type, that the `from` and `items_from` files exist, that FIFO queues end in `.fifo`, that a queue isn't its own DLQ, and AWS's rule on parameter names.
 
-If a `dlq` or an `sqs` subscription points to a queue that isn't in the seed, that's a warning, not an error: it may already exist in the emulator.
+If a `dlq`, a subscription, a trigger or a rule target points to something that isn't in the seed, that's a warning, not an error: it may already exist in the emulator.
 
 With errors, `validate`, `apply`, `start --seed` and `reset --seed` exit with code 2 without doing anything (`reset` doesn't even stop the emulator).
 
@@ -124,19 +165,25 @@ parameter  /app/host      updated
 | Subscription | Creates it, with the queue policy or the Lambda permission | Adjusts `raw` and `filter` if they differ |
 | Secret | Creates it | Stores a new version only if the value changed |
 | Parameter | Creates it | Overwrites it only if the value or type changed |
+| Stream | Creates it and waits until it's active | Changes the shard count or retention if they differ |
+| Function | Packages the code, creates the function (with the role `awsemu-lambda-role`) and waits until it's active | Redeploys the code only if it changed (the package is reproducible, so it compares its SHA-256), and updates the settings that differ |
+| Trigger | Creates the event source mapping | Adjusts `batch_size` and `enabled` |
+| State machine | Creates it (with the role `awsemu-sfn-role`) | Updates the definition if it differs; **error** if `express` changed (the type can't change) |
+| Rule | Creates it (and its bus if missing) | Updates the pattern, schedule, state or description if they differ |
+| Rule targets | Sets them, with the queue policy, the Lambda permission, or a role for Step Functions and Kinesis | Makes them match the seed: adds, changes, and removes the targets the seed no longer lists |
 
-`apply` **never deletes** anything. To start from scratch, use `awsemu reset --seed seed.yaml`.
+`apply` **never deletes** resources (only the targets of a rule the seed describes). To start from scratch, use `awsemu reset --seed seed.yaml`.
 
 If a resource fails, `apply` carries on with the rest, marks it as `failed` with the reason and exits with code 1.
 
-The order is: buckets, queues, tables, topics, secrets and parameters (queues before topics, so they can be subscribed). Lambda subscriptions need the function to exist: deploy it first with `awsemu lambda deploy`.
+The order is: buckets, queues, tables, streams, secrets, parameters, functions, state machines, topics and rules, so everything a function, a subscription or a rule points at exists first.
 
 ## Export
 
 ```bash
 awsemu seed export                          # to standard output
 awsemu seed export -o seed.yaml
-awsemu seed export -o seed.yaml --objects-dir seed-objects   # also saves binary and large objects
+awsemu seed export -o seed.yaml --objects-dir seed-files     # also saves binary and large objects, and functions' code
 awsemu seed export --no-secrets             # without secrets or SecureString parameters
 awsemu seed export -s queues -s tables      # only some sections
 ```
@@ -146,7 +193,8 @@ Handy for building a scenario by hand (or with your application) and saving it f
 - S3 text objects up to 64 KiB are stored inside the seed (`content`). Binary or larger ones are saved in `--objects-dir` and referenced with `from`; without that option they're skipped with a warning.
 - Secrets and `SecureString` parameters are exported **in plain text**, and `awsemu` warns you when writing the file. Use `--no-secrets` if the seed goes into a repository.
 - Only SQS and Lambda subscriptions are exported.
-- Lambda functions, EventBridge rules, Kinesis streams and Step Functions state machines aren't part of the format (yet).
+- Lambda functions are exported with `--objects-dir`, which receives their code as `functions/NAME.zip`. Without it they're skipped with a warning. Only SQS and Kinesis triggers are exported.
+- State machine definitions are exported inline. Rules managed by AWS services are left out, and so are targets other than SQS, Lambda, SNS, Step Functions and Kinesis.
 
 The exported file can be applied as-is; CI checks that exporting, restarting and applying leaves the emulator as it was.
 

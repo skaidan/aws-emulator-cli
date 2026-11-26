@@ -23,6 +23,19 @@ how you get the same starting data after every start or reset::
       - {name: db/password, value: s3cr3t}
     parameters:
       - {name: /app/db/host, value: localhost}
+    streams:
+      - {name: clicks, shards: 2}
+    functions:
+      - name: resize
+        code: ./functions/resize               # a folder, a file or a .zip
+        env: {BUCKET: photos}
+        triggers: [{sqs: jobs, batch_size: 10}]
+    state_machines:
+      - {name: order-flow, definition: ./flows/order.asl.json}
+    rules:
+      - name: orders-created
+        pattern: {source: [app.orders]}        # or schedule: rate(5 minutes)
+        targets: [{sqs: jobs}, {lambda: resize}]
 
 This module only parses and validates (no AWS calls). Errors carry the line
 and the field path, e.g. ``seed.yaml:12 queues[1].dlq: unknown queue 'x'``.
@@ -39,7 +52,8 @@ from typing import Any
 import yaml
 
 VERSION = 1
-SECTIONS = ("buckets", "queues", "tables", "topics", "secrets", "parameters")
+SECTIONS = ("buckets", "queues", "tables", "topics", "secrets", "parameters", "streams", "functions",
+            "state_machines", "rules")
 PARAM_TYPES = ("String", "SecureString", "StringList")
 KEY_TYPES = {"S", "N", "B"}
 
@@ -52,7 +66,15 @@ FIELDS = {
     "subscriptions": {"sqs", "lambda", "raw", "filter"},
     "secrets": {"name", "value", "description"},
     "parameters": {"name", "value", "type", "description"},
+    "streams": {"name", "shards", "retention_hours"},
+    "functions": {"name", "code", "handler", "runtime", "env", "timeout", "memory", "description", "triggers"},
+    "triggers": {"sqs", "kinesis", "batch_size", "enabled", "starting_position"},
+    "state_machines": {"name", "definition", "express"},
+    "rules": {"name", "bus", "description", "pattern", "schedule", "enabled", "targets"},
+    "targets": {"sqs", "lambda", "sns", "stepfunctions", "kinesis", "input"},
 }
+TARGET_KINDS = ("sqs", "lambda", "sns", "stepfunctions", "kinesis")
+STARTING_POSITIONS = ("TRIM_HORIZON", "LATEST")
 
 
 @dataclass
@@ -336,10 +358,123 @@ def _validate(data: Any, lines: dict[tuple, int], seed: Seed) -> list[Problem]:
             v.add(path + ("value",), "a list value needs type StringList")
         v.type(p, "description", str, path, "text")
 
+    # streams
+    stream_names: dict[str, tuple] = {}
+    for path, st in items("streams"):
+        v.name(st, path, stream_names)
+        if v.type(st, "shards", int, path, "a whole number") and "shards" in st and not 1 <= st["shards"] <= 500:
+            v.add(path + ("shards",), "must be between 1 and 500")
+        if v.type(st, "retention_hours", int, path, "a whole number") and "retention_hours" in st \
+                and not 24 <= st["retention_hours"] <= 8760:
+            v.add(path + ("retention_hours",), "must be between 24 and 8760 (AWS limits)")
+
+    def known(kind: str, name: str, where: tuple) -> None:
+        pools = {"sqs": queue_names, "kinesis": stream_names, "lambda": function_names,
+                 "sns": topic_names, "stepfunctions": machine_names}
+        if isinstance(name, str) and name not in pools[kind]:
+            seed.warnings.append(f"{_fmt_path(where)}: '{name}' isn't in this seed; it must already exist "
+                                 "when you apply it")
+
+    topic_names = {t.get("name"): () for t in data.get("topics") or [] if isinstance(t, dict)}
+    function_names: dict[str, tuple] = {}
+    machine_names: dict[str, tuple] = {}
+
+    # functions
+    functions = list(items("functions"))
+    for path, fn in functions:
+        v.name(fn, path, function_names)
+        if not isinstance(fn.get("code"), str):
+            v.add(path + ("code",) if "code" in fn else path, "'code' is required: a folder, a file or a .zip")
+        elif not (seed.base_dir / fn["code"]).exists():
+            v.add(path + ("code",), f"'{fn['code']}' not found (relative to the seed file)")
+        for key in ("handler", "runtime", "description"):
+            v.type(fn, key, str, path, "text")
+        if v.type(fn, "env", dict, path, "a mapping of names to values") and isinstance(fn.get("env"), dict):
+            for k, val in fn["env"].items():
+                if isinstance(val, (dict, list)) or val is None:
+                    v.add(path + ("env", k), "must be text or a number")
+        if v.type(fn, "timeout", int, path, "a whole number of seconds") and "timeout" in fn \
+                and not 1 <= fn["timeout"] <= 900:
+            v.add(path + ("timeout",), "must be between 1 and 900 seconds")
+        if v.type(fn, "memory", int, path, "a whole number of MB") and "memory" in fn \
+                and not 128 <= fn["memory"] <= 10240:
+            v.add(path + ("memory",), "must be between 128 and 10240 MB")
+    for path, fn in functions:
+        if v.type(fn, "triggers", list, path, "a list"):
+            for j, tr in enumerate(fn.get("triggers") or []):
+                tp_ = path + ("triggers", j)
+                if not isinstance(tr, dict):
+                    v.add(tp_, "each trigger must be a mapping")
+                    continue
+                v.keys(tr, FIELDS["triggers"], tp_)
+                sources = [k for k in ("sqs", "kinesis") if k in tr]
+                if len(sources) != 1:
+                    v.add(tp_, "give exactly one of 'sqs' or 'kinesis'")
+                else:
+                    known(sources[0], tr[sources[0]], tp_ + (sources[0],))
+                v.type(tr, "batch_size", int, tp_, "a whole number")
+                v.type(tr, "enabled", bool, tp_, "true or false")
+                if "starting_position" in tr:
+                    if "kinesis" not in tr:
+                        v.add(tp_ + ("starting_position",), "only applies to Kinesis triggers")
+                    elif tr["starting_position"] not in STARTING_POSITIONS:
+                        v.add(tp_ + ("starting_position",), f"must be one of {', '.join(STARTING_POSITIONS)}")
+
+    # state machines
+    for path, sm in items("state_machines"):
+        v.name(sm, path, machine_names)
+        definition = sm.get("definition")
+        if definition is None:
+            v.add(path, "'definition' is required: a file (.json/.yaml) or the definition itself")
+        elif isinstance(definition, str):
+            if not (seed.base_dir / definition).is_file():
+                v.add(path + ("definition",), f"'{definition}' not found (relative to the seed file)")
+        elif not isinstance(definition, dict) or "States" not in definition or "StartAt" not in definition:
+            v.add(path + ("definition",), "an inline definition needs 'StartAt' and 'States'")
+        v.type(sm, "express", bool, path, "true or false")
+
+    # rules
+    seen = {}
+    for path, r in items("rules"):
+        v.name(r, path, seen)
+        has = [k for k in ("pattern", "schedule") if k in r]
+        if len(has) != 1:
+            v.add(path, "give exactly one of 'pattern' or 'schedule'")
+        v.type(r, "pattern", dict, path, "a mapping (an EventBridge event pattern)")
+        v.type(r, "schedule", str, path, "text, like 'rate(5 minutes)' or 'cron(0 12 * * ? *)'")
+        if isinstance(r.get("schedule"), str) and not r["schedule"].startswith(("rate(", "cron(")):
+            v.add(path + ("schedule",), "must look like 'rate(5 minutes)' or 'cron(0 12 * * ? *)'")
+        for key in ("bus", "description"):
+            v.type(r, key, str, path, "text")
+        v.type(r, "enabled", bool, path, "true or false")
+        if v.type(r, "targets", list, path, "a list"):
+            for j, t in enumerate(r.get("targets") or []):
+                tp_ = path + ("targets", j)
+                if not isinstance(t, dict):
+                    v.add(tp_, "each target must be a mapping")
+                    continue
+                v.keys(t, FIELDS["targets"], tp_)
+                kinds = [k for k in TARGET_KINDS if k in t]
+                if len(kinds) != 1:
+                    v.add(tp_, f"give exactly one of {', '.join(TARGET_KINDS)}")
+                else:
+                    known(kinds[0], t[kinds[0]], tp_ + (kinds[0],))
+            if len(r.get("targets") or []) > 5:
+                v.add(path + ("targets",), "a rule can have at most 5 targets (AWS limit)")
+
     return v.problems
 
 
 # --------------------------------------------------------------------------- helpers for apply
+
+
+def read_definition(sm: dict, base_dir: Path) -> dict:
+    """A state machine's definition: inline, or from a .json/.yaml file."""
+    definition = sm["definition"]
+    if isinstance(definition, dict):
+        return definition
+    text = (base_dir / definition).read_text(encoding="utf-8")
+    return yaml.safe_load(text) if definition.endswith((".yaml", ".yml")) else json.loads(text)
 
 
 def key_spec(value: str) -> tuple[str, str]:

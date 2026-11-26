@@ -18,6 +18,7 @@ from click.testing import CliRunner
 
 from awsemu import runtime
 from awsemu.cli import cli
+from awsemu.clients import client
 from awsemu.paths import ACCOUNT_ID, InstanceFiles
 
 pytestmark = [
@@ -363,7 +364,8 @@ def _results(output):
     out = {}
     for line in output.splitlines():
         parts = line.split()
-        if len(parts) >= 3 and parts[0] in ("bucket", "queue", "table", "topic", "secret", "parameter"):
+        if len(parts) >= 3 and parts[0] in ("bucket", "queue", "table", "topic", "secret", "parameter",
+                                            "stream", "function", "state_machine", "rule"):
             out[(parts[0], parts[1])] = parts[2]
     return out
 
@@ -648,3 +650,77 @@ def test_auth_off_exec_signs_with_placeholder_keys(real_home, tmp_path):
             real.unlink()
         else:
             real.write_text(saved)
+
+
+SEED_MORE = """
+version: 1
+queues:
+  - {name: more-jobs}
+  - {name: more-events}
+streams:
+  - {name: more-clicks, shards: 2}
+functions:
+  - name: more-echo
+    code: ./fn
+    env: {STAGE: test}
+    timeout: 10
+    triggers: [{sqs: more-jobs, batch_size: 5}]
+state_machines:
+  - name: more-flow
+    definition: ./flow.yaml
+rules:
+  - name: more-orders
+    pattern: {source: [app.orders]}
+    targets: [{sqs: more-events}, {stepfunctions: more-flow}]
+"""
+
+
+def _write_more(tmp_path, text=SEED_MORE):
+    (tmp_path / "fn").mkdir(exist_ok=True)
+    (tmp_path / "fn" / "app.py").write_text(
+        "import os\n\ndef handler(event, context):\n    return {'stage': os.environ.get('STAGE'), 'event': event}\n")
+    (tmp_path / "flow.yaml").write_text("StartAt: Hi\nStates:\n  Hi: {Type: Pass, Result: done, End: true}\n")
+    path = tmp_path / "more.yaml"
+    path.write_text(text)
+    return path
+
+
+def test_seed_functions_streams_machines_rules(emu, tmp_path):
+    path = _write_more(tmp_path)
+    first = _results(run(emu, "seed", "apply", str(path)).output)
+    assert set(first.values()) == {"created"} and len(first) == 6, first
+
+    out = json.loads(run(emu, "lambda", "invoke", "more-echo", '{"n": 1}', "--raw").output)
+    assert out == {"stage": "test", "event": {"n": 1}}
+    assert "2" in run(emu, "kinesis", "ls").output
+    mappings = client("lambda", emu).list_event_source_mappings(FunctionName="more-echo")["EventSourceMappings"]
+    assert [(m["EventSourceArn"].rsplit(":", 1)[-1], m["BatchSize"]) for m in mappings] == [("more-jobs", 5)]
+    run(emu, "events", "put", "app.orders", "Created", '{"id": 7}')
+    msgs = json.loads(run(emu, "sqs", "receive", "more-events", "--wait", "10", "--delete", "--json").output)
+    assert json.loads(msgs[0]["Body"])["detail"] == {"id": 7}
+
+    # Applied again: nothing changes (the zip is reproducible, so the code isn't redeployed)
+    second = _results(run(emu, "seed", "apply", str(path)).output)
+    assert set(second.values()) == {"unchanged"}, second
+
+    # Changes are applied
+    changed = _write_more(tmp_path, SEED_MORE.replace("STAGE: test", "STAGE: prod")
+                          .replace("shards: 2", "shards: 3").replace("batch_size: 5", "batch_size: 7"))
+    third = _results(run(emu, "seed", "apply", str(changed)).output)
+    assert third[("function", "more-echo")] == "updated" and third[("stream", "more-clicks")] == "updated", third
+    assert third[("rule", "more-orders")] == "unchanged"
+    assert json.loads(run(emu, "lambda", "invoke", "more-echo", "{}", "--raw").output)["stage"] == "prod"
+
+    # Export with the code, and apply the export to an empty emulator
+    exported = tmp_path / "out" / "seed.yaml"
+    exported.parent.mkdir()
+    run(emu, "seed", "export", "-o", str(exported), "--objects-dir", str(tmp_path / "out" / "files"))
+    text = exported.read_text()
+    for needle in ("more-echo", "code: files/functions/more-echo.zip", "STAGE: prod", "more-clicks", "shards: 3",
+                   "more-flow", "StartAt: Hi", "more-orders", "app.orders", "stepfunctions: more-flow",
+                   "batch_size: 7"):
+        assert needle in text, (needle, text)
+    run(emu, "seed", "validate", str(exported))
+    run(emu, "reset", "--native", "--no-telemetry", "--idle-timeout", "900", "--wait", "60", "--seed", str(exported))
+    assert json.loads(run(emu, "lambda", "invoke", "more-echo", "{}", "--raw").output)["stage"] == "prod"
+    assert "more-orders" in run(emu, "events", "rules").output

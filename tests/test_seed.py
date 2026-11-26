@@ -97,6 +97,21 @@ def test_yaml_syntax_error_has_line():
     ("secrets:\n  - {name: s}\n", "'value' is required"),
     ("parameters:\n  - {name: /aws/x, value: 1}\n", "can't start with 'aws' or 'ssm'"),
     ("parameters:\n  - {name: /x, value: [a], type: String}\n", "needs type StringList"),
+    ("streams:\n  - {name: s, shards: 0}\n", "between 1 and 500"),
+    ("streams:\n  - {name: s, retention_hours: 1}\n", "between 24 and 8760"),
+    ("functions:\n  - {name: f}\n", "'code' is required"),
+    ("functions:\n  - {name: f, code: ./nope}\n", "'./nope' not found"),
+    ("functions:\n  - {name: f, code: ., timeout: 901}\n", "between 1 and 900 seconds"),
+    ("functions:\n  - {name: f, code: ., env: {A: [1]}}\n", "must be text or a number"),
+    ("functions:\n  - name: f\n    code: .\n    triggers: [{batch_size: 1}]\n", "exactly one of 'sqs' or 'kinesis'"),
+    ("functions:\n  - name: f\n    code: .\n    triggers: [{sqs: q, starting_position: LATEST}]\n",
+     "only applies to Kinesis"),
+    ("state_machines:\n  - {name: m}\n", "'definition' is required"),
+    ("state_machines:\n  - {name: m, definition: {States: {}}}\n", "needs 'StartAt' and 'States'"),
+    ("rules:\n  - {name: r}\n", "exactly one of 'pattern' or 'schedule'"),
+    ("rules:\n  - {name: r, schedule: every day}\n", "rate(5 minutes)"),
+    ("rules:\n  - name: r\n    pattern: {source: [a]}\n    targets: [{http: x}]\n", "unknown field"),
+    ("rules:\n  - name: r\n    pattern: {source: [a]}\n    targets: [{}, {}, {}, {}, {}, {}]\n", "at most 5 targets"),
     ("version: 2\n", "unsupported version 2"),
     ("bucket:\n  - name: x\n", "did you mean 'buckets'?"),
     ("- just a list\n", "top level must be a mapping"),
@@ -110,6 +125,40 @@ def test_references_outside_the_seed_are_warnings():
     s = seed.load_text("queues:\n  - {name: q, dlq: existing-dlq}\n"
                        "topics:\n  - name: t\n    subscriptions: [{sqs: existing}]\n")
     assert len(s.warnings) == 2 and "must already exist" in s.warnings[0]
+
+
+def test_new_sections_load_with_cross_references(tmp_path):
+    (tmp_path / "fn").mkdir()
+    (tmp_path / "fn" / "app.py").write_text("def handler(event, context):\n    return event\n")
+    (tmp_path / "flow.yaml").write_text("StartAt: Hi\nStates:\n  Hi: {Type: Pass, End: true}\n")
+    s = seed.load_text("""
+queues: [{name: jobs}]
+streams: [{name: clicks, shards: 2}]
+functions:
+  - {name: echo, code: ./fn, env: {A: 1}, triggers: [{sqs: jobs}, {kinesis: clicks}, {sqs: elsewhere}]}
+state_machines:
+  - {name: flow, definition: ./flow.yaml}
+rules:
+  - name: r
+    pattern: {source: [app]}
+    targets: [{sqs: jobs}, {lambda: echo}, {stepfunctions: flow}, {kinesis: clicks}, {sns: alerts}]
+""", "seed.yaml", tmp_path)
+    assert s.count() == {"queues": 1, "streams": 1, "functions": 1, "state_machines": 1, "rules": 1}
+    assert len(s.warnings) == 2 and "'elsewhere'" in s.warnings[0] and "'alerts'" in s.warnings[1]
+    assert seed.read_definition(s.section("state_machines")[0], tmp_path)["StartAt"] == "Hi"
+
+
+def test_lambda_zip_is_reproducible(tmp_path):
+    import os
+    import time
+
+    from awsemu.commands.lambda_ import build_zip
+
+    (tmp_path / "app.py").write_text("x = 1\n")
+    first = build_zip(tmp_path)
+    time.sleep(0.01)
+    os.utime(tmp_path / "app.py", (time.time() + 100, time.time() + 100))
+    assert build_zip(tmp_path) == first  # same content, same bytes, whatever the dates
 
 
 def test_object_payloads(seed_dir):

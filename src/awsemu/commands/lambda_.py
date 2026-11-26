@@ -34,20 +34,31 @@ def _skip(rel: Path) -> bool:
     return any(part in SKIP_DIRS for part in rel.parts) or rel.suffix in SKIP_SUFFIXES
 
 
+def _add(zf: zipfile.ZipFile, path: Path, name: str) -> None:
+    # A fixed date: the same files always give the same zip, so CodeSha256 tells
+    # whether the code changed (seeds don't redeploy unchanged functions).
+    info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.external_attr = (path.stat().st_mode & 0o777 | 0o100000) << 16
+    info.compress_type = zipfile.ZIP_DEFLATED
+    zf.writestr(info, path.read_bytes())
+
+
 def build_zip(source: Path) -> bytes:
-    """Zip a folder (contents at the zip root), a single file, or pass a .zip through."""
+    """Zip a folder (contents at the zip root), a single file, or pass a .zip through.
+
+    The zip is reproducible: same files, same bytes."""
     if source.is_file() and source.suffix == ".zip":
         return source.read_bytes()
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         if source.is_file():
-            zf.write(source, source.name)
+            _add(zf, source, source.name)
         else:
             files = sorted(p for p in source.rglob("*") if p.is_file())
             for path in files:
                 rel = path.relative_to(source)
                 if not _skip(rel):
-                    zf.write(path, rel.as_posix())
+                    _add(zf, path, rel.as_posix())
     data = buf.getvalue()
     if len(zipfile.ZipFile(io.BytesIO(data)).namelist()) == 0:
         raise click.BadParameter(f"nothing to package in {source}")

@@ -1054,9 +1054,9 @@ awsemu seed export [OPTIONS]
 | Option | Description |
 | --- | --- |
 | `-o, --output FILE` | Write to this file (default: stdout). |
-| `--objects-dir DIRECTORY` | Save binary or large S3 objects here and reference them with 'from'. |
+| `--objects-dir DIRECTORY` | Save binary or large S3 objects, and Lambda functions' code, here (referenced from the seed). |
 | `--no-secrets` | Leave out secrets and SecureString parameters. |
-| `-s, --section [buckets|queues|tables|topics|secrets|parameters]` | Only these sections. Repeatable. |
+| `-s, --section [buckets|queues|tables|topics|secrets|parameters|streams|functions|state_machines|rules]` | Only these sections. Repeatable. |
 
 ### `awsemu seed validate`
 
