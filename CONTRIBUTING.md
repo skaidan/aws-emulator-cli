@@ -1,5 +1,9 @@
 # Contributing
 
+## Where to start
+
+Issues labelled [`good first issue`](https://github.com/skaidan/aws-emulator-cli/labels/good%20first%20issue) are small and self-contained; [`help wanted`](https://github.com/skaidan/aws-emulator-cli/labels/help%20wanted) ones are bigger but welcome. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md); security problems go through [SECURITY.md](SECURITY.md), not issues.
+
 ## Language
 
 English is the project's official language. Everything is written in English: code, comments, docstrings, command help and messages, documentation, the ROADMAP and CHANGELOG, examples and test data, commit messages, pull requests and issues.

@@ -1,0 +1,19 @@
+name: Idea or feature request
+description: Something awsemu could do, or do better.
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: Check the [roadmap](https://github.com/skaidan/aws-emulator-cli/blob/main/ROADMAP.md) first; it may be planned already.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you're trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: A command, an option, a behaviour. Examples of how you'd use it help a lot.

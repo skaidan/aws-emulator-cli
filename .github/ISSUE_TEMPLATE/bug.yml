@@ -1,0 +1,35 @@
+name: Bug in awsemu
+description: awsemu does something wrong, crashes, or its docs are wrong.
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the **emulator** answers differently from AWS (a wrong error, a missing field), that's AWS Emulator's to fix: `awsemu report CALL` drafts the issue for [aws/aws-emulator](https://github.com/aws/aws-emulator/issues). For a security problem, use [Report a vulnerability](https://github.com/skaidan/aws-emulator-cli/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran and what it printed (with `--json` if it has it). Remove anything sensitive.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: awsemu doctor
+      description: The output of `awsemu doctor` (versions, OS, mode). It doesn't print credentials.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: awsemu.toml, a seed, the log (`awsemu logs -n 50`), how to reproduce it.

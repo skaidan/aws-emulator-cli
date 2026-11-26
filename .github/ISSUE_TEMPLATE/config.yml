@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: The emulator differs from AWS
+    url: https://github.com/aws/aws-emulator/issues/new?template=behavior-differs.yml
+    about: AWS Emulator's own issues (awsemu report CALL drafts one from the proxy's log).
+  - name: Report a security problem
+    url: https://github.com/skaidan/aws-emulator-cli/security/advisories/new
+    about: Privately, please. See SECURITY.md.

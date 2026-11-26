@@ -4,6 +4,8 @@
 
 Towards 0.12.0.
 
+- Releases come with signed build provenance (Sigstore, GitHub attestations), a CycloneDX SBOM and SHA-256 checksums; `SECURITY.md` says how to verify them. GitHub Actions are pinned to commit SHAs, and Dependabot proposes updates for Python, Actions, npm and Maven dependencies.
+- Project health: `SECURITY.md` (private vulnerability reports, scope), a code of conduct, issue forms (bugs, ideas, links to the emulator's own issues) and a pull request template.
 - Development: ruff (lint and format) and mypy run in CI, the code is formatted and type-checked, and tests have a coverage minimum (65%; 69% today). The proxy now closes every socket and upstream connection when it stops, and the suite runs without resource warnings.
 
 - `awsemu iam policy`: the least-privilege IAM policy for the calls in the proxy's log: actions (with S3, Lambda and batch exceptions mapped) and resource ARNs where the calls name them; `--account`, `--region`, `--service`, `--format terraform`.

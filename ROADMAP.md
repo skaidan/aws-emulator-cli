@@ -159,8 +159,8 @@ Goal: what a project people depend on needs, beyond features.
 - ⬜ **A compatibility matrix**: the oldest emulator version each awsemu release works with, tested in CI with `awsemu install VERSION`, and shown by `awsemu doctor`.
 - ✅ **Static checks in CI**: ruff (lint and format) and mypy on `src/`, and test coverage with a minimum. Fix the warnings that exist today (`tests/test_watch.py`).
 - ⬜ **Update notices**: `awsemu doctor` (and, at most once a day, `awsemu start`) says when there's a newer emulator release, or a newer awsemu, without getting in the way in CI.
-- ⬜ **Supply chain**: Dependabot for Python dependencies and Actions, pinned Action versions, signed release artifacts with provenance (Sigstore / GitHub attestations), and an SBOM.
-- ⬜ **Project health**: `SECURITY.md` (how to report a vulnerability, e.g. in the proxy), issue and pull request templates, a code of conduct, and labels for "good first issue".
+- ✅ **Supply chain**: Dependabot for Python dependencies and Actions, pinned Action versions, signed release artifacts with provenance (Sigstore / GitHub attestations), and an SBOM.
+- ✅ **Project health**: `SECURITY.md` (how to report a vulnerability, e.g. in the proxy), issue and pull request templates, a code of conduct, and labels for "good first issue".
 - ⬜ **JSON Schemas** for every `--json` output (generated from the contract tests and published with the docs), so scripts can validate what they read.
 - ⬜ **A deprecation policy**: how long a flag, setting or JSON field keeps working after it's replaced, and warnings when it's used, written down before 1.0 promises stability.
 - ⬜ **Lighter installs**: check whether `boto3` and `cryptography` can become extras (for example, `awsemu start`/`env` without them) without making the common case worse.

@@ -50,7 +50,7 @@ DynamoDB tables  1      users
 - [Scripting](docs/scripting.md): stable JSON output and exit codes.
 - [Troubleshooting](docs/troubleshooting.md): what each error means.
 - [Command reference](docs/reference.md): every command and option.
-- [Architecture](docs/architecture.md) and [contributing](CONTRIBUTING.md).
+- [Architecture](docs/architecture.md), [contributing](CONTRIBUTING.md), [security](SECURITY.md) and the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Installation
 
