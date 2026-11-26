@@ -70,7 +70,9 @@ def emulator_env(port: int, extras: Iterable[str] = ()) -> dict[str, str]:
         env["SSL_CERT_FILE"] = str(files.ca)
     bypass = no_proxy_value(os.environ)  # an HTTP(S) proxy must not get the emulator's calls
     if bypass:
-        env["NO_PROXY"] = env["no_proxy"] = bypass
+        env["NO_PROXY"] = bypass
+        if os.name != "nt":  # on Windows, variable names ignore case: it's the same variable
+            env["no_proxy"] = bypass
     return env
 
 

@@ -371,11 +371,12 @@ def test_trap_proxies_and_no_proxy(isolated_home, monkeypatch):
     assert traps.proxies({"https_proxy": "x", "no_proxy": "127.0.0.1"}) == []
     assert traps.proxies({"HTTP_PROXY": "x", "NO_PROXY": "*"}) == []
 
+    monkeypatch.delenv("no_proxy", raising=False)  # first: on Windows it's the same variable as NO_PROXY
     monkeypatch.setenv("HTTPS_PROXY", "http://corp:3128")
     monkeypatch.setenv("NO_PROXY", ".internal")
-    monkeypatch.delenv("no_proxy", raising=False)
     variables = envvars.emulator_env(9297)
-    assert variables["NO_PROXY"] == variables["no_proxy"] == ".internal,127.0.0.1,localhost"
+    assert variables["NO_PROXY"] == ".internal,127.0.0.1,localhost"
+    assert variables.get("no_proxy", variables["NO_PROXY"]) == variables["NO_PROXY"]
 
 
 def test_env_unset_keeps_your_no_proxy(runner, monkeypatch):

@@ -327,11 +327,29 @@ def _config_changes(current: dict, wanted: dict) -> dict:
     return changed
 
 
+TRIGGER_ACTIONS = {  # what Lambda needs to read each kind of source (AWS checks it; so does the emulator)
+    "sqs": ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"],
+    "kinesis": ["kinesis:GetRecords", "kinesis:GetShardIterator", "kinesis:DescribeStream",
+                "kinesis:DescribeStreamSummary", "kinesis:ListShards", "kinesis:ListStreams",
+                "kinesis:SubscribeToShard"],
+}
+
+
+def _allow_role_to_read(lam, iam, function: str, kind: str, source_arn: str, label: str) -> None:
+    """Give the function's role the permissions to poll ``source_arn``."""
+    role_arn = lam.get_function_configuration(FunctionName=function)["Role"]
+    policy = {"Version": "2012-10-17", "Statement": [
+        {"Effect": "Allow", "Action": TRIGGER_ACTIONS[kind], "Resource": source_arn}]}
+    name = f"awsemu-trigger-{label.replace(':', '-')}"[:128]
+    iam.put_role_policy(RoleName=role_arn.rsplit("/", 1)[-1], PolicyName=name, PolicyDocument=json.dumps(policy))
+
+
 def _apply_triggers(fn: dict, lam, port: int) -> list[str]:
     """Event source mappings from SQS queues and Kinesis streams to the function."""
     wanted = fn.get("triggers") or []
     if not wanted:
         return []
+    iam = client("iam", port)
     current = {}
     for page in lam.get_paginator("list_event_source_mappings").paginate(FunctionName=fn["name"]):
         for m in page.get("EventSourceMappings", []):
@@ -347,6 +365,7 @@ def _apply_triggers(fn: dict, lam, port: int) -> list[str]:
         enabled = tr.get("enabled", True)
         mapping = current.get(source)
         if mapping is None:
+            _allow_role_to_read(lam, iam, fn["name"], "sqs" if "sqs" in tr else "kinesis", source, label)
             kwargs = {"EventSourceArn": source, "FunctionName": fn["name"], "Enabled": enabled}
             if "batch_size" in tr:
                 kwargs["BatchSize"] = tr["batch_size"]

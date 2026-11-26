@@ -167,7 +167,7 @@ parameter  /app/host      updated
 | Parameter | Creates it | Overwrites it only if the value or type changed |
 | Stream | Creates it and waits until it's active | Changes the shard count or retention if they differ |
 | Function | Packages the code, creates the function (with the role `awsemu-lambda-role`) and waits until it's active | Redeploys the code only if it changed (the package is reproducible, so it compares its SHA-256), and updates the settings that differ |
-| Trigger | Creates the event source mapping | Adjusts `batch_size` and `enabled` |
+| Trigger | Gives the function's role the permissions Lambda needs to read the queue or stream (the emulator checks them, like AWS), then creates the event source mapping | Adjusts `batch_size` and `enabled` |
 | State machine | Creates it (with the role `awsemu-sfn-role`) | Updates the definition if it differs; **error** if `express` changed (the type can't change) |
 | Rule | Creates it (and its bus if missing) | Updates the pattern, schedule, state or description if they differ |
 | Rule targets | Sets them, with the queue policy, the Lambda permission, or a role for Step Functions and Kinesis | Makes them match the seed: adds, changes, and removes the targets the seed no longer lists |
