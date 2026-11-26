@@ -9,50 +9,11 @@ import click
 from .. import ui
 from ..clients import client, describe_error, ensure_running
 from ..context import Ctx, handle_errors, pass_ctx, json_option
+from ..services import all_services
 
 
-def _s3(c):
-    return [b["Name"] for b in c.list_buckets().get("Buckets", [])]
-
-
-def _sqs(c):
-    return [u.rsplit("/", 1)[-1] for u in c.list_queues().get("QueueUrls", [])]
-
-
-def _ddb(c):
-    names: list[str] = []
-    kwargs: dict = {}
-    while True:
-        page = c.list_tables(**kwargs)
-        names += page.get("TableNames", [])
-        if not page.get("LastEvaluatedTableName"):
-            return names
-        kwargs["ExclusiveStartTableName"] = page["LastEvaluatedTableName"]
-
-
-def _paginate(c, op, key, field=None, **kwargs):
-    out = []
-    for page in c.get_paginator(op).paginate(**kwargs):
-        for item in page.get(key, []):
-            out.append(item[field] if field else item)
-    return out
-
-
-# (label, boto3 service, lister)
-SERVICES = [
-    ("S3 buckets", "s3", _s3),
-    ("SQS queues", "sqs", _sqs),
-    ("DynamoDB tables", "dynamodb", _ddb),
-    ("SNS topics", "sns", lambda c: [t["TopicArn"].rsplit(":", 1)[-1] for t in _paginate(c, "list_topics", "Topics")]),
-    ("Lambda functions", "lambda", lambda c: _paginate(c, "list_functions", "Functions", "FunctionName")),
-    ("Secrets", "secretsmanager", lambda c: _paginate(c, "list_secrets", "SecretList", "Name")),
-    ("SSM parameters", "ssm", lambda c: _paginate(c, "describe_parameters", "Parameters", "Name")),
-    ("Kinesis streams", "kinesis", lambda c: _paginate(c, "list_streams", "StreamNames")),
-    ("EventBridge buses", "events", lambda c: [b["Name"] for b in c.list_event_buses().get("EventBuses", [])]),
-    ("Step Functions", "stepfunctions", lambda c: _paginate(c, "list_state_machines", "stateMachines", "name")),
-    ("Log groups", "logs", lambda c: _paginate(c, "describe_log_groups", "logGroups", "logGroupName")),
-    ("IAM roles", "iam", lambda c: _paginate(c, "list_roles", "Roles", "RoleName")),
-]
+# (label, boto3 service, lister), from the service registry.
+SERVICES = [(s.label, s.name, s.names) for s in all_services()]
 
 
 def collect(port: int, only: set[str] | None = None) -> list[dict]:

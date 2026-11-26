@@ -74,6 +74,11 @@ src/awsemu/
                     lambda_, secrets (secrets + ssm), events, kinesis, sfn, describe, call;
                     and seed, snapshot, compose, fidelity, watch, check, issues, install, proxy,
                     report, explain, iam, mcp
+  services/         the service registry: one module per service (s3, sqs, dynamodb, sns, lambda_,
+                    secretsmanager, ssm, kinesis, events, stepfunctions, logs, iam), each a Service
+                    with its hooks (names, details, describe, watch, completions)
+  arns.py           parse ARNs (used by describe)
+  awserrors.py      recognise AWS error answers (error_code, is_error, client_error)
   commands/_common.py  AliasedGroup, service roles, queue policies, Lambda permissions, error codes
 action.yml          composite GitHub Action (verified package, awsemu, seed, variables)
 scripts/            gen_reference.py (docs/reference.md), rename.py (package/repository rename)

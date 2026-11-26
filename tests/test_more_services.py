@@ -200,7 +200,7 @@ def test_parse_arn(arn, service, kind, rest):
 
 def test_describe_dispatch(runner, monkeypatch, running):
     ddb = FakeClient(describe_table={"Table": {"TableName": "users", "ItemCount": 2}})
-    use(monkeypatch, describe_mod, dynamodb=ddb)
+    monkeypatch.setattr("awsemu.clients.client", lambda service, port: {"dynamodb": ddb}[service])
     result = runner.invoke(cli, ["describe", "arn:aws:dynamodb:us-east-1:000000000000:table/users"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output) == {"TableName": "users", "ItemCount": 2}

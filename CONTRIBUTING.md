@@ -69,10 +69,10 @@ Variables to trigger odd cases: `FAKE_EMULATOR_CRASH=1` (exits with code 1) and 
    - offer `--json` on listings (`@json_option`) and `--yes` on anything that deletes (`@yes_option`), and give every option a `help` text (a test checks it);
    - JSON: `snake_case` for awsemu's own summaries, AWS's field names for AWS resources; add the format to `docs/scripting.md` and a test to `tests/test_json_contract.py`;
    - exit with the constants in `exitcodes.py`, never bare numbers;
-   - add `shell_complete=complete("<kind>")` to arguments that take resource names (see `completion.py`);
+   - add `shell_complete=complete("<kind>")` to arguments that take resource names (the kinds come from the services' `completions`);
    - for roles, queue policies, Lambda permissions or expected errors (`is_error(exc, "ResourceNotFound")`), use `commands/_common.py`.
 2. Register it in `LAZY_COMMANDS` in `cli.py` (`"name": "module:attribute"`); `tests/test_cli_lazy.py` checks it loads.
-3. If it has resources to list, add it to `SERVICES` in `commands/overview.py`, to `DETAILS` in `browse.py` and, if useful, to `COLLECTORS` in `commands/watch.py`.
+3. Describe the service in the registry: write `src/awsemu/services/<service>.py` with a `SERVICE = Service(...)` (copy `services/kinesis.py`) and add the module to `ORDER` in `services/__init__.py`. Its hooks feed `overview` (`names`), `awsemu ui` (`details`), `describe` (`arn`, `describe`), `watch` (`alias`, `watch`) and shell completion (`completions`); a hook you don't write goes in `missing` with the reason. `tests/test_services_registry.py` checks every hook is there or explained. In tests, fake the emulator by patching `awsemu.clients.client`.
 4. Tests with `FakeClient` (see `tests/test_services.py`) and, if you can, a test in `tests/test_real.py`.
 5. If it makes sense in a seed, add the section in `seed.py` (fields and validation), its `_apply_*` and its export in `commands/seed.py`, and extend `examples/seed.yaml`.
 6. Document it: a section in `docs/services.md` (and `docs/seeds.md` if relevant), a line in the README, and regenerate the reference (below).
