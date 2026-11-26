@@ -294,6 +294,39 @@ def test_describe_arns(emu):
     run(emu, "sns", "rm", "awsemu-describe-t", "--yes")
 
 
+def test_mcp_server_over_stdio(emu, real_home):
+    """An agent's view: start 'awsemu mcp', list the tools, create and see a resource."""
+    import subprocess
+
+    env = {**os.environ, "HOME": str(real_home), "USERPROFILE": str(real_home), "PYTHONUNBUFFERED": "1",
+           "AWS_ACCESS_KEY_ID": "AKIAREALKEYSHOULDNOTBEUSED", "AWS_SECRET_ACCESS_KEY": "x"}
+    messages = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+         "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+         "params": {"name": "aws_call", "arguments": {"service": "sqs", "operation": "CreateQueue",
+                                                       "params": {"QueueName": "awsemu-mcp"}}}},
+        {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+         "params": {"name": "list_resources", "arguments": {"services": ["sqs"]}}},
+        {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "emulator_status", "arguments": {}}},
+    ]
+    done = subprocess.run([sys.executable, "-m", "awsemu", "--port", str(emu), "mcp"], env=env, timeout=120,
+                          input="".join(json.dumps(m) + "\n" for m in messages), capture_output=True, text=True)
+    replies = {r["id"]: r for r in map(json.loads, done.stdout.splitlines())}
+    assert set(replies) == {1, 2, 3, 4, 5}, done.stderr
+    assert replies[1]["result"]["serverInfo"]["name"] == "awsemu"
+    created = replies[3]["result"]
+    assert not created["isError"], created
+    assert "awsemu-mcp" in created["structuredContent"]["result"]["QueueUrl"]
+    listed = replies[4]["result"]
+    assert "awsemu-mcp" in json.dumps(listed["structuredContent"]["result"])
+    assert listed["content"][0]["text"].startswith(f"AWS Emulator on 127.0.0.1:{emu} (this machine, not AWS")
+    assert replies[5]["result"]["structuredContent"]["result"]["status"] == "healthy"
+    run(emu, "sqs", "rm", "awsemu-mcp", "--yes")
+
+
 def test_call_any_operation(emu, tmp_path):
     body = tmp_path / "data.bin"
     body.write_bytes(b"\x00binary\xff")

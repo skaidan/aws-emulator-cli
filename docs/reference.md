@@ -20,6 +20,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`env`](#awsemu-env) — Print shell commands that point the AWS CLI and SDKs at the emulator.
 - [`events`](#awsemu-events) — EventBridge: buses, rules and events.
 - [`exec`](#awsemu-exec) — Run COMMAND with the environment pointed at the emulator.
+- [`explain`](#awsemu-explain) — Say whether a failed call is a known emulator difference or likely your code.
 - [`fidelity`](#awsemu-fidelity) — Fidelity scores published with each emulator release: tests passed per service.
 - [`image`](#awsemu-image) — Build the Docker image (AWS doesn't publish a prebuilt one).
 - [`init`](#awsemu-init) — Create awsemu.toml in this folder.
@@ -28,6 +29,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`kinesis`](#awsemu-kinesis) — Kinesis: data streams and records.
 - [`lambda`](#awsemu-lambda) — Lambda: deploy, invoke and inspect functions.
 - [`logs`](#awsemu-logs) — Show the emulator's log, prettified (also after it stopped).
+- [`mcp`](#awsemu-mcp) — An MCP server, so coding agents test against the emulator, never AWS.
 - [`overview`](#awsemu-overview) — What's inside the emulator, across common services.
 - [`proxy`](#awsemu-proxy) — See every API call, and inject faults (throttling, errors, latency).
 - [`report`](#awsemu-report) — Draft an issue for the emulator from a call the proxy logged.
@@ -446,6 +448,30 @@ awsemu exec [OPTIONS] COMMAND...
 | `--sdk [node|java|rust|dotnet]` | Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable. |
 | `--proxy / --no-proxy` | Go through the running proxy (default: yes when awsemu.toml has proxy = true and it's running). |
 
+## `awsemu explain`
+
+Say whether a failed call is a known emulator difference or likely your code.
+
+\b
+```bash
+awsemu explain            # the last failed call in the proxy's log
+awsemu explain 42 --json
+```
+Compares the call with the fidelity tests of your emulator release (like
+'awsemu check'): a test that fails at the same operation with the same
+answer is a known difference; passing tests and a "bad request" error point
+at the code under test. It's evidence, not proof.
+
+```
+awsemu explain [OPTIONS] CALL
+```
+
+| Option | Description |
+| --- | --- |
+| `--release VERSION` | Emulator release whose fidelity data to use (default: yours). |
+| `--refresh` | Download the fidelity data again. |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
 ## `awsemu fidelity`
 
 Fidelity scores published with each emulator release: tests passed per service.
@@ -760,6 +786,29 @@ awsemu logs [OPTIONS]
 | `-n, --lines INTEGER` | Lines to show first.  [default: 50] |
 | `--raw` | Print the JSON lines untouched. |
 | `--grep TEXT` | Only lines containing TEXT (case-insensitive). |
+
+## `awsemu mcp`
+
+An MCP server, so coding agents test against the emulator, never AWS.
+
+\b
+```bash
+awsemu mcp                          # the server (on stdio; your agent starts it)
+awsemu mcp config claude-code       # how to add it to your agent
+```
+Tools: start/stop the emulator and see its status, the environment for your
+code, seeds, resources, any API call, fidelity, project checks, the proxy's
+calls and faults, and explaining a failed call. They only work against the
+emulator on 127.0.0.1, never with real credentials. Run it from your
+project's folder (awsemu.toml applies). Guide: docs/agents.md.
+
+### `awsemu mcp config`
+
+Print how to add the server to an agent: claude-code, claude-desktop, cursor, vscode or json.
+
+```
+awsemu mcp config [OPTIONS] [claude-code|claude-desktop|cursor|vscode|json]
+```
 
 ## `awsemu overview`
 

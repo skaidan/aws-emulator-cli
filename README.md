@@ -45,6 +45,7 @@ DynamoDB tables  1      users
 - [Seeds](docs/seeds.md): reproducible starting data (format, validation, `apply` and `export`), and snapshots.
 - [Services guide](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions and `describe`, with examples.
 - [Testing and CI](docs/testing.md): pytest plugin, GitHub Action, Testcontainers (Python, Java, Node), scripts and Docker Compose.
+- [AI coding agents](docs/agents.md): an MCP server (`awsemu mcp`) so agents test against the emulator, never AWS.
 - [Scripting](docs/scripting.md): stable JSON output and exit codes.
 - [Troubleshooting](docs/troubleshooting.md): what each error means.
 - [Command reference](docs/reference.md): every command and option.
@@ -125,6 +126,8 @@ awsemu exec -- pytest -k integration       # any command, already pointed at the
 awsemu aws s3 ls                           # the AWS CLI, pointed at the emulator
 awsemu call s3 list-buckets                # any operation, without the AWS CLI
 awsemu report last                         # a draft emulator issue from the last failed call (proxy)
+awsemu explain                             # was that failure the emulator or your code?
+awsemu mcp config claude-code              # tools for your coding agent
 awsemu shell                               # a connected sub-shell ('exit' to leave)
 awsemu whoami                              # checks you're talking to account 000000000000
 ```

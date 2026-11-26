@@ -40,6 +40,23 @@ def _difference_line(d: chk.Difference) -> str:
     return f"{d.test.id}  {what}"
 
 
+def load_index(release: str | None, manifest_ref: str | None = None, refresh: bool = False):
+    """``(release tag, tests version, Index, installed version)`` for check and explain."""
+    tag, scores, installed = pick_release(release, refresh)
+    suite = fid.suite_version(tag) or (None if manifest_ref else chk.latest_suite_version()) or "main"
+    try:
+        if manifest_ref and Path(manifest_ref).is_file():
+            manifest = chk.read_manifest_file(Path(manifest_ref))
+            suite = Path(manifest_ref).name
+        else:
+            suite = manifest_ref or suite
+            manifest = chk.load_manifest(suite, refresh=refresh)
+    except fid.FidelityError as exc:
+        raise RuntimeErrorWithHint(str(exc), "Check your connection, or pass --manifest FILE "
+                                   "(manifest.jsonl from a clone of the tests repository).") from exc
+    return tag, suite, chk.Index(scores, manifest), installed
+
+
 @click.command()
 @click.argument("paths", nargs=-1, type=click.Path(exists=True, path_type=Path))
 @click.option("--release", metavar="VERSION",
@@ -86,20 +103,7 @@ def check(c: Ctx, paths, release, manifest_ref, show_all, strict, refresh, no_ex
         from_calls = True
     if from_calls and paths:
         raise click.UsageError("--from-calls reads the proxy's log, not files: drop the paths")
-    tag, scores, installed = pick_release(release, refresh)
-    suite = fid.suite_version(tag) or (None if manifest_ref else chk.latest_suite_version()) or "main"
-    try:
-        if manifest_ref and Path(manifest_ref).is_file():
-            manifest = chk.read_manifest_file(Path(manifest_ref))
-            suite = Path(manifest_ref).name
-        else:
-            suite = manifest_ref or suite
-            manifest = chk.load_manifest(suite, refresh=refresh)
-    except fid.FidelityError as exc:
-        raise RuntimeErrorWithHint(str(exc), "Check your connection, or pass --manifest FILE "
-                                   "(manifest.jsonl from a clone of the tests repository).") from exc
-
-    index = chk.Index(scores, manifest)
+    tag, suite, index, installed = load_index(release, manifest_ref, refresh)
     unknown_ops: list[str] = []
     if from_calls:
         from .. import proxy as px

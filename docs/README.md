@@ -11,6 +11,7 @@
 | [Seeds](seeds.md) | Always start with the same data: format, validation, `apply`, `export`. Snapshots: `snapshot save/restore`. |
 | [Services guide](services.md) | The 10 services with their own commands, and `describe ARN`, with end-to-end examples. |
 | [Testing and CI](testing.md) | pytest plugin, GitHub Action, Testcontainers, scripts and Docker Compose. |
+| [AI coding agents](agents.md) | The MCP server (`awsemu mcp`), its guard rails, and explaining a failed call. |
 | [Scripting](scripting.md) | Stable JSON output and exit codes for scripts. |
 | [Troubleshooting](troubleshooting.md) | What each error means and how to fix it. |
 | [Command reference](reference.md) | Every command and option (generated from the code). |

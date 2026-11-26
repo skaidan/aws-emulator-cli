@@ -847,6 +847,7 @@ from .commands import compose as _compose  # noqa: E402
 from .commands import describe as _describe  # noqa: E402
 from .commands import dynamodb as _dynamodb  # noqa: E402
 from .commands import events as _events  # noqa: E402
+from .commands import explain as _explain  # noqa: E402
 from .commands import fidelity as _fidelity  # noqa: E402
 from .commands import install as _install  # noqa: E402
 from .commands import issues as _issues  # noqa: E402
@@ -854,6 +855,7 @@ from .commands import proxy as _proxy  # noqa: E402
 from .commands import report as _report  # noqa: E402
 from .commands import snapshot as _snapshot  # noqa: E402
 from .commands import kinesis as _kinesis  # noqa: E402
+from .commands import mcp as _mcp  # noqa: E402
 from .commands import overview as _overview  # noqa: E402
 from .commands import lambda_ as _lambda  # noqa: E402
 from .commands import s3 as _s3  # noqa: E402
@@ -885,6 +887,8 @@ cli.add_command(_install.install)
 cli.add_command(_issues.issues)
 cli.add_command(_proxy.proxy)
 cli.add_command(_report.report)
+cli.add_command(_explain.explain)
+cli.add_command(_mcp.mcp)
 cli.add_command(_snapshot.snapshot)
 cli.add_command(_watch.watch)
 

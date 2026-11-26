@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-Towards 0.10.0.
+Towards 0.10.0 (the next release also has what was planned for 0.11).
+
+- `awsemu mcp`: an MCP server (stdio, no extra dependency) so coding agents test against the emulator: status, start/stop, the environment for the code, seeds, resources, any API call, fidelity, project checks, the proxy's calls and faults, and explaining a failure. Guard rails: no real credentials or endpoint overrides reach the commands, tools refuse an emulator that isn't on 127.0.0.1, no tool takes an endpoint, region or keys, and every answer says it ran on the emulator, not AWS. `awsemu mcp config claude-code|claude-desktop|cursor|vscode` prints how to add it. Guide: `docs/agents.md`.
+- `awsemu explain [CALL]`: whether a failed call from the proxy's log is a known emulator difference, maybe one, an emulator gap, probably the code under test, or unknown, with the fidelity tests that back it.
 
 - Other languages and infrastructure tools, tested in CI against the real emulator: `examples/sdks/node` (AWS SDK for JavaScript v3), `examples/sdks/java` (SDK for Java v2), `examples/sdks/go` (SDK for Go v2), `examples/terraform` and `examples/cdk`, and a guide, `docs/languages.md`, with what each needs.
 - `--sdk java` no longer makes the JVM trust only the emulator, which broke every other HTTPS connection of the process (Maven, Gradle). It builds a truststore with what Java already trusted (your truststore, or the JDK's `cacerts`) plus the emulator's certificate, with `keytool`, and keeps your other `JAVA_TOOL_OPTIONS` (proxy settings, memory), which it used to replace.
