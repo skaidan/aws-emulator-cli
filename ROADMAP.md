@@ -181,7 +181,7 @@ Where we are (measured on 0.13.0): 18,400 lines in 73 modules; `cli.py` has 1,16
 - ⬜ **One runtime interface** for native and Docker modes (start, stop, health, logs, version, files), with a fake implementation for tests, instead of `subprocess` calls spread across modules.
 - ⬜ **One configuration model**: `settings`, `project`, `envvars` and command-line options merged into one layered object that knows where each value came from; `awsemu config --explain` prints it ("port 4566 from awsemu.toml, line 3").
 - ✅ **Errors**: a small hierarchy of awsemu errors mapped to exit codes in one place (`awsemu.errors`); the 18 "not found" checks only catch AWS error answers. The other 39 `except Exception` are deliberate (one failing resource or service mustn't stop the others, a notice must never break a command) and stay, each with its reason.
-- ⬜ **Split the big modules** along those lines: ~~`cli.py` (1,167 lines)~~ (done: 95 lines, its commands are in `commands/`), `commands/seed.py` (1,124), `proxy.py` (890), `commands/proxy.py` (663), `runtime.py` (567), `seed.py` (568), `commands/lambda_.py` (565).
+- ⬜ **Split the big modules** along those lines: ~~`cli.py` (1,167 lines)~~ (done: 128 lines, its commands are in `commands/`), `commands/seed.py` (1,124), `proxy.py` (890), `commands/proxy.py` (663), `runtime.py` (567), `seed.py` (568), `commands/lambda_.py` (565).
 - ⬜ **The proxy as a pipeline**: parse → match faults → forward → record → shadow → cost, each step a small class with its own tests, so new steps (IAM enforcement, tracing in v0.20) plug in without touching the others.
 - ⬜ Keep old import paths working through the deprecation policy (the pytest plugin and `awsemu.containers` are imported by users).
 
