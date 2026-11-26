@@ -17,90 +17,11 @@ from .. import exitcodes
 from .. import health, ui
 from ..clients import client
 from ..context import Ctx, handle_errors, pass_ctx
-from ._common import client_error, is_error
+from ..services import Snapshot, all_services
 
-# A snapshot maps (kind, name) -> a number to compare (messages, items, objects) or None.
-Snapshot = dict[tuple[str, str], "int | None"]
+# {awsemu name: (boto3 service, snapshot function)}, from the service registry.
+COLLECTORS: dict[str, tuple[str, Callable]] = {s.alias: (s.name, s.watch) for s in all_services() if s.watch}
 
-S3_CAP = 1000  # count objects up to this many per bucket
-DDB_CAP = 10000
-
-
-def _s3(c) -> Snapshot:
-    out: Snapshot = {}
-    for b in c.list_buckets().get("Buckets", []):
-        try:
-            out[("bucket", b["Name"])] = c.list_objects_v2(Bucket=b["Name"], MaxKeys=S3_CAP).get("KeyCount", 0)
-        except client_error() as exc:
-            if not is_error(exc, "NoSuchBucket"):
-                raise
-    return out
-
-
-def _sqs(c) -> Snapshot:
-    out: Snapshot = {}
-    for url in c.list_queues().get("QueueUrls", []):
-        try:
-            a = c.get_queue_attributes(QueueUrl=url, AttributeNames=["ApproximateNumberOfMessages"])
-            out[("queue", url.rsplit("/", 1)[-1])] = int(a["Attributes"].get("ApproximateNumberOfMessages", 0))
-        except client_error() as exc:
-            if not is_error(exc, "NonExistentQueue", "QueueDoesNotExist"):
-                raise
-    return out
-
-
-def _ddb(c) -> Snapshot:
-    out: Snapshot = {}
-    for page in c.get_paginator("list_tables").paginate():
-        for name in page.get("TableNames", []):
-            count, kwargs = 0, {"TableName": name, "Select": "COUNT"}
-            try:
-                while count < DDB_CAP:
-                    resp = c.scan(**kwargs)
-                    count += resp.get("Count", 0)
-                    if "LastEvaluatedKey" not in resp:
-                        break
-                    kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
-            except client_error() as exc:
-                if not is_error(exc, "ResourceNotFound"):
-                    raise
-                continue
-            out[("table", name)] = count
-    return out
-
-
-def _names(kind: str, lister: Callable) -> Callable:
-    def collect(c) -> Snapshot:
-        return {(kind, n): None for n in lister(c)}
-
-    return collect
-
-
-def _pages(c, op: str, key: str, field: str | None = None, **kw) -> list:
-    out = []
-    for page in c.get_paginator(op).paginate(**kw):
-        out += [x[field] if field else x for x in page.get(key, [])]
-    return out
-
-
-COLLECTORS: dict[str, tuple[str, Callable]] = {
-    "s3": ("s3", _s3),
-    "sqs": ("sqs", _sqs),
-    "dynamodb": ("dynamodb", _ddb),
-    "sns": (
-        "sns",
-        _names("topic", lambda c: [t["TopicArn"].rsplit(":", 1)[-1] for t in _pages(c, "list_topics", "Topics")]),
-    ),
-    "lambda": ("lambda", _names("function", lambda c: _pages(c, "list_functions", "Functions", "FunctionName"))),
-    "secrets": ("secretsmanager", _names("secret", lambda c: _pages(c, "list_secrets", "SecretList", "Name"))),
-    "ssm": ("ssm", _names("parameter", lambda c: _pages(c, "describe_parameters", "Parameters", "Name"))),
-    "kinesis": ("kinesis", _names("stream", lambda c: _pages(c, "list_streams", "StreamNames"))),
-    "events": ("events", _names("rule", lambda c: _pages(c, "list_rules", "Rules", "Name"))),
-    "sfn": (
-        "stepfunctions",
-        _names("state machine", lambda c: _pages(c, "list_state_machines", "stateMachines", "name")),
-    ),
-}
 
 UNITS = {"bucket": "object(s)", "queue": "message(s)", "table": "item(s)"}
 
