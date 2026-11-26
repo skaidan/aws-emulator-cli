@@ -18,26 +18,37 @@ import re
 
 from . import check as chk
 
-GAP_CODES = {"NotImplemented", "NotImplementedException", "UnknownOperationException", "InvalidAction",
-             "UnsupportedOperation", "UnsupportedOperationException", "InternalFailure", "InternalError",
-             "InternalServerError", "InternalServerException", "ServiceUnavailable", "EmulatorUnreachable"}
+GAP_CODES = {
+    "NotImplemented",
+    "NotImplementedException",
+    "UnknownOperationException",
+    "InvalidAction",
+    "UnsupportedOperation",
+    "UnsupportedOperationException",
+    "InternalFailure",
+    "InternalError",
+    "InternalServerError",
+    "InternalServerException",
+    "ServiceUnavailable",
+    "EmulatorUnreachable",
+}
 
 ADVICE = {
     "injected": "The proxy made this error on purpose (a fault rule). Remove the rule if you didn't mean it: "
-                "awsemu proxy faults clear.",
+    "awsemu proxy faults clear.",
     "known_difference": "The emulator is known to answer this differently from AWS. Your code may be right: "
-                        "check the difference, and work around it or wait for a fix (upgrading may help).",
+    "check the difference, and work around it or wait for a fix (upgrading may help).",
     "possible_difference": "The emulator has known differences in this operation, but none with this answer. "
-                           "Compare the request with the operation's reference before blaming either side.",
+    "Compare the request with the operation's reference before blaming either side.",
     "emulator_gap": "The emulator answered with a server error or doesn't support this: probably not your code. "
-                    "If AWS supports the request, report it: awsemu report CALL.",
+    "If AWS supports the request, report it: awsemu report CALL.",
     "likely_your_code": "The emulator's tests for this operation pass and this is the error AWS returns for a "
-                        "request it rejects: check the parameters, the resources the call needs and the order "
-                        "of the calls.",
+    "request it rejects: check the parameters, the resources the call needs and the order "
+    "of the calls.",
     "unknown": "No fidelity tests cover this operation, so there's no evidence either way. Check the request "
-               "against the operation's reference; if AWS accepts it, report it: awsemu report CALL.",
+    "against the operation's reference; if AWS accepts it, report it: awsemu report CALL.",
     "succeeded": "The call succeeded (HTTP status below 400). If the response itself looks wrong, compare it "
-                 "with the operation's reference.",
+    "with the operation's reference.",
 }
 
 
@@ -54,10 +65,21 @@ def _matches(answer: str | None, call: dict) -> bool:
 
 def explain(call: dict, index: chk.Index, release: str, suite: str, with_issues: bool = True) -> dict:
     service, operation = call.get("service") or "", call.get("operation") or ""
-    out = {"call": {k: call.get(k) for k in ("id", "time", "service", "operation", "resource", "status",
-                                             "error", "fault", "request_id")},
-           "release": release, "fidelity_tests": suite, "operation": None, "tests": 0, "passed": 0,
-           "differences": [], "matching": [], "verdict": "", "advice": ""}
+    out: dict = {
+        "call": {
+            k: call.get(k)
+            for k in ("id", "time", "service", "operation", "resource", "status", "error", "fault", "request_id")
+        },
+        "release": release,
+        "fidelity_tests": suite,
+        "operation": None,
+        "tests": 0,
+        "passed": 0,
+        "differences": [],
+        "matching": [],
+        "verdict": "",
+        "advice": "",
+    }
 
     def done(verdict: str) -> dict:
         out["verdict"], out["advice"] = verdict, ADVICE[verdict]
@@ -78,11 +100,11 @@ def explain(call: dict, index: chk.Index, release: str, suite: str, with_issues:
         if with_issues and op.differences:
             try:
                 chk.attach_issues(report)
-            except Exception:  # noqa: BLE001 - explanations are a bonus; the verdict doesn't need them
+            except Exception:
                 pass
         at_op = [d for d in op.differences if d.at_operation]
         out["differences"] = [d.as_dict(suite) for d in at_op]
-        out["matching"] = [d["test"] for d, diff in zip(out["differences"], at_op) if _matches(d["actual"], call)]
+        out["matching"] = [d["test"] for d in out["differences"] if _matches(d["actual"], call)]
 
     status = int(call.get("status") or 0)
     if out["matching"]:  # also a success where AWS would have failed

@@ -18,45 +18,95 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # IAM prefix when the botocore signing name/endpoint prefix isn't it
-PREFIX_OVERRIDES = {"monitoring": "cloudwatch", "email": "ses", "streams.dynamodb": "dynamodb",
-                    "execute-api": "execute-api"}
+PREFIX_OVERRIDES = {
+    "monitoring": "cloudwatch",
+    "email": "ses",
+    "streams.dynamodb": "dynamodb",
+    "execute-api": "execute-api",
+}
 NO_PERMISSION = {("sts", "GetCallerIdentity")}  # always allowed
 
 S3_ACTIONS = {
-    "ListObjects": "ListBucket", "ListObjectsV2": "ListBucket", "HeadBucket": "ListBucket",
-    "ListObjectVersions": "ListBucketVersions", "ListMultipartUploads": "ListBucketMultipartUploads",
-    "ListParts": "ListMultipartUploadParts", "ListBuckets": "ListAllMyBuckets",
-    "HeadObject": "GetObject", "CreateMultipartUpload": "PutObject", "UploadPart": "PutObject",
-    "CompleteMultipartUpload": "PutObject", "UploadPartCopy": "PutObject", "CopyObject": "PutObject",
+    "ListObjects": "ListBucket",
+    "ListObjectsV2": "ListBucket",
+    "HeadBucket": "ListBucket",
+    "ListObjectVersions": "ListBucketVersions",
+    "ListMultipartUploads": "ListBucketMultipartUploads",
+    "ListParts": "ListMultipartUploadParts",
+    "ListBuckets": "ListAllMyBuckets",
+    "HeadObject": "GetObject",
+    "CreateMultipartUpload": "PutObject",
+    "UploadPart": "PutObject",
+    "CompleteMultipartUpload": "PutObject",
+    "UploadPartCopy": "PutObject",
+    "CopyObject": "PutObject",
     "DeleteObjects": "DeleteObject",
     "PutBucketNotificationConfiguration": "PutBucketNotification",
     "GetBucketNotificationConfiguration": "GetBucketNotification",
-    "PutBucketCors": "PutBucketCORS", "GetBucketCors": "GetBucketCORS", "DeleteBucketCors": "PutBucketCORS",
+    "PutBucketCors": "PutBucketCORS",
+    "GetBucketCors": "GetBucketCORS",
+    "DeleteBucketCors": "PutBucketCORS",
     "PutBucketLifecycleConfiguration": "PutLifecycleConfiguration",
     "GetBucketLifecycleConfiguration": "GetLifecycleConfiguration",
     "DeleteBucketLifecycle": "PutLifecycleConfiguration",
-    "PutBucketEncryption": "PutEncryptionConfiguration", "GetBucketEncryption": "GetEncryptionConfiguration",
+    "PutBucketEncryption": "PutEncryptionConfiguration",
+    "GetBucketEncryption": "GetEncryptionConfiguration",
     "DeleteBucketEncryption": "PutEncryptionConfiguration",
-    "PutBucketTagging": "PutBucketTagging", "DeleteBucketTagging": "PutBucketTagging",
+    "PutBucketTagging": "PutBucketTagging",
+    "DeleteBucketTagging": "PutBucketTagging",
 }
-S3_OBJECT_ACTIONS = {"GetObject", "PutObject", "DeleteObject", "GetObjectTagging", "PutObjectTagging",
-                     "DeleteObjectTagging", "GetObjectAcl", "PutObjectAcl", "AbortMultipartUpload",
-                     "ListMultipartUploadParts", "RestoreObject", "GetObjectAttributes", "GetObjectVersion",
-                     "GetObjectRetention", "PutObjectRetention", "GetObjectLegalHold", "PutObjectLegalHold"}
+S3_OBJECT_ACTIONS = {
+    "GetObject",
+    "PutObject",
+    "DeleteObject",
+    "GetObjectTagging",
+    "PutObjectTagging",
+    "DeleteObjectTagging",
+    "GetObjectAcl",
+    "PutObjectAcl",
+    "AbortMultipartUpload",
+    "ListMultipartUploadParts",
+    "RestoreObject",
+    "GetObjectAttributes",
+    "GetObjectVersion",
+    "GetObjectRetention",
+    "PutObjectRetention",
+    "GetObjectLegalHold",
+    "PutObjectLegalHold",
+}
 OTHER_ACTIONS = {
-    ("lambda", "Invoke"): "InvokeFunction", ("lambda", "InvokeWithResponseStream"): "InvokeFunction",
-    ("sqs", "SendMessageBatch"): "SendMessage", ("sqs", "DeleteMessageBatch"): "DeleteMessage",
+    ("lambda", "Invoke"): "InvokeFunction",
+    ("lambda", "InvokeWithResponseStream"): "InvokeFunction",
+    ("sqs", "SendMessageBatch"): "SendMessage",
+    ("sqs", "DeleteMessageBatch"): "DeleteMessage",
     ("sqs", "ChangeMessageVisibilityBatch"): "ChangeMessageVisibility",
     ("sns", "PublishBatch"): "Publish",
 }
 # Actions without resource-level permissions: always "*"
-STAR_ONLY = {"s3:ListAllMyBuckets", "dynamodb:ListTables", "sqs:ListQueues", "sns:ListTopics",
-             "lambda:ListFunctions", "kinesis:ListStreams", "secretsmanager:ListSecrets",
-             "ssm:DescribeParameters", "states:ListStateMachines", "logs:DescribeLogGroups",
-             "events:ListRules", "events:ListEventBuses", "iam:ListRoles", "kms:ListKeys", "kms:ListAliases",
-             "cloudwatch:PutMetricData", "cloudwatch:GetMetricData", "cloudwatch:ListMetrics",
-             "sns:ListSubscriptions", "lambda:ListEventSourceMappings", "secretsmanager:GetRandomPassword",
-             "kms:CreateKey"}
+STAR_ONLY = {
+    "s3:ListAllMyBuckets",
+    "dynamodb:ListTables",
+    "sqs:ListQueues",
+    "sns:ListTopics",
+    "lambda:ListFunctions",
+    "kinesis:ListStreams",
+    "secretsmanager:ListSecrets",
+    "ssm:DescribeParameters",
+    "states:ListStateMachines",
+    "logs:DescribeLogGroups",
+    "events:ListRules",
+    "events:ListEventBuses",
+    "iam:ListRoles",
+    "kms:ListKeys",
+    "kms:ListAliases",
+    "cloudwatch:PutMetricData",
+    "cloudwatch:GetMetricData",
+    "cloudwatch:ListMetrics",
+    "sns:ListSubscriptions",
+    "lambda:ListEventSourceMappings",
+    "secretsmanager:GetRandomPassword",
+    "kms:CreateKey",
+}
 
 
 def prefix(service: str) -> str:
@@ -65,7 +115,7 @@ def prefix(service: str) -> str:
 
         meta = botocore.session.get_session().get_service_model(service).metadata
         name = meta.get("signingName") or meta.get("endpointPrefix") or service
-    except Exception:  # noqa: BLE001 - a service botocore doesn't know keeps its own name
+    except Exception:
         name = service
     return PREFIX_OVERRIDES.get(name, name)
 
@@ -143,9 +193,15 @@ def build(calls: list[dict], region: str = "*", account: str = "*", services: se
     for act, res in sorted(actions.items()):
         groups.setdefault(tuple(sorted(res)), []).append(act)
     statements = []
-    for i, (res, acts) in enumerate(sorted(groups.items(), key=lambda kv: (kv[1][0], kv[0])), 1):
-        statements.append({"Sid": f"Awsemu{i}", "Effect": "Allow", "Action": acts if len(acts) > 1 else acts[0],
-                           "Resource": list(res) if len(res) > 1 else res[0]})
+    for i, (arns, acts) in enumerate(sorted(groups.items(), key=lambda kv: (kv[1][0], kv[0])), 1):
+        statements.append(
+            {
+                "Sid": f"Awsemu{i}",
+                "Effect": "Allow",
+                "Action": acts if len(acts) > 1 else acts[0],
+                "Resource": list(arns) if len(arns) > 1 else arns[0],
+            }
+        )
     return Policy({"Version": "2012-10-17", "Statement": statements}, actions, sorted(skipped), used)
 
 
@@ -155,8 +211,12 @@ def terraform(policy: Policy, name: str = "awsemu") -> str:
     for st in policy.document["Statement"]:
         acts = st["Action"] if isinstance(st["Action"], list) else [st["Action"]]
         res = st["Resource"] if isinstance(st["Resource"], list) else [st["Resource"]]
-        lines += ["  statement {", f'    sid       = "{st["Sid"]}"',
-                  "    actions   = [" + ", ".join(f'"{a}"' for a in acts) + "]",
-                  "    resources = [" + ", ".join(f'"{r}"' for r in res) + "]", "  }"]
+        lines += [
+            "  statement {",
+            f'    sid       = "{st["Sid"]}"',
+            "    actions   = [" + ", ".join(f'"{a}"' for a in acts) + "]",
+            "    resources = [" + ", ".join(f'"{r}"' for r in res) + "]",
+            "  }",
+        ]
     lines.append("}")
     return "\n".join(lines) + "\n"

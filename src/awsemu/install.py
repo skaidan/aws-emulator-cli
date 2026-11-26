@@ -128,9 +128,12 @@ class Plan:
     command: list[str]
 
     def describe(self) -> list[tuple[str, str]]:
-        return [("version", self.version or "latest"), ("package", self.url),
-                ("signature", f"{self.url}.sig, key {KEY_FINGERPRINT}" if self.verify else "not checked (--no-verify)"),
-                ("install with", " ".join(self.command))]
+        return [
+            ("version", self.version or "latest"),
+            ("package", self.url),
+            ("signature", f"{self.url}.sig, key {KEY_FINGERPRINT}" if self.verify else "not checked (--no-verify)"),
+            ("install with", " ".join(self.command)),
+        ]
 
 
 def _sudo() -> list[str]:
@@ -138,8 +141,9 @@ def _sudo() -> list[str]:
         return []
     if shutil.which("sudo"):
         return ["sudo"]
-    raise InstallError("installing a system package needs root, and sudo isn't available",
-                       "Run awsemu install as root.")
+    raise InstallError(
+        "installing a system package needs root, and sudo isn't available", "Run awsemu install as root."
+    )
 
 
 def install_command(kind: str, path: str) -> list[str]:
@@ -148,16 +152,23 @@ def install_command(kind: str, path: str) -> list[str]:
     return [*_sudo(), "rpm", "-U", "--oldpackage", "--replacepkgs", path]
 
 
-def native_plan(version: str | None, verify: bool = True, arch: str | None = None,
-                kind: str | None = None) -> Plan:
+def native_plan(version: str | None, verify: bool = True, arch: str | None = None, kind: str | None = None) -> Plan:
     kind = kind or package_kind()
     if kind is None:
-        raise InstallError("this machine can't install the emulator's Linux packages (deb or rpm)",
-                           "Use 'awsemu install --docker' (macOS, Windows, other Linux).")
+        raise InstallError(
+            "this machine can't install the emulator's Linux packages (deb or rpm)",
+            "Use 'awsemu install --docker' (macOS, Windows, other Linux).",
+        )
     arch = arch or detect_arch()
     url = package_url(kind, arch, version)
-    return Plan(kind=kind, arch=arch, version=version, url=url, verify=verify,
-                command=install_command(kind, f"./{package_file(kind, arch, version)}"))
+    return Plan(
+        kind=kind,
+        arch=arch,
+        version=version,
+        url=url,
+        verify=verify,
+        command=install_command(kind, f"./{package_file(kind, arch, version)}"),
+    )
 
 
 def _download(url: str, dest: Path) -> None:
@@ -165,8 +176,7 @@ def _download(url: str, dest: Path) -> None:
         dest.write_bytes(fid._get(url, accept="application/octet-stream"))
     except fid.FidelityError as exc:
         if "not found" in str(exc):
-            raise InstallError(f"{url} doesn't exist",
-                               "Check the version: awsemu install --list") from exc
+            raise InstallError(f"{url} doesn't exist", "Check the version: awsemu install --list") from exc
         raise InstallError(str(exc)) from exc
 
 
@@ -174,23 +184,28 @@ def verify_signature(package: Path, signature: Path, workdir: Path) -> str:
     """Check ``signature`` with AWS's key in a throwaway keyring. Returns the gpg output."""
     gpg = shutil.which("gpg")
     if not gpg:
-        raise InstallError("gpg isn't installed, so the package signature can't be checked",
-                           "Install gnupg, or pass --no-verify to skip the check.")
+        raise InstallError(
+            "gpg isn't installed, so the package signature can't be checked",
+            "Install gnupg, or pass --no-verify to skip the check.",
+        )
     home = workdir / "gnupg"
     home.mkdir(mode=0o700)
     env = {**os.environ, "GNUPGHOME": str(home)}
     key = workdir / "key.asc"
     _download(KEY_URL, key)
-    subprocess.run([gpg, "--batch", "--quiet", "--import", str(key)], env=env, check=True,
-                   capture_output=True)
-    out = subprocess.run([gpg, "--batch", "--with-colons", "--fingerprint", KEY_UID], env=env,
-                         capture_output=True, text=True).stdout
+    subprocess.run([gpg, "--batch", "--quiet", "--import", str(key)], env=env, check=True, capture_output=True)
+    out = subprocess.run(
+        [gpg, "--batch", "--with-colons", "--fingerprint", KEY_UID], env=env, capture_output=True, text=True
+    ).stdout
     fingerprints = [line.split(":")[9] for line in out.splitlines() if line.startswith("fpr:")]
     if KEY_FINGERPRINT not in fingerprints:
-        raise InstallError(f"AWS's signing key has an unexpected fingerprint ({', '.join(fingerprints) or 'none'})",
-                           f"Expected {KEY_FINGERPRINT}. Don't install; check AWS's documentation.")
-    result = subprocess.run([gpg, "--batch", "--verify", str(signature), str(package)], env=env,
-                            capture_output=True, text=True)
+        raise InstallError(
+            f"AWS's signing key has an unexpected fingerprint ({', '.join(fingerprints) or 'none'})",
+            f"Expected {KEY_FINGERPRINT}. Don't install; check AWS's documentation.",
+        )
+    result = subprocess.run(
+        [gpg, "--batch", "--verify", str(signature), str(package)], env=env, capture_output=True, text=True
+    )
     if result.returncode != 0:
         raise InstallError("the package signature is NOT valid", result.stderr.strip()[-300:])
     return result.stderr

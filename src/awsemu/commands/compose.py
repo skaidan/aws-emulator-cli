@@ -17,8 +17,7 @@ from ..paths import REGION, InstanceFiles, cli_root, emulator_root
 CLIENT_ANCHOR = "aws-emulator-client"
 
 
-def service(opts: runtime.StartOptions, system: str | None = None, arch: str | None = None,
-            build: bool = True) -> dict:
+def service(opts: runtime.StartOptions, system: str | None = None, arch: str | None = None, build: bool = True) -> dict:
     """The compose service, mirroring ``runtime.docker_command`` (the official recipe)."""
     system = system or platform.system()
     port = opts.port
@@ -27,7 +26,7 @@ def service(opts: runtime.StartOptions, system: str | None = None, arch: str | N
     if build:
         svc["build"] = {"context": ".", "dockerfile_inline": runtime.dockerfile(arch)}
     svc["command"] = runtime.emulator_args(opts)
-    svc["ports"] = [f"127.0.0.1:{port}:{port}"]   # never expose it to the network
+    svc["ports"] = [f"127.0.0.1:{port}:{port}"]  # never expose it to the network
     svc["mem_limit"] = opts.memory
     svc["memswap_limit"] = opts.memory
     if system == "Windows":
@@ -75,8 +74,7 @@ def render(name: str, svc: dict, port: int, client: dict | None = None, proxy_po
         pass
 
     def str_presenter(dumper, value):
-        return dumper.represent_scalar("tag:yaml.org,2002:str", value,
-                                       style="|" if "\n" in value else None)
+        return dumper.represent_scalar("tag:yaml.org,2002:str", value, style="|" if "\n" in value else None)
 
     _Dumper.add_representer(str, str_presenter)
     body = yaml.dump({"services": {name: svc}}, Dumper=_Dumper, sort_keys=False, width=100)
@@ -100,7 +98,9 @@ def render(name: str, svc: dict, port: int, client: dict | None = None, proxy_po
 # certificate path in AWS_CA_BUNDLE resolves inside the container too.
 """
     if client is not None:
-        header = header.rsplit("# Containers of your app:", 1)[0] + f"""\
+        header = (
+            header.rsplit("# Containers of your app:", 1)[0]
+            + f"""\
 # Containers of your app go through the awsemu proxy on this machine (calls log,
 # faults), at host.docker.internal:{proxy_port}. Start it so containers can reach it:
 #
@@ -117,22 +117,39 @@ def render(name: str, svc: dict, port: int, client: dict | None = None, proxy_po
 # them: copy the lines you need.) The credentials file is mounted, not copied: the
 # emulator makes new keys on every start.
 """
+        )
     return header + body
 
 
 @click.command()
-@click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path),
-              help="Write to this file (default: stdout).")
+@click.option(
+    "-o", "--output", type=click.Path(dir_okay=False, path_type=Path), help="Write to this file (default: stdout)."
+)
 @click.option("--name", default="aws-emulator", show_default=True, help="Service name.")
 @click.option("--no-build", is_flag=True, help="Omit the build section (image built with 'awsemu image build').")
-@click.option("--auth/--no-auth", default=None, show_default="auth",
-              help="Require SigV4-signed requests (default: awsemu.toml, else auth).")
-@click.option("--telemetry/--no-telemetry", default=None,
-              help="Force telemetry on/off (default: awsemu.toml, else emulator settings).")
-@click.option("--idle-timeout", type=click.IntRange(1, 31536000), metavar="SECONDS",
-              help="Stop after this many seconds without API calls.")
-@click.option("--proxy", "with_proxy", is_flag=True,
-              help=f"Also write settings (x-{CLIENT_ANCHOR}) that send app containers through the awsemu proxy.")
+@click.option(
+    "--auth/--no-auth",
+    default=None,
+    show_default="auth",
+    help="Require SigV4-signed requests (default: awsemu.toml, else auth).",
+)
+@click.option(
+    "--telemetry/--no-telemetry",
+    default=None,
+    help="Force telemetry on/off (default: awsemu.toml, else emulator settings).",
+)
+@click.option(
+    "--idle-timeout",
+    type=click.IntRange(1, 31536000),
+    metavar="SECONDS",
+    help="Stop after this many seconds without API calls.",
+)
+@click.option(
+    "--proxy",
+    "with_proxy",
+    is_flag=True,
+    help=f"Also write settings (x-{CLIENT_ANCHOR}) that send app containers through the awsemu proxy.",
+)
 @pass_ctx
 @handle_errors
 def compose(c: Ctx, output: Path | None, name: str, no_build: bool, auth, telemetry, idle_timeout, with_proxy):
@@ -149,7 +166,8 @@ def compose(c: Ctx, output: Path | None, name: str, no_build: bool, auth, teleme
         return flag if flag is not None else (value if value is not None else default)
 
     opts = runtime.StartOptions(
-        port=c.port, mode="docker",
+        port=c.port,
+        mode="docker",
         auth=pick(auth, proj and proj.auth, True),
         telemetry=pick(telemetry, proj and proj.telemetry, None),
         idle_timeout=pick(idle_timeout, proj and proj.idle_timeout, None),

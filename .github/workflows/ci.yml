@@ -22,11 +22,28 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install -e ".[dev,ui]"
       - run: pytest -q
+        if: matrix.os != 'ubuntu-latest' || matrix.python != '3.13'
+      - name: Tests with coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        run: pytest -q --cov --cov-report=term-missing:skip-covered --cov-report=xml
       - name: Command reference is up to date
         run: python scripts/gen_reference.py --check
       - run: awsemu --help
       - run: awsemu doctor
         continue-on-error: true
+
+  lint:
+    name: lint, format and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev,ui,testcontainers]" "ruff==0.16.9" "mypy==2.3.1"
+      - run: ruff check src tests scripts
+      - run: ruff format --check src tests scripts
+      - run: mypy
 
   real-emulator:
     name: against the real AWS Emulator

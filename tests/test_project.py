@@ -43,14 +43,17 @@ def test_awsemu_config_env(tmp_path, monkeypatch):
     assert project.load().port == 9333
 
 
-@pytest.mark.parametrize("text,needle", [
-    ('port = "9297"\n', "'port' must be int"),
-    ("prot = 1\n", "did you mean 'port'?"),
-    ('mode = "podman"\n', "'mode' must be one of auto, native, docker"),
-    ('sdk = ["go"]\n', "'sdk' accepts"),
-    ("port = 70000\n", "between 1 and 65535"),
-    ("port = [\n", "invalid TOML"),
-])
+@pytest.mark.parametrize(
+    "text,needle",
+    [
+        ('port = "9297"\n', "'port' must be int"),
+        ("prot = 1\n", "did you mean 'port'?"),
+        ('mode = "podman"\n', "'mode' must be one of auto, native, docker"),
+        ('sdk = ["go"]\n', "'sdk' accepts"),
+        ("port = 70000\n", "between 1 and 65535"),
+        ("port = [\n", "invalid TOML"),
+    ],
+)
 def test_errors(proj_dir, text, needle):
     (proj_dir / "awsemu.toml").write_text(text)
     with pytest.raises(project.ProjectError, match=None) as info:
@@ -95,7 +98,8 @@ def test_init_writes_template(runner, proj_dir):
 
 def test_up_down_with_project(runner, fake_binary, free_port, proj_dir):
     (proj_dir / "awsemu.toml").write_text(
-        f'port = {free_port}\nmode = "native"\nauth = false\ntelemetry = false\nidle_timeout = 600\n')
+        f'port = {free_port}\nmode = "native"\nauth = false\ntelemetry = false\nidle_timeout = 600\n'
+    )
     result = runner.invoke(cli, ["up"])
     assert result.exit_code == 0, result.output
     assert "project:" in result.output and f"127.0.0.1:{free_port}" in result.output

@@ -60,8 +60,10 @@ def explain(c: Ctx, call_id: str, release, refresh, as_json):
 
     calls = read_calls(px.ProxyFiles(c.port).calls)
     if not calls:
-        raise RuntimeErrorWithHint(f"no calls logged by the proxy in front of port {c.port}",
-                                   "Run your code through it: awsemu proxy start -d, then awsemu exec --proxy -- …")
+        raise RuntimeErrorWithHint(
+            f"no calls logged by the proxy in front of port {c.port}",
+            "Run your code through it: awsemu proxy start -d, then awsemu exec --proxy -- …",
+        )
     call = pick_call(calls, call_id)
     tag, suite, index, _installed = load_index(release, None, refresh)
     data = ex.explain(call, index, tag, suite)

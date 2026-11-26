@@ -33,10 +33,33 @@ CBOR_PATH_RE = re.compile(r"^/service/([^/]+)/operation/([^/?]+)")
 XML_CODE_RE = re.compile(rb"<Code>([^<]{1,200})</Code>")
 
 RESOURCE_KEYS = (
-    "TableName", "QueueUrl", "QueueName", "TopicArn", "TargetArn", "StreamName", "StreamARN",
-    "FunctionName", "StateMachineArn", "stateMachineArn", "executionArn", "SecretId", "Bucket",
-    "LogGroupName", "logGroupName", "EventBusName", "Name", "KeyId", "RoleName", "UserName",
-    "StackName", "ClusterName", "RestApiId", "ResourceArn", "resourceArn", "Arn", "name",
+    "TableName",
+    "QueueUrl",
+    "QueueName",
+    "TopicArn",
+    "TargetArn",
+    "StreamName",
+    "StreamARN",
+    "FunctionName",
+    "StateMachineArn",
+    "stateMachineArn",
+    "executionArn",
+    "SecretId",
+    "Bucket",
+    "LogGroupName",
+    "logGroupName",
+    "EventBusName",
+    "Name",
+    "KeyId",
+    "RoleName",
+    "UserName",
+    "StackName",
+    "ClusterName",
+    "RestApiId",
+    "ResourceArn",
+    "resourceArn",
+    "Arn",
+    "name",
 )
 REST_XML = {"s3", "s3control", "route53", "cloudfront"}
 
@@ -179,11 +202,12 @@ def _rest_ops(service: str) -> list[tuple]:
     return ops
 
 
-def _match_rest(service: str, method: str, path: str, query: dict[str, str],
-                headers: dict[str, str]) -> tuple[str, dict] | None:
+def _match_rest(
+    service: str, method: str, path: str, query: dict[str, str], headers: dict[str, str]
+) -> tuple[str, dict] | None:
     try:
         ops = _rest_ops(service)
-    except Exception:  # noqa: BLE001 - no model for this service
+    except Exception:
         return None
     for op_method, regex, required, _, name in ops:
         if op_method != method:
@@ -191,8 +215,10 @@ def _match_rest(service: str, method: str, path: str, query: dict[str, str],
         m = regex.match(path)
         if not m:
             continue
-        if all(k in (query if where == "query" else headers) and (v is None or query.get(k) == v)
-               for where, k, v in required):
+        if all(
+            k in (query if where == "query" else headers) and (v is None or query.get(k) == v)
+            for where, k, v in required
+        ):
             return name, {k: unquote(v) for k, v in m.groupdict().items()}
     return None
 

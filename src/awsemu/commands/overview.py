@@ -20,7 +20,8 @@ def _sqs(c):
 
 
 def _ddb(c):
-    names, kwargs = [], {}
+    names: list[str] = []
+    kwargs: dict = {}
     while True:
         page = c.list_tables(**kwargs)
         names += page.get("TableNames", [])
@@ -42,24 +43,15 @@ SERVICES = [
     ("S3 buckets", "s3", _s3),
     ("SQS queues", "sqs", _sqs),
     ("DynamoDB tables", "dynamodb", _ddb),
-    ("SNS topics", "sns",
-     lambda c: [t["TopicArn"].rsplit(":", 1)[-1] for t in _paginate(c, "list_topics", "Topics")]),
-    ("Lambda functions", "lambda",
-     lambda c: _paginate(c, "list_functions", "Functions", "FunctionName")),
-    ("Secrets", "secretsmanager",
-     lambda c: _paginate(c, "list_secrets", "SecretList", "Name")),
-    ("SSM parameters", "ssm",
-     lambda c: _paginate(c, "describe_parameters", "Parameters", "Name")),
-    ("Kinesis streams", "kinesis",
-     lambda c: _paginate(c, "list_streams", "StreamNames")),
-    ("EventBridge buses", "events",
-     lambda c: [b["Name"] for b in c.list_event_buses().get("EventBuses", [])]),
-    ("Step Functions", "stepfunctions",
-     lambda c: _paginate(c, "list_state_machines", "stateMachines", "name")),
-    ("Log groups", "logs",
-     lambda c: _paginate(c, "describe_log_groups", "logGroups", "logGroupName")),
-    ("IAM roles", "iam",
-     lambda c: _paginate(c, "list_roles", "Roles", "RoleName")),
+    ("SNS topics", "sns", lambda c: [t["TopicArn"].rsplit(":", 1)[-1] for t in _paginate(c, "list_topics", "Topics")]),
+    ("Lambda functions", "lambda", lambda c: _paginate(c, "list_functions", "Functions", "FunctionName")),
+    ("Secrets", "secretsmanager", lambda c: _paginate(c, "list_secrets", "SecretList", "Name")),
+    ("SSM parameters", "ssm", lambda c: _paginate(c, "describe_parameters", "Parameters", "Name")),
+    ("Kinesis streams", "kinesis", lambda c: _paginate(c, "list_streams", "StreamNames")),
+    ("EventBridge buses", "events", lambda c: [b["Name"] for b in c.list_event_buses().get("EventBuses", [])]),
+    ("Step Functions", "stepfunctions", lambda c: _paginate(c, "list_state_machines", "stateMachines", "name")),
+    ("Log groups", "logs", lambda c: _paginate(c, "describe_log_groups", "logGroups", "logGroupName")),
+    ("IAM roles", "iam", lambda c: _paginate(c, "list_roles", "Roles", "RoleName")),
 ]
 
 
@@ -79,9 +71,14 @@ def collect(port: int, only: set[str] | None = None) -> list[dict]:
 
 
 @click.command()
-@click.option("-s", "--service", "services", multiple=True,
-              type=click.Choice([s[1] for s in SERVICES]),
-              help="Only these services. Repeatable.")
+@click.option(
+    "-s",
+    "--service",
+    "services",
+    multiple=True,
+    type=click.Choice([s[1] for s in SERVICES]),
+    help="Only these services. Repeatable.",
+)
 @click.option("--all", "show_empty", is_flag=True, help="Also list services with nothing in them.")
 @json_option
 @pass_ctx
@@ -91,8 +88,7 @@ def overview(c: Ctx, services, show_empty: bool, as_json: bool):
     ensure_running(c.port)
     results = collect(c.port, set(services) or None)
     if as_json:
-        ui.print_json({r["service"]: {"label": r["label"], "items": r["items"], "error": r["error"]}
-                       for r in results})
+        ui.print_json({r["service"]: {"label": r["label"], "items": r["items"], "error": r["error"]} for r in results})
         return
     rows = []
     for r in results:
@@ -105,6 +101,9 @@ def overview(c: Ctx, services, show_empty: bool, as_json: bool):
         if len(r["items"]) > 8:
             names += f", … (+{len(r['items']) - 8})"
         rows.append([r["label"], len(r["items"]), names])
-    ui.table(["resource", "count", "names"], rows,
-             title=f"AWS Emulator on port {c.port}",
-             empty="The emulator is empty. (Use --all to list every service checked.)")
+    ui.table(
+        ["resource", "count", "names"],
+        rows,
+        title=f"AWS Emulator on port {c.port}",
+        empty="The emulator is empty. (Use --all to list every service checked.)",
+    )

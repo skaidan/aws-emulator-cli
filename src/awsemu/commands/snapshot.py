@@ -36,8 +36,13 @@ def default_dir() -> Path:
 
 
 def _dir_option(fn):
-    return click.option("--dir", "base", type=click.Path(file_okay=False, path_type=Path), metavar="DIR",
-                        help="Where snapshots are kept (default: ~/.aws/emulator-cli/snapshots).")(fn)
+    return click.option(
+        "--dir",
+        "base",
+        type=click.Path(file_okay=False, path_type=Path),
+        metavar="DIR",
+        help="Where snapshots are kept (default: ~/.aws/emulator-cli/snapshots).",
+    )(fn)
 
 
 def _folder(base: Path | None, name: str) -> Path:
@@ -58,7 +63,7 @@ def _installed_version() -> str | None:
 
     try:
         return installed_version()
-    except Exception:  # noqa: BLE001 - only informative
+    except Exception:
         return None
 
 
@@ -96,15 +101,24 @@ def save(c: Ctx, name: str, base: Path | None, no_secrets: bool, force: bool):
     staging.mkdir(parents=True)
     try:
         data, notes = _export(c.port, set(seedlib.SECTIONS), staging / "files", staging, not no_secrets)
-        text = (f"# awsemu snapshot '{name}', saved from port {c.port} on "
-                f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M')}.\n"
-                f"# Restore it with: awsemu snapshot restore {name}\n") + seedlib.dump(data)
+        text = (
+            f"# awsemu snapshot '{name}', saved from port {c.port} on "
+            f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M')}.\n"
+            f"# Restore it with: awsemu snapshot restore {name}\n"
+        ) + seedlib.dump(data)
         (staging / "seed.yaml").write_text(text, encoding="utf-8")
         counts = {k: len(v) for k, v in data.items() if isinstance(v, list)}
         secrets = bool(data.get("secrets")) or any(p.get("type") == "SecureString" for p in data.get("parameters", []))
-        meta = {"name": name, "created_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-                "port": c.port, "emulator_version": _installed_version(), "awsemu_version": __version__,
-                "counts": counts, "secrets": secrets, "notes": notes}
+        meta = {
+            "name": name,
+            "created_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+            "port": c.port,
+            "emulator_version": _installed_version(),
+            "awsemu_version": __version__,
+            "counts": counts,
+            "secrets": secrets,
+            "notes": notes,
+        }
         (staging / "snapshot.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         seedlib.load_file(staging / "seed.yaml")  # it must apply later: check it now
         if folder.exists():
@@ -125,7 +139,9 @@ def save(c: Ctx, name: str, base: Path | None, no_secrets: bool, force: bool):
 @snapshot.command()
 @click.argument("name")
 @_dir_option
-@click.option("--no-reset", is_flag=True, help="Apply it on top of what's there instead of emptying the emulator first.")
+@click.option(
+    "--no-reset", is_flag=True, help="Apply it on top of what's there instead of emptying the emulator first."
+)
 @pass_ctx
 @click.pass_context
 @handle_errors
@@ -159,18 +175,35 @@ def ls(base: Path | None, as_json: bool):
     rows = []
     for folder in folders:
         meta = _meta(folder)
-        rows.append({"name": folder.name, "created_at": meta.get("created_at"), "port": meta.get("port"),
-                     "emulator_version": meta.get("emulator_version"), "counts": meta.get("counts", {}),
-                     "secrets": meta.get("secrets"), "path": str(folder)})
+        rows.append(
+            {
+                "name": folder.name,
+                "created_at": meta.get("created_at"),
+                "port": meta.get("port"),
+                "emulator_version": meta.get("emulator_version"),
+                "counts": meta.get("counts", {}),
+                "secrets": meta.get("secrets"),
+                "path": str(folder),
+            }
+        )
     if as_json:
         ui.print_json(rows)
         return
     if not rows:
         ui.echo(f"No snapshots in {root}. Save one with: awsemu snapshot save NAME", "muted")
         return
-    ui.table(["name", "saved", "emulator", "contents"],
-             [[r["name"], (r["created_at"] or "")[:16].replace("T", " "), r["emulator_version"] or "-",
-               ", ".join(f"{n} {k}" for k, n in r["counts"].items()) or "empty"] for r in rows])
+    ui.table(
+        ["name", "saved", "emulator", "contents"],
+        [
+            [
+                r["name"],
+                (r["created_at"] or "")[:16].replace("T", " "),
+                r["emulator_version"] or "-",
+                ", ".join(f"{n} {k}" for k, n in r["counts"].items()) or "empty",
+            ]
+            for r in rows
+        ],
+    )
 
 
 @snapshot.command(name="rm")

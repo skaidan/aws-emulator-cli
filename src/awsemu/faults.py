@@ -43,15 +43,28 @@ import uuid
 from dataclasses import asdict, dataclass
 
 STATUS_BY_CODE = {
-    "SlowDown": 503, "ServiceUnavailable": 503, "ServiceUnavailableException": 503,
-    "RequestLimitExceeded": 503, "InternalError": 500, "InternalFailure": 500,
-    "InternalServerError": 500, "InternalServerException": 500, "InternalServiceError": 500,
-    "TooManyRequestsException": 429, "RequestTimeout": 400,
+    "SlowDown": 503,
+    "ServiceUnavailable": 503,
+    "ServiceUnavailableException": 503,
+    "RequestLimitExceeded": 503,
+    "InternalError": 500,
+    "InternalFailure": 500,
+    "InternalServerError": 500,
+    "InternalServerException": 500,
+    "InternalServiceError": 500,
+    "TooManyRequestsException": 429,
+    "RequestTimeout": 400,
 }
 CODE_BY_STATUS = {
-    400: "BadRequest", 403: "AccessDenied", 404: "NotFound", 408: "RequestTimeout",
-    429: "TooManyRequestsException", 500: "InternalFailure", 502: "BadGateway",
-    503: "ServiceUnavailable", 504: "GatewayTimeout",
+    400: "BadRequest",
+    403: "AccessDenied",
+    404: "NotFound",
+    408: "RequestTimeout",
+    429: "TooManyRequestsException",
+    500: "InternalFailure",
+    502: "BadGateway",
+    503: "ServiceUnavailable",
+    504: "GatewayTimeout",
 }
 REST_XML_CODE_BY_STATUS = {500: "InternalError", 503: "SlowDown"}
 
@@ -83,14 +96,17 @@ class Fault:
     added_at: float = 0.0  # time.time() when parsed (the window starts then)
 
     def matches(self, service: str, operation: str, resource: str = "") -> bool:
-        if not (fnmatch.fnmatch((service or "").lower(), self.service.lower())
-                and fnmatch.fnmatch((operation or "").lower(), self.operation.lower())):
+        if not (
+            fnmatch.fnmatch((service or "").lower(), self.service.lower())
+            and fnmatch.fnmatch((operation or "").lower(), self.operation.lower())
+        ):
             return False
         if self.resource == "*":
             return True
         resource = resource or ""
-        return (fnmatch.fnmatchcase(resource, self.resource)
-                or fnmatch.fnmatchcase(resource.split("/", 1)[0], self.resource))  # S3: the bucket
+        return fnmatch.fnmatchcase(resource, self.resource) or fnmatch.fnmatchcase(
+            resource.split("/", 1)[0], self.resource
+        )  # S3: the bucket
 
     def remaining_s(self, now: float | None = None) -> float | None:
         if self.duration_s is None:
@@ -107,7 +123,8 @@ class Fault:
 
     def as_dict(self) -> dict:
         data = asdict(self)
-        data["remaining_s"] = None if self.duration_s is None else round(self.remaining_s(), 1)
+        remaining = self.remaining_s()
+        data["remaining_s"] = None if remaining is None else round(remaining, 1)
         data["active"] = not self.exhausted
         return data
 
@@ -117,14 +134,23 @@ def parse(spec: str) -> Fault:
     text = spec.strip()
     m = RULE_RE.match(text.replace(" ", ""))
     if not m:
-        raise FaultError(f"'{spec}' isn't a fault rule; expected TARGET=EFFECT[@RATE], "
-                         "like dynamodb=throttle@10% or s3=latency:500ms")
+        raise FaultError(
+            f"'{spec}' isn't a fault rule; expected TARGET=EFFECT[@RATE], "
+            "like dynamodb=throttle@10% or s3=latency:500ms"
+        )
     t = TARGET_RE.match(m.group("target"))
     if not t:
-        raise FaultError(f"'{m.group('target')}' in '{spec}' isn't a target: use service, "
-                         "service:Operation or service:Operation[resource]")
-    fault = Fault(service=t.group("service") or "*", operation=t.group("operation") or "*",
-                  resource=t.group("resource") or "*", spec=text, added_at=time.time())
+        raise FaultError(
+            f"'{m.group('target')}' in '{spec}' isn't a target: use service, "
+            "service:Operation or service:Operation[resource]"
+        )
+    fault = Fault(
+        service=t.group("service") or "*",
+        operation=t.group("operation") or "*",
+        resource=t.group("resource") or "*",
+        spec=text,
+        added_at=time.time(),
+    )
     for effect in m.group("effects").split(","):
         if not effect:
             continue
@@ -142,14 +168,16 @@ def parse(spec: str) -> Fault:
         elif effect == "throttle":
             fault.error = "throttle"
         else:
-            code, _, status = effect.partition(":")
-            if not CODE_RE.match(code) or (status and not status.isdigit()):
-                raise FaultError(f"'{effect}' in '{spec}' isn't an effect: use latency:500ms, "
-                                 "throttle, reset, a status like 503, or an error code like "
-                                 "ThrottlingException[:400]")
+            code, _, status_text = effect.partition(":")
+            if not CODE_RE.match(code) or (status_text and not status_text.isdigit()):
+                raise FaultError(
+                    f"'{effect}' in '{spec}' isn't an effect: use latency:500ms, "
+                    "throttle, reset, a status like 503, or an error code like "
+                    "ThrottlingException[:400]"
+                )
             fault.error = code
-            if status:
-                fault.status = int(status)
+            if status_text:
+                fault.status = int(status_text)
     if not (fault.latency_ms or fault.error or fault.status or fault.reset):
         raise FaultError(f"'{spec}' has no effect")
     for mod in MOD_RE.finditer(m.group("mods")):
@@ -270,8 +298,9 @@ def cbor_map(items: dict[str, str]) -> bytes:
     return out
 
 
-def error_response(code: str, status: int, protocol: str, message: str,
-                   request_content_type: str = "") -> tuple[int, dict[str, str], bytes]:
+def error_response(
+    code: str, status: int, protocol: str, message: str, request_content_type: str = ""
+) -> tuple[int, dict[str, str], bytes]:
     """``(status, headers, body)`` of an AWS error in the given protocol."""
     rid = str(uuid.uuid4())
     headers = {"x-amzn-RequestId": rid}
@@ -286,18 +315,25 @@ def error_response(code: str, status: int, protocol: str, message: str,
     elif protocol in ("query", "ec2"):
         headers["Content-Type"] = "text/xml"
         side = "Receiver" if status >= 500 else "Sender"
+        xml: str
         if protocol == "ec2":
-            body = (f"<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Errors><Error><Code>{code}</Code>"
-                    f"<Message>{message}</Message></Error></Errors><RequestID>{rid}</RequestID></Response>")
+            xml = (
+                f'<?xml version="1.0" encoding="UTF-8"?><Response><Errors><Error><Code>{code}</Code>'
+                f"<Message>{message}</Message></Error></Errors><RequestID>{rid}</RequestID></Response>"
+            )
         else:
-            body = (f"<ErrorResponse><Error><Type>{side}</Type><Code>{code}</Code><Message>{message}</Message>"
-                    f"</Error><RequestId>{rid}</RequestId></ErrorResponse>")
-        body = body.encode()
+            xml = (
+                f"<ErrorResponse><Error><Type>{side}</Type><Code>{code}</Code><Message>{message}</Message>"
+                f"</Error><RequestId>{rid}</RequestId></ErrorResponse>"
+            )
+        body = xml.encode()
     elif protocol == "rest-xml":
         headers["Content-Type"] = "application/xml"
         headers["x-amz-request-id"] = rid
-        body = (f"<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>{code}</Code><Message>{message}"
-                f"</Message><RequestId>{rid}</RequestId></Error>").encode()
+        body = (
+            f'<?xml version="1.0" encoding="UTF-8"?><Error><Code>{code}</Code><Message>{message}'
+            f"</Message><RequestId>{rid}</RequestId></Error>"
+        ).encode()
     else:  # rest-json
         headers["Content-Type"] = "application/json"
         headers["x-amzn-ErrorType"] = code

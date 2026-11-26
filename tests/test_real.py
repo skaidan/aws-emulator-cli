@@ -23,8 +23,9 @@ from awsemu.paths import ACCOUNT_ID, InstanceFiles
 
 pytestmark = [
     pytest.mark.real,
-    pytest.mark.skipif(os.environ.get("AWSEMU_REAL_TESTS") != "1",
-                       reason="set AWSEMU_REAL_TESTS=1 to run against the real emulator"),
+    pytest.mark.skipif(
+        os.environ.get("AWSEMU_REAL_TESTS") != "1", reason="set AWSEMU_REAL_TESTS=1 to run against the real emulator"
+    ),
 ]
 
 
@@ -59,8 +60,9 @@ def emu(real_home):
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
-        result = CliRunner().invoke(cli, ["--port", str(port), "start", "--native",
-                                          "--no-telemetry", "--idle-timeout", "900", "--wait", "60"])
+        result = CliRunner().invoke(
+            cli, ["--port", str(port), "start", "--native", "--no-telemetry", "--idle-timeout", "900", "--wait", "60"]
+        )
         assert result.exit_code == 0, result.output
         yield port
         result = CliRunner().invoke(cli, ["--port", str(port), "stop"])
@@ -104,7 +106,8 @@ def test_s3_roundtrip(emu, tmp_path):
     run(emu, "s3", "get", "awsemu-real/docs/hello.txt", str(dest))
     assert dest.read_text() == src.read_text()
     assert run(emu, "s3", "presign", "awsemu-real/docs/hello.txt").output.startswith(
-        f"https://127.0.0.1:{emu}/awsemu-real/docs/hello.txt?")
+        f"https://127.0.0.1:{emu}/awsemu-real/docs/hello.txt?"
+    )
     run(emu, "s3", "rb", "awsemu-real", "--force", "--yes")
     assert "awsemu-real" not in run(emu, "s3", "ls").output
 
@@ -124,9 +127,14 @@ def test_sqs_roundtrip(emu):
 
 def test_dynamodb_roundtrip(emu):
     run(emu, "ddb", "create", "awsemu-users", "--pk", "id", "--sk", "created:N")
-    run(emu, "ddb", "put", "awsemu-users",
+    run(
+        emu,
+        "ddb",
+        "put",
+        "awsemu-users",
         '[{"id": "u1", "created": 1, "name": "Ana", "tags": ["a"]},'
-        ' {"id": "u2", "created": 2, "name": "Luis", "score": 9.5}]')
+        ' {"id": "u2", "created": 2, "name": "Luis", "score": 9.5}]',
+    )
     item = json.loads(run(emu, "ddb", "get", "awsemu-users", '{"id": "u2", "created": 2}').output)
     assert item == {"id": "u2", "created": 2, "name": "Luis", "score": 9.5}
     rows = json.loads(run(emu, "ddb", "scan", "awsemu-users", "--json").output)
@@ -149,12 +157,10 @@ def test_overview_reports_every_service(emu):
 
 def test_exec_environment_reaches_emulator(emu):
     """The variables from 'awsemu env' must work for plain boto3 code."""
-    code = ("import boto3; i = boto3.client('sts').get_caller_identity(); "
-            f"assert i['Account'] == '{ACCOUNT_ID}', i")
+    code = f"import boto3; i = boto3.client('sts').get_caller_identity(); assert i['Account'] == '{ACCOUNT_ID}', i"
     env = os.environ.copy()
     env["AWS_ACCESS_KEY_ID"] = "AKIAREALKEYSHOULDBEDROPPED"
-    result = CliRunner().invoke(cli, ["--port", str(emu), "exec", "--", sys.executable, "-c", code],
-                                env=env)
+    result = CliRunner().invoke(cli, ["--port", str(emu), "exec", "--", sys.executable, "-c", code], env=env)
     assert result.exit_code == 0, result.output
 
 
@@ -183,8 +189,7 @@ def test_sns_to_sqs_end_to_end(emu):
     run(emu, "sns", "subscribe", "awsemu-orders", "--to-sqs", "awsemu-order-events", "--raw")
     assert "awsemu-order-events" in run(emu, "sns", "ls").output
     run(emu, "sns", "publish", "awsemu-orders", '{"order": 42}', "-a", "kind=created")
-    msgs = json.loads(run(emu, "sqs", "receive", "awsemu-order-events", "--wait", "5",
-                          "--delete", "--json").output)
+    msgs = json.loads(run(emu, "sqs", "receive", "awsemu-order-events", "--wait", "5", "--delete", "--json").output)
     assert len(msgs) == 1, msgs
     assert json.loads(msgs[0]["Body"]) == {"order": 42}  # raw delivery: no SNS envelope
     run(emu, "sns", "rm", "awsemu-orders", "--yes")
@@ -198,7 +203,8 @@ def test_lambda_deploy_invoke(emu, tmp_path):
         "import os\n"
         "def handler(event, context):\n"
         "    print('hello from the emulator')\n"
-        "    return {'greeting': f\"hello {event.get('name', 'nobody')}\", 'stage': os.environ.get('STAGE')}\n")
+        "    return {'greeting': f\"hello {event.get('name', 'nobody')}\", 'stage': os.environ.get('STAGE')}\n"
+    )
     out = run(emu, "lambda", "deploy", "awsemu-hello", str(src), "-e", "STAGE=local").output
     assert "created awsemu-hello" in out and "app.handler" in out
     assert "awsemu-hello" in run(emu, "lambda", "ls").output
@@ -238,8 +244,7 @@ def test_eventbridge_to_sqs(emu):
     assert any(r["Name"] == "awsemu-orders" and r["Targets"] for r in rules)
     run(emu, "events", "put", "awsemu.orders", "OrderCreated", '{"id": 7}')
     run(emu, "events", "put", "other.source", "Ignored", "{}")
-    msgs = json.loads(run(emu, "sqs", "receive", "awsemu-eb-target", "--wait", "5", "--delete",
-                          "--json").output)
+    msgs = json.loads(run(emu, "sqs", "receive", "awsemu-eb-target", "--wait", "5", "--delete", "--json").output)
     assert len(msgs) == 1, msgs
     event = json.loads(msgs[0]["Body"])
     assert event["source"] == "awsemu.orders" and event["detail"] == {"id": 7}
@@ -260,19 +265,32 @@ def test_kinesis_roundtrip(emu):
 
 def test_step_functions(emu, tmp_path):
     flow = tmp_path / "flow.asl.json"
-    flow.write_text(json.dumps({
-        "StartAt": "Greet",
-        "States": {
-            "Greet": {"Type": "Pass", "Parameters": {"greeting.$": "States.Format('hello {}', $.name)"},
-                      "Next": "Done"},
-            "Done": {"Type": "Succeed"},
-        }}))
+    flow.write_text(
+        json.dumps(
+            {
+                "StartAt": "Greet",
+                "States": {
+                    "Greet": {
+                        "Type": "Pass",
+                        "Parameters": {"greeting.$": "States.Format('hello {}', $.name)"},
+                        "Next": "Done",
+                    },
+                    "Done": {"Type": "Succeed"},
+                },
+            }
+        )
+    )
     run(emu, "sfn", "deploy", "awsemu-flow", str(flow))
     out = run(emu, "sfn", "start", "awsemu-flow", '{"name": "Ana"}', "--raw").output
     assert json.loads(out) == {"greeting": "hello Ana"}
 
-    run(emu, "sfn", "deploy", "awsemu-flow",
-        '{"StartAt": "X", "States": {"X": {"Type": "Fail", "Error": "Nope", "Cause": "on purpose"}}}')
+    run(
+        emu,
+        "sfn",
+        "deploy",
+        "awsemu-flow",
+        '{"StartAt": "X", "States": {"X": {"Type": "Fail", "Error": "Nope", "Cause": "on purpose"}}}',
+    )
     result = run(emu, "sfn", "start", "awsemu-flow", ok=False)
     assert result.exit_code == 1 and "FAILED" in result.output and "Nope" in result.output
     assert "SUCCEEDED" in run(emu, "sfn", "executions", "awsemu-flow").output
@@ -298,22 +316,52 @@ def test_mcp_server_over_stdio(emu, real_home):
     """An agent's view: start 'awsemu mcp', list the tools, create and see a resource."""
     import subprocess
 
-    env = {**os.environ, "HOME": str(real_home), "USERPROFILE": str(real_home), "PYTHONUNBUFFERED": "1",
-           "AWS_ACCESS_KEY_ID": "AKIAREALKEYSHOULDNOTBEUSED", "AWS_SECRET_ACCESS_KEY": "x"}
+    env = {
+        **os.environ,
+        "HOME": str(real_home),
+        "USERPROFILE": str(real_home),
+        "PYTHONUNBUFFERED": "1",
+        "AWS_ACCESS_KEY_ID": "AKIAREALKEYSHOULDNOTBEUSED",
+        "AWS_SECRET_ACCESS_KEY": "x",
+    }
     messages = [
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-         "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}},
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            },
+        },
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-        {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-         "params": {"name": "aws_call", "arguments": {"service": "sqs", "operation": "CreateQueue",
-                                                       "params": {"QueueName": "awsemu-mcp"}}}},
-        {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
-         "params": {"name": "list_resources", "arguments": {"services": ["sqs"]}}},
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "aws_call",
+                "arguments": {"service": "sqs", "operation": "CreateQueue", "params": {"QueueName": "awsemu-mcp"}},
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {"name": "list_resources", "arguments": {"services": ["sqs"]}},
+        },
         {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "emulator_status", "arguments": {}}},
     ]
-    done = subprocess.run([sys.executable, "-m", "awsemu", "--port", str(emu), "mcp"], env=env, timeout=120,
-                          input="".join(json.dumps(m) + "\n" for m in messages), capture_output=True, text=True)
+    done = subprocess.run(
+        [sys.executable, "-m", "awsemu", "--port", str(emu), "mcp"],
+        env=env,
+        timeout=120,
+        input="".join(json.dumps(m) + "\n" for m in messages),
+        capture_output=True,
+        text=True,
+    )
     replies = {r["id"]: r for r in map(json.loads, done.stdout.splitlines())}
     assert set(replies) == {1, 2, 3, 4, 5}, done.stderr
     assert replies[1]["result"]["serverInfo"]["name"] == "awsemu"
@@ -332,8 +380,11 @@ def test_call_any_operation(emu, tmp_path):
     body.write_bytes(b"\x00binary\xff")
     run(emu, "call", "s3", "create-bucket", "-p", "Bucket=awsemu-call")
     run(emu, "call", "s3", "PutObject", "-p", "Bucket=awsemu-call", "-p", "Key=a.bin", "-p", f"Body=@{body}")
-    names = json.loads(run(emu, "call", "s3", "list_objects_v2", "--params", '{"Bucket": "awsemu-call"}',
-                           "--query", "Contents[].Key").output)
+    names = json.loads(
+        run(
+            emu, "call", "s3", "list_objects_v2", "--params", '{"Bucket": "awsemu-call"}', "--query", "Contents[].Key"
+        ).output
+    )
     assert names == ["a.bin"]
     out = tmp_path / "back.bin"
     run(emu, "call", "s3", "get-object", "-p", "Bucket=awsemu-call", "-p", "Key=a.bin", "--out", str(out))
@@ -344,8 +395,9 @@ def test_call_any_operation(emu, tmp_path):
     run(emu, "call", "s3", "delete-bucket", "-p", "Bucket=awsemu-call")
     # a service without its own command, with pages
     run(emu, "call", "logs", "create-log-group", "-p", "logGroupName=/awsemu/call")
-    groups = json.loads(run(emu, "call", "logs", "describe-log-groups", "--paginate",
-                            "--query", "logGroups[].logGroupName").output)
+    groups = json.loads(
+        run(emu, "call", "logs", "describe-log-groups", "--paginate", "--query", "logGroups[].logGroupName").output
+    )
     assert "/awsemu/call" in groups
     run(emu, "call", "logs", "delete-log-group", "-p", "logGroupName=/awsemu/call")
 
@@ -360,11 +412,20 @@ def test_lambda_watch_redeploys_and_installs_requirements(emu, tmp_path, real_ho
     (src / "requirements.txt").write_text("six==1.16.0\n")
     app = src / "app.py"
     app.write_text("import six\ndef handler(event, context):\n    return {'v': 1, 'six': six.__version__}\n")
-    env = {**os.environ, "HOME": str(real_home), "USERPROFILE": str(real_home), "AWSEMU_PLAIN": "1",
-           "PYTHONUNBUFFERED": "1"}
-    proc = subprocess.Popen([sys.executable, "-m", "awsemu", "--port", str(emu), "lambda", "deploy",
-                             str(src), "--watch", "--invoke", "{}"],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+    env = {
+        **os.environ,
+        "HOME": str(real_home),
+        "USERPROFILE": str(real_home),
+        "AWSEMU_PLAIN": "1",
+        "PYTHONUNBUFFERED": "1",
+    }
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "awsemu", "--port", str(emu), "lambda", "deploy", str(src), "--watch", "--invoke", "{}"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    )
     lines: list[str] = []
 
     def wait_for(text, timeout=120):
@@ -394,9 +455,7 @@ def test_lambda_watch_redeploys_and_installs_requirements(emu, tmp_path, real_ho
 
 def test_lambda_invoke_log_async_and_sns_subscription(emu, tmp_path):
     src = tmp_path / "echo.py"
-    src.write_text("def handler(event, context):\n"
-                   "    print('AWSEMU-MARK', event)\n"
-                   "    return event\n")
+    src.write_text("def handler(event, context):\n    print('AWSEMU-MARK', event)\n    return event\n")
     run(emu, "lambda", "deploy", "awsemu-echo", str(src))
 
     # The invocation log tail is how you see function output with the emulator.
@@ -462,8 +521,18 @@ def _results(output):
     out = {}
     for line in output.splitlines():
         parts = line.split()
-        if len(parts) >= 3 and parts[0] in ("bucket", "queue", "table", "topic", "secret", "parameter",
-                                            "stream", "function", "state_machine", "rule"):
+        if len(parts) >= 3 and parts[0] in (
+            "bucket",
+            "queue",
+            "table",
+            "topic",
+            "secret",
+            "parameter",
+            "stream",
+            "function",
+            "state_machine",
+            "rule",
+        ):
             out[(parts[0], parts[1])] = parts[2]
     return out
 
@@ -486,8 +555,9 @@ def test_seed_apply_is_idempotent_and_works(emu, tmp_path):
 
     # Second run: nothing to create. Buckets/tables rewrite their content ("updated").
     second = _results(run(emu, "seed", "apply", str(path)).output)
-    assert {k: v for k, v in second.items() if k[0] not in ("bucket", "table")} == \
-        {k: "unchanged" for k in first if k[0] not in ("bucket", "table")}, second
+    assert {k: v for k, v in second.items() if k[0] not in ("bucket", "table")} == {
+        k: "unchanged" for k in first if k[0] not in ("bucket", "table")
+    }, second
 
     # A changed value is updated, the rest left alone.
     changed = _write_seed(tmp_path, SEED.replace("value: localhost", "value: db.local"))
@@ -504,14 +574,22 @@ def test_seed_export_roundtrip_and_reset(emu, tmp_path):
     out = run(emu, "seed", "export", "-o", str(exported)).output
     assert "contains secret values" in out
     text = exported.read_text()
-    for needle in ("seed-photos", "hello seed", "seed-dlq", "max_receive: 3", "sk: created:N",
-                   "score: 9.5", "kind:", "seed/db", "/seed/hosts"):
+    for needle in (
+        "seed-photos",
+        "hello seed",
+        "seed-dlq",
+        "max_receive: 3",
+        "sk: created:N",
+        "score: 9.5",
+        "kind:",
+        "seed/db",
+        "/seed/hosts",
+    ):
         assert needle in text, (needle, text)
     run(emu, "seed", "validate", str(exported))
 
     # reset --seed: empty emulator, then the exported seed brings everything back.
-    run(emu, "reset", "--native", "--no-telemetry", "--idle-timeout", "900", "--wait", "60",
-        "--seed", str(exported))
+    run(emu, "reset", "--native", "--no-telemetry", "--idle-timeout", "900", "--wait", "60", "--seed", str(exported))
     assert "seed-users" in run(emu, "ddb", "ls").output
     assert run(emu, "s3", "cat", "seed-photos/web/index.html").output == "<h1>hello</h1>"
     assert json.loads(run(emu, "secrets", "get", "seed/db", "--raw").output)["user"] == "app"
@@ -533,9 +611,11 @@ def test_pytest_plugin_with_real_emulator(emu, pytester):
     """A pytest session using the plugin: own emulator, seed, plain boto3, fresh state."""
     import importlib.metadata
 
-    pytester.makefile(".yaml", seed="version: 1\nbuckets:\n  - name: plugin-bucket\n"
-                                    "    objects: [{key: a.txt, content: hello}]\n")
-    pytester.makepyfile(test_inner="""
+    pytester.makefile(
+        ".yaml", seed="version: 1\nbuckets:\n  - name: plugin-bucket\n    objects: [{key: a.txt, content: hello}]\n"
+    )
+    pytester.makepyfile(
+        test_inner="""
         import boto3
 
         def test_seeded(aws_emulator):
@@ -548,7 +628,8 @@ def test_pytest_plugin_with_real_emulator(emu, pytester):
         def test_fresh_is_back_to_seed(aws_emulator_fresh):
             names = [b["Name"] for b in aws_emulator_fresh.client("s3").list_buckets()["Buckets"]]
             assert names == ["plugin-bucket"]
-    """)
+    """
+    )
     eps = importlib.metadata.entry_points()
     group = eps.select(group="pytest11") if hasattr(eps, "select") else eps.get("pytest11", [])
     plugin = [] if any(ep.value == "awsemu.pytest_plugin" for ep in group) else ["-p", "awsemu.pytest_plugin"]
@@ -575,10 +656,13 @@ def test_watch_sees_changes(emu):
     import sys
     import time
 
-    proc = subprocess.Popen([sys.executable, "-m", "awsemu", "--plain", "--port", str(emu), "watch",
-                             "-s", "sqs", "-i", "1"],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                            env={**os.environ, "AWSEMU_PLAIN": "1"})
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "awsemu", "--plain", "--port", str(emu), "watch", "-s", "sqs", "-i", "1"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env={**os.environ, "AWSEMU_PLAIN": "1"},
+    )
     try:
         time.sleep(4)
         run(emu, "sqs", "create", "awsemu-watched")
@@ -600,8 +684,9 @@ def test_shell_completion_with_real_names(emu):
     run(emu, "sqs", "create", "awsemu-complete-me")
     words = f"awsemu --port {emu} sqs send awsemu-comp"
     env = {**os.environ, "_AWSEMU_COMPLETE": "bash_complete", "COMP_WORDS": words, "COMP_CWORD": "5"}
-    out = subprocess.run([sys.executable, "-c", "from awsemu.cli import main; main()"],
-                         capture_output=True, text=True, env=env).stdout
+    out = subprocess.run(
+        [sys.executable, "-c", "from awsemu.cli import main; main()"], capture_output=True, text=True, env=env
+    ).stdout
     assert "awsemu-complete-me" in out, out
     run(emu, "sqs", "rm", "awsemu-complete-me", "--yes")
 
@@ -631,7 +716,6 @@ def test_tui_against_real_emulator(emu):
     run(emu, "ddb", "drop", "awsemu-tui", "--yes")
 
 
-
 def test_json_listings_against_real_emulator(emu):
     """The --json contract holds with real responses too (types, ISO dates)."""
     run(emu, "ddb", "create", "awsemu-json", "--pk", "id", "--sk", "at:N")
@@ -659,6 +743,7 @@ def test_proxy_against_real_emulator(emu):
     server = px.ProxyServer(emu, 0)
     server.start_thread()
     try:
+
         def c(service):
             return client(service, emu, endpoint_url=server.endpoint_url, ca=str(server.files.ca))
 
@@ -671,9 +756,12 @@ def test_proxy_against_real_emulator(emu):
         c("sqs").send_message(QueueUrl=url, MessageBody="m")
         assert c("sqs").receive_message(QueueUrl=url, WaitTimeSeconds=1)["Messages"][0]["Body"] == "m"
         ddb = c("dynamodb")
-        ddb.create_table(TableName="via-proxy", BillingMode="PAY_PER_REQUEST",
-                         AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
-                         KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}])
+        ddb.create_table(
+            TableName="via-proxy",
+            BillingMode="PAY_PER_REQUEST",
+            AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
+            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+        )
         ddb.get_waiter("table_exists").wait(TableName="via-proxy", WaiterConfig={"Delay": 1, "MaxAttempts": 30})
         ddb.put_item(TableName="via-proxy", Item={"id": {"S": "1"}})
         with pytest.raises(ClientError) as exc:
@@ -684,25 +772,43 @@ def test_proxy_against_real_emulator(emu):
         c("lambda").list_functions()
 
         calls = server.calls_after(0)
-        print("\n" + "\n".join(f"{x['service']}:{x['operation']} {x['resource']} {x['status']} {x['error']}"
-                               for x in calls))
+        print(
+            "\n"
+            + "\n".join(f"{x['service']}:{x['operation']} {x['resource']} {x['status']} {x['error']}" for x in calls)
+        )
         ops = [f"{x['service']}:{x['operation']}" for x in calls]
-        for expected in ("s3:CreateBucket", "s3:PutObject", "s3:GetObject", "s3:HeadObject", "sqs:CreateQueue",
-                         "sqs:SendMessage", "sqs:ReceiveMessage", "dynamodb:CreateTable", "dynamodb:PutItem",
-                         "sns:CreateTopic", "sts:GetCallerIdentity", "lambda:ListFunctions"):
+        for expected in (
+            "s3:CreateBucket",
+            "s3:PutObject",
+            "s3:GetObject",
+            "s3:HeadObject",
+            "sqs:CreateQueue",
+            "sqs:SendMessage",
+            "sqs:ReceiveMessage",
+            "dynamodb:CreateTable",
+            "dynamodb:PutItem",
+            "sns:CreateTopic",
+            "sts:GetCallerIdentity",
+            "lambda:ListFunctions",
+        ):
             assert expected in ops, expected
         assert not [x for x in calls if x["status"] in (401, 403, 502)], "signature or forwarding problem"
         failed = [x for x in calls if x["error"]]
         assert [x["error"] for x in failed] == ["ConditionalCheckFailedException"]
         assert next(x for x in calls if x["operation"] == "PutObject")["resource"] == "via-proxy/dir/a.txt"
 
-        server.faults.add(px.faults.parse("dynamodb:GetItem=throttle x1"),
-                          px.faults.parse("s3:GetObject=InternalError x1"))
+        server.faults.add(
+            px.faults.parse("dynamodb:GetItem=throttle x1"), px.faults.parse("s3:GetObject=InternalError x1")
+        )
         assert ddb.get_item(TableName="via-proxy", Key={"id": {"S": "1"}})["Item"]
         assert s3.get_object(Bucket="via-proxy", Key="dir/a.txt")["Body"].read() == b"hello"
         tail = [(x["operation"], x["error"]) for x in server.calls_after(len(calls))]
-        assert tail == [("GetItem", "ThrottlingException"), ("GetItem", None),
-                        ("GetObject", "InternalError"), ("GetObject", None)]
+        assert tail == [
+            ("GetItem", "ThrottlingException"),
+            ("GetItem", None),
+            ("GetObject", "InternalError"),
+            ("GetObject", None),
+        ]
     finally:
         server.shutdown()
         server.server_close()
@@ -736,10 +842,12 @@ def test_auth_off_exec_signs_with_placeholder_keys(real_home, tmp_path):
     try:
         assert not InstanceFiles(port).credentials.exists()  # the emulator writes none with auth off
         script = tmp_path / "use.py"
-        script.write_text("import boto3\ns = boto3.Session()\n"
-                          "assert s.get_credentials().access_key == 'EMULATORAUTHOFF00000'\n"
-                          "s.client('s3').create_bucket(Bucket='auth-off')\n"
-                          "assert 'auth-off' in [b['Name'] for b in s.client('s3').list_buckets()['Buckets']]\n")
+        script.write_text(
+            "import boto3\ns = boto3.Session()\n"
+            "assert s.get_credentials().access_key == 'EMULATORAUTHOFF00000'\n"
+            "s.client('s3').create_bucket(Bucket='auth-off')\n"
+            "assert 'auth-off' in [b['Name'] for b in s.client('s3').list_buckets()['Buckets']]\n"
+        )
         result = run(port, "exec", "--", sys.executable, str(script))
         assert result.exit_code == 0
     finally:
@@ -776,7 +884,8 @@ rules:
 def _write_more(tmp_path, text=SEED_MORE):
     (tmp_path / "fn").mkdir(exist_ok=True)
     (tmp_path / "fn" / "app.py").write_text(
-        "import os\n\ndef handler(event, context):\n    return {'stage': os.environ.get('STAGE'), 'event': event}\n")
+        "import os\n\ndef handler(event, context):\n    return {'stage': os.environ.get('STAGE'), 'event': event}\n"
+    )
     (tmp_path / "flow.yaml").write_text("StartAt: Hi\nStates:\n  Hi: {Type: Pass, Result: done, End: true}\n")
     path = tmp_path / "more.yaml"
     path.write_text(text)
@@ -802,8 +911,12 @@ def test_seed_functions_streams_machines_rules(emu, tmp_path):
     assert set(second.values()) == {"unchanged"}, second
 
     # Changes are applied
-    changed = _write_more(tmp_path, SEED_MORE.replace("STAGE: test", "STAGE: prod")
-                          .replace("shards: 2", "shards: 3").replace("batch_size: 5", "batch_size: 7"))
+    changed = _write_more(
+        tmp_path,
+        SEED_MORE.replace("STAGE: test", "STAGE: prod")
+        .replace("shards: 2", "shards: 3")
+        .replace("batch_size: 5", "batch_size: 7"),
+    )
     third = _results(run(emu, "seed", "apply", str(changed)).output)
     assert third[("function", "more-echo")] == "updated" and third[("stream", "more-clicks")] == "updated", third
     assert third[("rule", "more-orders")] == "unchanged"
@@ -814,9 +927,19 @@ def test_seed_functions_streams_machines_rules(emu, tmp_path):
     exported.parent.mkdir()
     run(emu, "seed", "export", "-o", str(exported), "--objects-dir", str(tmp_path / "out" / "files"))
     text = exported.read_text()
-    for needle in ("more-echo", "code: files/functions/more-echo.zip", "STAGE: prod", "more-clicks", "shards: 3",
-                   "more-flow", "StartAt: Hi", "more-orders", "app.orders", "stepfunctions: more-flow",
-                   "batch_size: 7"):
+    for needle in (
+        "more-echo",
+        "code: files/functions/more-echo.zip",
+        "STAGE: prod",
+        "more-clicks",
+        "shards: 3",
+        "more-flow",
+        "StartAt: Hi",
+        "more-orders",
+        "app.orders",
+        "stepfunctions: more-flow",
+        "batch_size: 7",
+    ):
         assert needle in text, (needle, text)
     run(emu, "seed", "validate", str(exported))
     run(emu, "reset", "--native", "--no-telemetry", "--idle-timeout", "900", "--wait", "60", "--seed", str(exported))

@@ -1,16 +1,19 @@
 """awsemu watch: snapshot diffs and the command with fake clients."""
 
-import pytest
-
 from awsemu.cli import cli
 from awsemu.commands import watch as w
-from tests.test_services import FakeClient, running  # noqa: F401  (fixture)
+from tests.test_services import FakeClient
 
 
 def test_diff_created_deleted_changed():
     before = {("queue", "jobs"): 0, ("queue", "old"): 1, ("table", "users"): 2, ("topic", "t"): None}
-    after = {("queue", "jobs"): 3, ("table", "users"): 2, ("bucket", "new"): 5, ("topic", "t"): None,
-             ("topic", "u"): None}
+    after = {
+        ("queue", "jobs"): 3,
+        ("table", "users"): 2,
+        ("bucket", "new"): 5,
+        ("topic", "t"): None,
+        ("topic", "u"): None,
+    }
     assert w.diff(before, after) == [
         ("+", "bucket", "new", "5 object(s)"),
         ("+", "topic", "u", ""),
@@ -30,9 +33,13 @@ def test_snapshot_isolates_failing_services(monkeypatch):
     def boom(**_):
         raise Boom()
 
-    clients = {"sqs": FakeClient(list_queues={"QueueUrls": ["https://x/000000000000/jobs"]},
-                                 get_queue_attributes={"Attributes": {"ApproximateNumberOfMessages": "4"}}),
-               "s3": FakeClient(list_buckets=boom)}
+    clients = {
+        "sqs": FakeClient(
+            list_queues={"QueueUrls": ["https://x/000000000000/jobs"]},
+            get_queue_attributes={"Attributes": {"ApproximateNumberOfMessages": "4"}},
+        ),
+        "s3": FakeClient(list_buckets=boom),
+    }
     monkeypatch.setattr(w, "client", lambda service, port: clients[service])
     snaps, errors = w.snapshot(9297, ["sqs", "s3"])
     assert snaps == {"sqs": {("queue", "jobs"): 4}}
@@ -41,9 +48,13 @@ def test_snapshot_isolates_failing_services(monkeypatch):
 
 def test_watch_once(runner, monkeypatch, running):
     monkeypatch.setattr(w.health, "check", lambda port: type("H", (), {"healthy": True, "detail": ""})())
-    clients = {"sqs": FakeClient(list_queues={"QueueUrls": ["https://x/000000000000/jobs"]},
-                                 get_queue_attributes={"Attributes": {"ApproximateNumberOfMessages": "2"}}),
-               "dynamodb": FakeClient(list_tables=[{"TableNames": ["users"]}], scan={"Count": 7})}
+    clients = {
+        "sqs": FakeClient(
+            list_queues={"QueueUrls": ["https://x/000000000000/jobs"]},
+            get_queue_attributes={"Attributes": {"ApproximateNumberOfMessages": "2"}},
+        ),
+        "dynamodb": FakeClient(list_tables=[{"TableNames": ["users"]}], scan={"Count": 7}),
+    }
     monkeypatch.setattr(w, "client", lambda service, port: clients[service])
     result = runner.invoke(cli, ["watch", "--once", "-s", "sqs", "-s", "dynamodb"])
     assert result.exit_code == 0, result.output
@@ -61,6 +72,7 @@ def test_watch_loop_prints_changes(runner, monkeypatch, running):
         v = next(sleeps)
         if isinstance(v, BaseException):
             raise v
+
     monkeypatch.setattr(w.time, "sleep", fake_sleep)
     result = runner.invoke(cli, ["watch", "-s", "sqs"])
     assert result.exit_code == 0, result.output

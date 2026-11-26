@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate docs/reference.md from the Click command tree.
 
-    python scripts/gen_reference.py           # write docs/reference.md
-    python scripts/gen_reference.py --check   # exit 1 if it's out of date (used in CI)
+python scripts/gen_reference.py           # write docs/reference.md
+python scripts/gen_reference.py --check   # exit 1 if it's out of date (used in CI)
 """
 
 from __future__ import annotations
@@ -119,8 +119,9 @@ def main() -> int:
             import difflib
 
             print("docs/reference.md is out of date: run python scripts/gen_reference.py")
-            sys.stdout.writelines(difflib.unified_diff(
-                current.splitlines(True), text.splitlines(True), "committed", "generated", n=1))
+            sys.stdout.writelines(
+                difflib.unified_diff(current.splitlines(True), text.splitlines(True), "committed", "generated", n=1)
+            )
             return 1
         print("docs/reference.md is up to date")
         return 0

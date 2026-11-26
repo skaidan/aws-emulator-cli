@@ -71,8 +71,9 @@ def tag_for(release: str) -> str:
 # --------------------------------------------------------------------------- download
 
 
-def _get(url: str, accept: str = "application/vnd.github+json", gzip_ok: bool = False,
-         first_bytes: int | None = None) -> bytes:
+def _get(
+    url: str, accept: str = "application/vnd.github+json", gzip_ok: bool = False, first_bytes: int | None = None
+) -> bytes:
     """GET ``url``. ``first_bytes`` asks for only the start of the file (a Range request);
     servers that ignore it send the whole file, which is fine too."""
     headers = {"Accept": accept, "User-Agent": "awsemu"}
@@ -94,8 +95,7 @@ def _get(url: str, accept: str = "application/vnd.github+json", gzip_ok: bool = 
         if exc.code == 404:
             raise FidelityError(f"not found: {url}") from exc
         if exc.code == 403:
-            raise FidelityError("GitHub refused the request (rate limit?). "
-                                "Set GITHUB_TOKEN and retry.") from exc
+            raise FidelityError("GitHub refused the request (rate limit?). Set GITHUB_TOKEN and retry.") from exc
         raise FidelityError(f"GitHub answered HTTP {exc.code} for {url}") from exc
     except (urllib.error.URLError, OSError) as exc:
         raise FidelityError(f"couldn't reach GitHub: {getattr(exc, 'reason', exc)}") from exc
@@ -153,8 +153,7 @@ def parse_suite_version(body: str) -> str | None:
 
 
 def _save_release_info(tag: str, meta: dict) -> None:
-    info = {"tag": tag, "published_at": meta.get("published_at"),
-            "suite": parse_suite_version(meta.get("body") or "")}
+    info = {"tag": tag, "published_at": meta.get("published_at"), "suite": parse_suite_version(meta.get("body") or "")}
     cache_dir().mkdir(parents=True, exist_ok=True)
     (cache_dir() / f"{tag}.release.json").write_text(json.dumps(info), encoding="utf-8")
 
@@ -182,8 +181,9 @@ def _load_gz(data: bytes) -> dict:
     if not isinstance(scores, dict) or "units" not in scores:
         raise FidelityError(f"{ASSET} has an unexpected format (no 'units')")
     if scores.get("schemaVersion") not in (None, 1):
-        raise FidelityError(f"{ASSET} schemaVersion {scores.get('schemaVersion')} isn't supported "
-                            "by this awsemu; update it")
+        raise FidelityError(
+            f"{ASSET} schemaVersion {scores.get('schemaVersion')} isn't supported by this awsemu; update it"
+        )
     return scores
 
 
@@ -233,7 +233,10 @@ def summarize(scores: dict) -> dict[str, ServiceScore]:
 
 ALIASES = {
     # names people type that differ from the API namespace in the score file
-    **BOTO_TO_SCORE, "states": "sfn", "secrets": "secretsmanager", "ddb": "dynamodb",
+    **BOTO_TO_SCORE,
+    "states": "sfn",
+    "secrets": "secretsmanager",
+    "ddb": "dynamodb",
     "cognito": "cognitoidentityprovider",
 }
 
@@ -264,9 +267,14 @@ def describe_failure(unit: dict) -> dict[str, str]:
         return " ".join(parts) or (json.dumps(x)[:60] if x else "")
 
     step = f"{d.get('failedStep')}/{d.get('totalSteps')}" if d.get("failedStep") else ""
-    return {"test": unit.get("unitId", ""), "operation": d.get("operation", ""),
-            "mismatch": d.get("mismatch", ""), "expected": fmt(expected), "actual": fmt(actual),
-            "step": step}
+    return {
+        "test": unit.get("unitId", ""),
+        "operation": d.get("operation", ""),
+        "mismatch": d.get("mismatch", ""),
+        "expected": fmt(expected),
+        "actual": fmt(actual),
+        "step": step,
+    }
 
 
 # --------------------------------------------------------------------------- compare
@@ -285,8 +293,14 @@ class ServiceChange:
 
     @property
     def changed(self) -> bool:
-        return bool(self.fixed or self.regressed or self.added_passing or self.added_failing
-                    or self.removed or self.before != self.after)
+        return bool(
+            self.fixed
+            or self.regressed
+            or self.added_passing
+            or self.added_failing
+            or self.removed
+            or self.before != self.after
+        )
 
 
 def _outcomes(scores: dict) -> dict[str, tuple[str, list[str]]]:
@@ -309,15 +323,17 @@ def compare(before: dict, after: dict) -> dict[str, ServiceChange]:
 
     for uid in sorted(set(a) | set(b)):
         old, new = a.get(uid), b.get(uid)
-        for name in (new or old)[1]:
+        either = new or old
+        assert either is not None  # uid comes from one of them
+        for name in either[1]:
             c = get(name)
             if old and not new:
                 c.removed.append(uid)
             elif new and not old:
                 (c.added_passing if new[0] == "pass" else c.added_failing).append(uid)
-            elif old[0] == "fail" and new[0] == "pass":
+            elif old and new and old[0] == "fail" and new[0] == "pass":
                 c.fixed.append(uid)
-            elif old[0] == "pass" and new[0] == "fail":
+            elif old and new and old[0] == "pass" and new[0] == "fail":
                 c.regressed.append(uid)
     for name in set(sa) | set(sb) | set(changes):
         c = get(name)

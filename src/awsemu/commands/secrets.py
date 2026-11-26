@@ -55,10 +55,8 @@ def secrets_ls(c: Ctx, as_json: bool):
     if as_json:
         ui.print_json(items)
         return
-    rows = [[s["Name"], s.get("Description", ""), str(s.get("LastChangedDate", ""))[:19]]
-            for s in items]
-    ui.table(["secret", "description", "changed"], rows,
-             empty="No secrets. Try 'awsemu secrets put NAME VALUE'.")
+    rows = [[s["Name"], s.get("Description", ""), str(s.get("LastChangedDate", ""))[:19]] for s in items]
+    ui.table(["secret", "description", "changed"], rows, empty="No secrets. Try 'awsemu secrets put NAME VALUE'.")
 
 
 @secrets.command(name="get")
@@ -118,7 +116,7 @@ def secrets_rm(c: Ctx, name: str, now: bool, yes: bool):
     """Delete a secret (with a 7-day recovery window unless --now)."""
     if not yes:
         click.confirm(f"Delete secret {name}?", abort=True)
-    kwargs = {"SecretId": name}
+    kwargs: dict = {"SecretId": name}
     if now:
         kwargs["ForceDeleteWithoutRecovery"] = True
     else:
@@ -134,11 +132,18 @@ def secrets_rm(c: Ctx, name: str, now: bool, yes: bool):
 def secrets_info(c: Ctx, name: str):
     """Show a secret's metadata and versions (not its value)."""
     d = client("secretsmanager", c.port).describe_secret(SecretId=name)
-    versions = ", ".join(f"{vid[:8]} ({'/'.join(stages)})"
-                         for vid, stages in d.get("VersionIdsToStages", {}).items())
-    ui.kv([("arn", d.get("ARN")), ("description", d.get("Description")),
-           ("created", d.get("CreatedDate")), ("changed", d.get("LastChangedDate")),
-           ("deleted", d.get("DeletedDate")), ("versions", versions)], title=name)
+    versions = ", ".join(f"{vid[:8]} ({'/'.join(stages)})" for vid, stages in d.get("VersionIdsToStages", {}).items())
+    ui.kv(
+        [
+            ("arn", d.get("ARN")),
+            ("description", d.get("Description")),
+            ("created", d.get("CreatedDate")),
+            ("changed", d.get("LastChangedDate")),
+            ("deleted", d.get("DeletedDate")),
+            ("versions", versions),
+        ],
+        title=name,
+    )
 
 
 # =========================================================================== SSM Parameter Store
@@ -160,8 +165,7 @@ def ssm_ls(c: Ctx, path: str | None, values: bool, as_json: bool):
     s = client("ssm", c.port)
     params: list[dict] = []
     if path:
-        for page in s.get_paginator("get_parameters_by_path").paginate(
-                Path=path, Recursive=True, WithDecryption=False):
+        for page in s.get_paginator("get_parameters_by_path").paginate(Path=path, Recursive=True, WithDecryption=False):
             params += page.get("Parameters", [])
     else:
         for page in s.get_paginator("describe_parameters").paginate():
@@ -170,7 +174,7 @@ def ssm_ls(c: Ctx, path: str | None, values: bool, as_json: bool):
             names = [p["Name"] for p in params]
             found = {}
             for i in range(0, len(names), 10):
-                for p in s.get_parameters(Names=names[i:i + 10]).get("Parameters", []):
+                for p in s.get_parameters(Names=names[i : i + 10]).get("Parameters", []):
                     found[p["Name"]] = p.get("Value")
             for p in params:
                 p["Value"] = found.get(p["Name"])
@@ -207,8 +211,7 @@ def ssm_get(c: Ctx, name: str, no_decrypt: bool):
 @click.option("--description", help="Free text stored with it.")
 @pass_ctx
 @handle_errors
-def ssm_put(c: Ctx, name: str, value: str | None, file_, secure: bool, as_list: bool,
-            description: str | None):
+def ssm_put(c: Ctx, name: str, value: str | None, file_, secure: bool, as_list: bool, description: str | None):
     """Create or overwrite a parameter: 'awsemu ssm put /app/db/host localhost'."""
     if secure and as_list:
         raise click.UsageError("--secure and --list are mutually exclusive")
@@ -230,7 +233,7 @@ def ssm_rm(c: Ctx, names):
     s = client("ssm", c.port)
     missing = 0
     for i in range(0, len(names), 10):
-        resp = s.delete_parameters(Names=list(names[i:i + 10]))
+        resp = s.delete_parameters(Names=list(names[i : i + 10]))
         for n in resp.get("DeletedParameters", []):
             ui.success(f"deleted {n}")
         for n in resp.get("InvalidParameters", []):

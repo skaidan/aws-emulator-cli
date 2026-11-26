@@ -30,14 +30,25 @@ def _targets(args, mine: bool) -> list[tuple[str, str]]:
 @click.command()
 @click.argument("targets", nargs=-1, metavar="[SERVICE[:Operation]]...")
 @click.option("--mine", is_flag=True, help="The services this project uses (found like 'awsemu check' does).")
-@click.option("--fixed", is_flag=True,
-              help="Fixed issues instead of open ones, marking those whose tests still fail in your release.")
-@click.option("--severity", type=click.Choice(LEVELS, case_sensitive=False), metavar="LEVEL",
-              help="Only this severity and worse (CRITICAL, HIGH, MEDIUM, LOW).")
+@click.option(
+    "--fixed",
+    is_flag=True,
+    help="Fixed issues instead of open ones, marking those whose tests still fail in your release.",
+)
+@click.option(
+    "--severity",
+    type=click.Choice(LEVELS, case_sensitive=False),
+    metavar="LEVEL",
+    help="Only this severity and worse (CRITICAL, HIGH, MEDIUM, LOW).",
+)
 @click.option("--search", metavar="TEXT", help="Only issues whose title contains TEXT.")
 @click.option("-n", "--limit", type=int, default=30, show_default=True, help="How many to list (0 = all).")
-@click.option("--show", "show", metavar="N|NAME",
-              help="Print one issue in full: its row in the last listing, its file name (or a prefix), or its URL.")
+@click.option(
+    "--show",
+    "show",
+    metavar="N|NAME",
+    help="Print one issue in full: its row in the last listing, its file name (or a prefix), or its URL.",
+)
 @click.option("--release", metavar="VERSION", help="With --fixed: the release to compare with (default: yours).")
 @click.option("--refresh", is_flag=True, help="List the issues again instead of using the 6-hour cache.")
 @json_option
@@ -72,11 +83,16 @@ def issues(targets, mine, fixed, severity, search, limit, show, release, refresh
     except iss.IssueNotFound as exc:
         raise RuntimeErrorWithHint(str(exc), "List them with: awsemu issues SERVICE") from exc
     except iss.IssuesError as exc:
-        raise RuntimeErrorWithHint(str(exc), "Check your connection, or set GITHUB_TOKEN if GitHub rate-limits you.") from exc
+        raise RuntimeErrorWithHint(
+            str(exc), "Check your connection, or set GITHUB_TOKEN if GitHub rate-limits you."
+        ) from exc
 
     def keep(issue) -> bool:
-        if not any(svc in issue.file.services and (op == "*" or any(
-                fnmatch.fnmatch(o.lower(), op.lower()) for o in issue.operations)) for svc, op in wanted):
+        if not any(
+            svc in issue.file.services
+            and (op == "*" or any(fnmatch.fnmatch(o.lower(), op.lower()) for o in issue.operations))
+            for svc, op in wanted
+        ):
             return False
         if severity:
             worst_allowed = LEVELS.index(severity.upper())
@@ -98,19 +114,19 @@ def issues(targets, mine, fixed, severity, search, limit, show, release, refresh
     iss.remember(shown)
 
     if as_json:
-        rows = []
+        listed = []
         for i in shown:
             d = i.as_dict()
             if fixed:
                 d["fails_in_release"] = bool(i.tests & failing)
-            rows.append(d)
-        ui.print_json(rows)
+            listed.append(d)
+        ui.print_json(listed)
         return
     if not found:
         ui.success(f"No {'fixed' if fixed else 'open'} issues match.")
         return
     columns = ["#", "severity", "since", "operation", "title"] + ([f"fails in {tag}"] if fixed else [])
-    rows = []
+    rows: list[list] = []
     for n, i in enumerate(shown, 1):
         row = [n, i.severity or "-", i.file.created, ", ".join(i.operations)[:28] or "-", i.title[:90]]
         if fixed:
@@ -122,8 +138,11 @@ def issues(targets, mine, fixed, severity, search, limit, show, release, refresh
     if fixed:
         n = sum(bool(i.tests & failing) for i in found)
         if n:
-            ui.echo(f"{n} of them are fixed after {tag}: their tests still fail in that release "
-                    "(awsemu fidelity --compare latest).", "warn")
+            ui.echo(
+                f"{n} of them are fixed after {tag}: their tests still fail in that release "
+                "(awsemu fidelity --compare latest).",
+                "warn",
+            )
 
 
 def _show(name: str, refresh: bool, as_json: bool) -> None:
@@ -133,8 +152,15 @@ def _show(name: str, refresh: bool, as_json: bool) -> None:
     if as_json:
         ui.print_json({**issue.as_dict(), "text": text})
         return
-    ui.kv([("issue", file.name), ("state", file.state), ("severity", issue.severity or "-"),
-           ("services", ", ".join(file.services) or "-"), ("url", file.url)])
+    ui.kv(
+        [
+            ("issue", file.name),
+            ("state", file.state),
+            ("severity", issue.severity or "-"),
+            ("services", ", ".join(file.services) or "-"),
+            ("url", file.url),
+        ]
+    )
     ui.echo()
     body = text.partition("\n# ")[2]
     body = "# " + body if body else text
@@ -147,4 +173,3 @@ def _show(name: str, refresh: bool, as_json: bool) -> None:
     except ImportError:
         pass
     click.echo(body)
-

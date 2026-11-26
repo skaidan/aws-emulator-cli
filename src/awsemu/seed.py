@@ -52,8 +52,18 @@ from typing import Any
 import yaml
 
 VERSION = 1
-SECTIONS = ("buckets", "queues", "tables", "topics", "secrets", "parameters", "streams", "functions",
-            "state_machines", "rules")
+SECTIONS = (
+    "buckets",
+    "queues",
+    "tables",
+    "topics",
+    "secrets",
+    "parameters",
+    "streams",
+    "functions",
+    "state_machines",
+    "rules",
+)
 PARAM_TYPES = ("String", "SecureString", "StringList")
 KEY_TYPES = {"S", "N", "B"}
 
@@ -67,8 +77,7 @@ FIELDS = {
     "secrets": {"name", "value", "description"},
     "parameters": {"name", "value", "type", "description"},
     "streams": {"name", "shards", "retention_hours"},
-    "functions": {"name", "code", "handler", "runtime", "env", "timeout", "memory", "description", "triggers",
-                  "deps"},
+    "functions": {"name", "code", "handler", "runtime", "env", "timeout", "memory", "description", "triggers", "deps"},
     "triggers": {"sqs", "kinesis", "batch_size", "enabled", "starting_position"},
     "state_machines": {"name", "definition", "express"},
     "rules": {"name", "bus", "description", "pattern", "schedule", "enabled", "targets"},
@@ -182,13 +191,15 @@ class _V:
         for key in obj:
             if key not in allowed:
                 hint = difflib.get_close_matches(str(key), sorted(allowed), n=1)
-                extra = f" (did you mean '{hint[0]}'?)" if hint else \
-                    f" (allowed: {', '.join(sorted(allowed))})"
+                extra = f" (did you mean '{hint[0]}'?)" if hint else f" (allowed: {', '.join(sorted(allowed))})"
                 self.add(path + (key,), f"unknown field{extra}")
 
     def type(self, obj: dict, key: str, kinds, path: tuple, what: str) -> bool:
-        if key in obj and not isinstance(obj[key], kinds) or \
-                (key in obj and kinds is int and isinstance(obj[key], bool)):
+        if (
+            key in obj
+            and not isinstance(obj[key], kinds)
+            or (key in obj and kinds is int and isinstance(obj[key], bool))
+        ):
             self.add(path + (key,), f"must be {what}")
             return False
         return True
@@ -276,8 +287,9 @@ def _validate(data: Any, lines: dict[tuple, int], seed: Seed) -> list[Problem]:
         if dlq is not None and (not isinstance(dlq, str) or not dlq):
             v.add(path + ("dlq",), "must be a queue name")
         elif dlq is not None and dlq not in queue_names:
-            seed.warnings.append(f"{_fmt_path(path + ('dlq',))}: '{dlq}' isn't in this seed; "
-                                 "it must already exist when you apply it")
+            seed.warnings.append(
+                f"{_fmt_path(path + ('dlq',))}: '{dlq}' isn't in this seed; it must already exist when you apply it"
+            )
         if dlq is not None and dlq == q.get("name"):
             v.add(path + ("dlq",), "a queue can't be its own dead-letter queue")
 
@@ -299,8 +311,9 @@ def _validate(data: Any, lines: dict[tuple, int], seed: Seed) -> list[Problem]:
                 for key_name, kind in keys:
                     if key_name not in item:
                         v.add(ip, f"missing key attribute '{key_name}'")
-                    elif kind == "N" and (isinstance(item[key_name], bool) or
-                                          not isinstance(item[key_name], (int, float))):
+                    elif kind == "N" and (
+                        isinstance(item[key_name], bool) or not isinstance(item[key_name], (int, float))
+                    ):
                         v.add(ip + (key_name,), "must be a number (the key type is N)")
                     elif kind == "S" and not isinstance(item[key_name], str):
                         v.add(ip + (key_name,), "must be text (the key type is S)")
@@ -328,8 +341,10 @@ def _validate(data: Any, lines: dict[tuple, int], seed: Seed) -> list[Problem]:
                 if len(targets) != 1:
                     v.add(sp, "give exactly one of 'sqs' or 'lambda'")
                 elif targets == ["sqs"] and isinstance(s["sqs"], str) and s["sqs"] not in queue_names:
-                    seed.warnings.append(f"{_fmt_path(sp + ('sqs',))}: '{s['sqs']}' isn't in this "
-                                         "seed; it must already exist when you apply it")
+                    seed.warnings.append(
+                        f"{_fmt_path(sp + ('sqs',))}: '{s['sqs']}' isn't in this "
+                        "seed; it must already exist when you apply it"
+                    )
                 v.type(s, "raw", bool, sp, "true or false")
                 v.type(s, "filter", dict, sp, "a mapping (an SNS filter policy)")
 
@@ -365,18 +380,29 @@ def _validate(data: Any, lines: dict[tuple, int], seed: Seed) -> list[Problem]:
         v.name(st, path, stream_names)
         if v.type(st, "shards", int, path, "a whole number") and "shards" in st and not 1 <= st["shards"] <= 500:
             v.add(path + ("shards",), "must be between 1 and 500")
-        if v.type(st, "retention_hours", int, path, "a whole number") and "retention_hours" in st \
-                and not 24 <= st["retention_hours"] <= 8760:
+        if (
+            v.type(st, "retention_hours", int, path, "a whole number")
+            and "retention_hours" in st
+            and not 24 <= st["retention_hours"] <= 8760
+        ):
             v.add(path + ("retention_hours",), "must be between 24 and 8760 (AWS limits)")
 
     def known(kind: str, name: str, where: tuple) -> None:
-        pools = {"sqs": queue_names, "kinesis": stream_names, "lambda": function_names,
-                 "sns": topic_names, "stepfunctions": machine_names}
+        pools = {
+            "sqs": queue_names,
+            "kinesis": stream_names,
+            "lambda": function_names,
+            "sns": topic_names,
+            "stepfunctions": machine_names,
+        }
         if isinstance(name, str) and name not in pools[kind]:
-            seed.warnings.append(f"{_fmt_path(where)}: '{name}' isn't in this seed; it must already exist "
-                                 "when you apply it")
+            seed.warnings.append(
+                f"{_fmt_path(where)}: '{name}' isn't in this seed; it must already exist when you apply it"
+            )
 
-    topic_names = {t.get("name"): () for t in data.get("topics") or [] if isinstance(t, dict)}
+    topic_names: dict[str, tuple] = {
+        t["name"]: () for t in data.get("topics") or [] if isinstance(t, dict) and isinstance(t.get("name"), str)
+    }
     function_names: dict[str, tuple] = {}
     machine_names: dict[str, tuple] = {}
 
@@ -394,11 +420,17 @@ def _validate(data: Any, lines: dict[tuple, int], seed: Seed) -> list[Problem]:
             for k, val in fn["env"].items():
                 if isinstance(val, (dict, list)) or val is None:
                     v.add(path + ("env", k), "must be text or a number")
-        if v.type(fn, "timeout", int, path, "a whole number of seconds") and "timeout" in fn \
-                and not 1 <= fn["timeout"] <= 900:
+        if (
+            v.type(fn, "timeout", int, path, "a whole number of seconds")
+            and "timeout" in fn
+            and not 1 <= fn["timeout"] <= 900
+        ):
             v.add(path + ("timeout",), "must be between 1 and 900 seconds")
-        if v.type(fn, "memory", int, path, "a whole number of MB") and "memory" in fn \
-                and not 128 <= fn["memory"] <= 10240:
+        if (
+            v.type(fn, "memory", int, path, "a whole number of MB")
+            and "memory" in fn
+            and not 128 <= fn["memory"] <= 10240
+        ):
             v.add(path + ("memory",), "must be between 128 and 10240 MB")
     for path, fn in functions:
         if v.type(fn, "triggers", list, path, "a list"):
@@ -507,8 +539,7 @@ def object_payloads(obj: dict, base_dir: Path) -> list[tuple[str, bytes | Path]]
     if src.is_file():
         return [(key + src.name if key.endswith("/") else key, src)]
     prefix = key if key.endswith("/") or not key else key + "/"
-    return [(prefix + p.relative_to(src).as_posix(), p)
-            for p in sorted(src.rglob("*")) if p.is_file()]
+    return [(prefix + p.relative_to(src).as_posix(), p) for p in sorted(src.rglob("*")) if p.is_file()]
 
 
 def load_items(t: dict, base_dir: Path) -> list[dict]:
@@ -525,6 +556,7 @@ def load_items(t: dict, base_dir: Path) -> list[dict]:
 
 def dump(data: dict) -> str:
     """YAML for ``seed export``: readable, key order kept, unicode as-is."""
+
     class _Dumper(yaml.SafeDumper):
         pass
 

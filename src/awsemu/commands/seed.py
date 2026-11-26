@@ -115,10 +115,15 @@ def _apply_queues(seed, port, report):
         if q.get("dlq"):
             try:
                 dlq_url = urls.get(q["dlq"]) or sqs.get_queue_url(QueueName=q["dlq"])["QueueUrl"]
-                dlq_arn = sqs.get_queue_attributes(QueueUrl=dlq_url, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
+                dlq_arn = sqs.get_queue_attributes(QueueUrl=dlq_url, AttributeNames=["QueueArn"])["Attributes"][
+                    "QueueArn"
+                ]
                 wanted = {"deadLetterTargetArn": dlq_arn, "maxReceiveCount": int(q.get("max_receive", 5))}
-                current = sqs.get_queue_attributes(QueueUrl=urls[name], AttributeNames=["RedrivePolicy"]
-                                                   ).get("Attributes", {}).get("RedrivePolicy")
+                current = (
+                    sqs.get_queue_attributes(QueueUrl=urls[name], AttributeNames=["RedrivePolicy"])
+                    .get("Attributes", {})
+                    .get("RedrivePolicy")
+                )
                 current_policy = json.loads(current) if current else {}
                 if {k: str(v) for k, v in current_policy.items()} != {k: str(v) for k, v in wanted.items()}:
                     sqs.set_queue_attributes(QueueUrl=urls[name], Attributes={"RedrivePolicy": json.dumps(wanted)})
@@ -151,16 +156,17 @@ def _apply_tables(seed, port, report):
             except Exception as exc:
                 if not is_error(exc, "ResourceNotFound"):
                     raise
-                ddb.create_table(TableName=name, BillingMode="PAY_PER_REQUEST",
-                                 AttributeDefinitions=[{"AttributeName": n, "AttributeType": k}
-                                                       for (n, k), _ in keys],
-                                 KeySchema=wanted_schema)
-                ddb.get_waiter("table_exists").wait(TableName=name,
-                                                    WaiterConfig={"Delay": 1, "MaxAttempts": 30})
+                ddb.create_table(
+                    TableName=name,
+                    BillingMode="PAY_PER_REQUEST",
+                    AttributeDefinitions=[{"AttributeName": n, "AttributeType": k} for (n, k), _ in keys],
+                    KeySchema=wanted_schema,
+                )
+                ddb.get_waiter("table_exists").wait(TableName=name, WaiterConfig={"Delay": 1, "MaxAttempts": 30})
                 result = "created"
             items = seedlib.load_items(t, seed.base_dir)
             for i in range(0, len(items), 25):
-                pending = {name: [{"PutRequest": {"Item": to_item(it)}} for it in items[i:i + 25]]}
+                pending: dict | None = {name: [{"PutRequest": {"Item": to_item(it)}} for it in items[i : i + 25]]}
                 while pending:
                     pending = ddb.batch_write_item(RequestItems=pending).get("UnprocessedItems") or None
             if items and result == "unchanged":
@@ -198,17 +204,26 @@ def _apply_topics(seed, port, report):
                     wanted["FilterPolicy"] = json.dumps(sub["filter"])
                 match = next((s for s in subs if s["Protocol"] == protocol and s["Endpoint"] == target), None)
                 if match is None:
-                    sns.subscribe(TopicArn=topic, Protocol=protocol, Endpoint=target,
-                                  Attributes=wanted, ReturnSubscriptionArn=True)
+                    sns.subscribe(
+                        TopicArn=topic,
+                        Protocol=protocol,
+                        Endpoint=target,
+                        Attributes=wanted,
+                        ReturnSubscriptionArn=True,
+                    )
                     result = "updated" if result == "unchanged" else result
                 else:
                     current = sns.get_subscription_attributes(SubscriptionArn=match["SubscriptionArn"])["Attributes"]
                     for k, val in wanted.items():
-                        same = (json.loads(current[k]) == json.loads(val)) if k == "FilterPolicy" and current.get(k) \
+                        same = (
+                            (json.loads(current[k]) == json.loads(val))
+                            if k == "FilterPolicy" and current.get(k)
                             else current.get(k, "false" if k == "RawMessageDelivery" else None) == val
+                        )
                         if not same:
-                            sns.set_subscription_attributes(SubscriptionArn=match["SubscriptionArn"],
-                                                            AttributeName=k, AttributeValue=val)
+                            sns.set_subscription_attributes(
+                                SubscriptionArn=match["SubscriptionArn"], AttributeName=k, AttributeValue=val
+                            )
                             result = "updated" if result == "unchanged" else result
                 details.append(f"→ {protocol}:{sub.get('sqs') or sub.get('lambda')}")
             report.add("topic", name, result, ", ".join(details))
@@ -330,17 +345,25 @@ def _config_changes(current: dict, wanted: dict) -> dict:
 
 TRIGGER_ACTIONS = {  # what Lambda needs to read each kind of source (AWS checks it; so does the emulator)
     "sqs": ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"],
-    "kinesis": ["kinesis:GetRecords", "kinesis:GetShardIterator", "kinesis:DescribeStream",
-                "kinesis:DescribeStreamSummary", "kinesis:ListShards", "kinesis:ListStreams",
-                "kinesis:SubscribeToShard"],
+    "kinesis": [
+        "kinesis:GetRecords",
+        "kinesis:GetShardIterator",
+        "kinesis:DescribeStream",
+        "kinesis:DescribeStreamSummary",
+        "kinesis:ListShards",
+        "kinesis:ListStreams",
+        "kinesis:SubscribeToShard",
+    ],
 }
 
 
 def _allow_role_to_read(lam, iam, function: str, kind: str, source_arn: str, label: str) -> None:
     """Give the function's role the permissions to poll ``source_arn``."""
     role_arn = lam.get_function_configuration(FunctionName=function)["Role"]
-    policy = {"Version": "2012-10-17", "Statement": [
-        {"Effect": "Allow", "Action": TRIGGER_ACTIONS[kind], "Resource": source_arn}]}
+    policy = {
+        "Version": "2012-10-17",
+        "Statement": [{"Effect": "Allow", "Action": TRIGGER_ACTIONS[kind], "Resource": source_arn}],
+    }
     name = f"awsemu-trigger-{label.replace(':', '-')}"[:128]
     iam.put_role_policy(RoleName=role_arn.rsplit("/", 1)[-1], PolicyName=name, PolicyDocument=json.dumps(policy))
 
@@ -402,8 +425,11 @@ def _apply_functions(seed, port, report):
             sha = base64.b64encode(hashlib.sha256(code).digest()).decode()
             exists = _exists(lam, name)
             # An existing function keeps its handler/runtime unless the seed sets them
-            wanted = _function_config(fn, fn.get("handler") or (None if exists else handler),
-                                      fn.get("runtime") or (None if exists else runtime))
+            wanted = _function_config(
+                fn,
+                fn.get("handler") or (None if exists else handler),
+                fn.get("runtime") or (None if exists else runtime),
+            )
             changes = []
             if exists:
                 current = lam.get_function_configuration(FunctionName=name)
@@ -419,11 +445,16 @@ def _apply_functions(seed, port, report):
                 result = "updated" if changes else "unchanged"
             else:
                 if not handler or not runtime:
-                    report.add("function", name, "failed",
-                               "couldn't guess the handler/runtime from the code; set 'handler' and 'runtime'")
+                    report.add(
+                        "function",
+                        name,
+                        "failed",
+                        "couldn't guess the handler/runtime from the code; set 'handler' and 'runtime'",
+                    )
                     continue
-                lam.create_function(FunctionName=name, Code={"ZipFile": code},
-                                    Role=ensure_role(client("iam", port)), **wanted)
+                lam.create_function(
+                    FunctionName=name, Code={"ZipFile": code}, Role=ensure_role(client("iam", port)), **wanted
+                )
                 _wait(lam, "function_active_v2", name)
                 result = "created"
             triggers = _apply_triggers(fn, lam, port)
@@ -450,15 +481,23 @@ def _apply_state_machines(seed, port, report):
             except Exception as exc:
                 if not is_error(exc, "StateMachineDoesNotExist", "ResourceNotFound"):
                     raise
-                role = ensure_service_role(client("iam", port), DEFAULT_ROLE_NAME, "states.amazonaws.com",
-                                           "Created by awsemu for Step Functions")
+                role = ensure_service_role(
+                    client("iam", port),
+                    DEFAULT_ROLE_NAME,
+                    "states.amazonaws.com",
+                    "Created by awsemu for Step Functions",
+                )
                 sf.create_state_machine(name=name, definition=json.dumps(definition), roleArn=role, type=kind)
                 report.add("state_machine", name, "created", kind.lower())
                 continue
             if current.get("type", "STANDARD") != kind:
-                report.add("state_machine", name, "failed",
-                           f"it's {current.get('type')} and the seed says {kind}: the type can't change; "
-                           "delete it first (awsemu sfn rm)")
+                report.add(
+                    "state_machine",
+                    name,
+                    "failed",
+                    f"it's {current.get('type')} and the seed says {kind}: the type can't change; "
+                    "delete it first (awsemu sfn rm)",
+                )
                 continue
             if json.loads(current["definition"]) != definition:
                 sf.update_state_machine(stateMachineArn=target, definition=json.dumps(definition))
@@ -477,8 +516,9 @@ def _target(kind: str, name: str, rule_arn: str, port: int) -> dict:
         return {"Arn": allow_lambda(client("lambda", port), name, "events.amazonaws.com", rule_arn, sid)}
     if kind == "sns":
         return {"Arn": arn("sns", name)}
-    role = ensure_service_role(client("iam", port), "awsemu-events-role", "events.amazonaws.com",
-                               "Created by awsemu for EventBridge targets")
+    role = ensure_service_role(
+        client("iam", port), "awsemu-events-role", "events.amazonaws.com", "Created by awsemu for EventBridge targets"
+    )
     if kind == "stepfunctions":
         return {"Arn": arn("states", f"stateMachine:{name}"), "RoleArn": role}
     return {"Arn": arn("kinesis", f"stream/{name}"), "RoleArn": role}
@@ -505,11 +545,13 @@ def _apply_rules(seed, port, report):
                 wanted["Description"] = r["description"]
             try:
                 current = ev.describe_rule(Name=name, EventBusName=bus)
-                same = (current.get("State") == wanted["State"]
-                        and current.get("ScheduleExpression") == wanted.get("ScheduleExpression")
-                        and (json.loads(current["EventPattern"]) if current.get("EventPattern") else None)
-                        == r.get("pattern")
-                        and (not r.get("description") or current.get("Description") == r["description"]))
+                same = (
+                    current.get("State") == wanted["State"]
+                    and current.get("ScheduleExpression") == wanted.get("ScheduleExpression")
+                    and (json.loads(current["EventPattern"]) if current.get("EventPattern") else None)
+                    == r.get("pattern")
+                    and (not r.get("description") or current.get("Description") == r["description"])
+                )
                 result = "unchanged"
                 if not same:
                     ev.put_rule(**wanted)
@@ -520,7 +562,7 @@ def _apply_rules(seed, port, report):
                     raise
                 rule_arn = ev.put_rule(**wanted)["RuleArn"]
                 result = "created"
-            existing = {}
+            existing: dict[str, dict] = {}
             for page in ev.get_paginator("list_targets_by_rule").paginate(Rule=name, EventBusName=bus):
                 existing |= {t["Id"]: t for t in page.get("Targets", [])}
             desired, labels = [], []
@@ -556,10 +598,16 @@ def _err(exc: Exception) -> str:
 
 
 APPLY_ORDER = [  # what others point at first: queues and streams, then functions, then the wiring
-    ("buckets", _apply_buckets), ("queues", _apply_queues), ("tables", _apply_tables),
-    ("streams", _apply_streams), ("secrets", _apply_secrets), ("parameters", _apply_parameters),
-    ("functions", _apply_functions), ("state_machines", _apply_state_machines),
-    ("topics", _apply_topics), ("rules", _apply_rules),
+    ("buckets", _apply_buckets),
+    ("queues", _apply_queues),
+    ("tables", _apply_tables),
+    ("streams", _apply_streams),
+    ("secrets", _apply_secrets),
+    ("parameters", _apply_parameters),
+    ("functions", _apply_functions),
+    ("state_machines", _apply_state_machines),
+    ("topics", _apply_topics),
+    ("rules", _apply_rules),
 ]
 
 
@@ -577,7 +625,7 @@ def load_or_fail(path: str) -> seedlib.Seed:
     except seedlib.SeedError as exc:
         for p in exc.problems:
             ui.error(p.format(exc.source))
-        raise SystemExit(exitcodes.USAGE)
+        raise SystemExit(exitcodes.USAGE) from exc
     for w in seed.warnings:
         ui.warn(w)
     return seed
@@ -602,8 +650,9 @@ def run_apply(seed: seedlib.Seed, port: int) -> None:
 # =========================================================================== export
 
 
-def _export(port: int, sections: set[str], objects_dir: Path | None, out_dir: Path,
-            include_secrets: bool) -> tuple[dict, list[str]]:
+def _export(
+    port: int, sections: set[str], objects_dir: Path | None, out_dir: Path, include_secrets: bool
+) -> tuple[dict, list[str]]:
     data: dict = {"version": seedlib.VERSION}
     notes: list[str] = []
 
@@ -672,7 +721,9 @@ def _export(port: int, sections: set[str], objects_dir: Path | None, out_dir: Pa
                 types = {d["AttributeName"]: d["AttributeType"] for d in t["AttributeDefinitions"]}
                 entry = {"name": name}
                 for k in t["KeySchema"]:
-                    spec = k["AttributeName"] + ("" if types[k["AttributeName"]] == "S" else f":{types[k['AttributeName']]}")
+                    spec = k["AttributeName"] + (
+                        "" if types[k["AttributeName"]] == "S" else f":{types[k['AttributeName']]}"
+                    )
                     entry["pk" if k["KeyType"] == "HASH" else "sk"] = spec
                 items = []
                 for p in ddb.get_paginator("scan").paginate(TableName=name):
@@ -741,7 +792,7 @@ def _export(port: int, sections: set[str], objects_dir: Path | None, out_dir: Pa
         values = {}
         names = [p["Name"] for p in described]
         for i in range(0, len(names), 10):
-            for p in ssm.get_parameters(Names=names[i:i + 10], WithDecryption=True).get("Parameters", []):
+            for p in ssm.get_parameters(Names=names[i : i + 10], WithDecryption=True).get("Parameters", []):
                 values[p["Name"]] = p
         for d in described:
             p = values.get(d["Name"])
@@ -789,7 +840,7 @@ def _export(port: int, sections: set[str], objects_dir: Path | None, out_dir: Pa
                 dest = objects_dir / "functions" / f"{name}.zip"
                 try:
                     _download_code(lam.get_function(FunctionName=name)["Code"]["Location"], dest, port)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     notes.append(f"skipped function {name}: couldn't download its code ({exc})")
                     continue
                 entry = {"name": name, "code": os.path.relpath(dest, out_dir)}
@@ -906,7 +957,7 @@ def _download_code(location: str, dest: Path, port: int) -> None:
     from ..paths import InstanceFiles
 
     ctx = ssl.create_default_context(cafile=str(InstanceFiles(port).ca))
-    with urllib.request.urlopen(location, context=ctx, timeout=60) as resp:  # noqa: S310 - the emulator's URL
+    with urllib.request.urlopen(location, context=ctx, timeout=60) as resp:
         data = resp.read()
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(data)
@@ -945,13 +996,23 @@ def validate_cmd(file: str):
 
 
 @seed.command(name="export")
-@click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path),
-              help="Write to this file (default: stdout).")
-@click.option("--objects-dir", type=click.Path(file_okay=False, path_type=Path),
-              help="Save binary or large S3 objects, and Lambda functions' code, here (referenced from the seed).")
+@click.option(
+    "-o", "--output", type=click.Path(dir_okay=False, path_type=Path), help="Write to this file (default: stdout)."
+)
+@click.option(
+    "--objects-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Save binary or large S3 objects, and Lambda functions' code, here (referenced from the seed).",
+)
 @click.option("--no-secrets", is_flag=True, help="Leave out secrets and SecureString parameters.")
-@click.option("-s", "--section", "sections", multiple=True, type=click.Choice(seedlib.SECTIONS),
-              help="Only these sections. Repeatable.")
+@click.option(
+    "-s",
+    "--section",
+    "sections",
+    multiple=True,
+    type=click.Choice(seedlib.SECTIONS),
+    help="Only these sections. Repeatable.",
+)
 @pass_ctx
 @handle_errors
 def export_cmd(c: Ctx, output: Path | None, objects_dir: Path | None, no_secrets: bool, sections):
@@ -961,11 +1022,18 @@ def export_cmd(c: Ctx, output: Path | None, objects_dir: Path | None, no_secrets
     unless --no-secrets.
     """
     out_dir = (output.parent if output else Path(".")).resolve()
-    data, notes = _export(c.port, set(sections) or set(seedlib.SECTIONS),
-                          objects_dir.resolve() if objects_dir else None, out_dir, not no_secrets)
-    header = (f"# Seed exported by awsemu from port {c.port} on "
-              f"{datetime.now().strftime('%Y-%m-%d %H:%M')}.\n"
-              "# Apply it with: awsemu seed apply <this file>\n")
+    data, notes = _export(
+        c.port,
+        set(sections) or set(seedlib.SECTIONS),
+        objects_dir.resolve() if objects_dir else None,
+        out_dir,
+        not no_secrets,
+    )
+    header = (
+        f"# Seed exported by awsemu from port {c.port} on "
+        f"{datetime.now().strftime('%Y-%m-%d %H:%M')}.\n"
+        "# Apply it with: awsemu seed apply <this file>\n"
+    )
     text = header + seedlib.dump(data)
     for n in notes:
         ui.warn(n)
@@ -973,21 +1041,33 @@ def export_cmd(c: Ctx, output: Path | None, objects_dir: Path | None, no_secrets
         output.write_text(text, encoding="utf-8")
         counts = ", ".join(f"{len(v)} {k}" for k, v in data.items() if isinstance(v, list)) or "nothing"
         ui.success(f"wrote {output} ({counts})")
-        if not no_secrets and (data.get("secrets") or any(p.get("type") == "SecureString"
-                                                          for p in data.get("parameters", []))):
+        if not no_secrets and (
+            data.get("secrets") or any(p.get("type") == "SecureString" for p in data.get("parameters", []))
+        ):
             ui.warn(f"{output} contains secret values in plain text")
     else:
         click.echo(text, nl=False)
 
 
 @seed.command(name="import")
-@click.option("--profile", required=True, metavar="NAME",
-              help="The AWS profile to read with (required: the default credentials are never used).")
+@click.option(
+    "--profile",
+    required=True,
+    metavar="NAME",
+    help="The AWS profile to read with (required: the default credentials are never used).",
+)
 @click.option("--region", metavar="REGION", help="Region to read (default: the profile's).")
-@click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path),
-              help="Write to this file (default: stdout).")
-@click.option("-s", "--section", "sections", multiple=True, type=click.Choice(seedlib.SECTIONS),
-              help="Only these sections. Repeatable.")
+@click.option(
+    "-o", "--output", type=click.Path(dir_okay=False, path_type=Path), help="Write to this file (default: stdout)."
+)
+@click.option(
+    "-s",
+    "--section",
+    "sections",
+    multiple=True,
+    type=click.Choice(seedlib.SECTIONS),
+    help="Only these sections. Repeatable.",
+)
 @click.option("--yes", is_flag=True, help="Don't ask before reading the account.")
 @handle_errors
 def import_cmd(profile: str, region, output: Path | None, sections, yes: bool):
@@ -1013,11 +1093,13 @@ def import_cmd(profile: str, region, output: Path | None, sections, yes: bool):
         raise RuntimeErrorWithHint(str(exc)) from exc
     except Exception as exc:
         if type(exc).__name__ in ("ProfileNotFound", "NoCredentialsError", "PartialCredentialsError"):
-            raise RuntimeErrorWithHint(f"can't use profile '{profile}': {exc}",
-                                       "List your profiles with: aws configure list-profiles") from exc
+            raise RuntimeErrorWithHint(
+                f"can't use profile '{profile}': {exc}", "List your profiles with: aws configure list-profiles"
+            ) from exc
         raise
-    ui.echo(f"Reading AWS account {who['Account']} ({who['Arn']}), Region {sess.region_name}, read-only.", "warn",
-            err=True)
+    ui.echo(
+        f"Reading AWS account {who['Account']} ({who['Arn']}), Region {sess.region_name}, read-only.", "warn", err=True
+    )
     if not yes:
         if not sys.stdin.isatty():
             raise click.UsageError("reading a real account needs --yes when there's no terminal to ask")
@@ -1026,9 +1108,11 @@ def import_cmd(profile: str, region, output: Path | None, sections, yes: bool):
         data, notes = ra.import_seed(sess, set(sections) or set(seedlib.SECTIONS))
     except ra.NotReadOnly as exc:  # pragma: no cover - a bug if it happens: say so loudly
         raise RuntimeErrorWithHint(str(exc)) from exc
-    header = (f"# Seed imported by awsemu from AWS account {who['Account']}, {sess.region_name}, on "
-              f"{datetime.now().strftime('%Y-%m-%d %H:%M')} (configuration only, read-only).\n"
-              "# Secret values are placeholders. Apply it with: awsemu seed apply <this file>\n")
+    header = (
+        f"# Seed imported by awsemu from AWS account {who['Account']}, {sess.region_name}, on "
+        f"{datetime.now().strftime('%Y-%m-%d %H:%M')} (configuration only, read-only).\n"
+        "# Secret values are placeholders. Apply it with: awsemu seed apply <this file>\n"
+    )
     text = header + seedlib.dump(data)
     for n in notes:
         ui.warn(n)

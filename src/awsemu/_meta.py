@@ -5,9 +5,9 @@ ROADMAP). Code reads them from here; ``scripts/rename.py`` changes them here
 and everywhere else in one go.
 """
 
-DIST_NAME = "aws-emulator-cli"          # name on PyPI / pip
-REPO = "skaidan/aws-emulator-cli"       # GitHub owner/name
-COMMAND = "awsemu"                      # the command people type
+DIST_NAME = "aws-emulator-cli"  # name on PyPI / pip
+REPO = "skaidan/aws-emulator-cli"  # GitHub owner/name
+COMMAND = "awsemu"  # the command people type
 
 REPO_URL = f"https://github.com/{REPO}"
 DOCS_URL = f"{REPO_URL}/blob/main/docs"

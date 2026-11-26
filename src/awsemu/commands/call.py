@@ -59,8 +59,12 @@ def resolve_service(name: str) -> str:
     if _key(name) in by_key:
         return by_key[_key(name)]
     close = difflib.get_close_matches(name.lower(), known, n=3)
-    raise click.BadParameter(f"no service '{name}'" + (f"; did you mean {', '.join(close)}?" if close else "")
-                             + " ('awsemu call' lists them)", param_hint="SERVICE")
+    raise click.BadParameter(
+        f"no service '{name}'"
+        + (f"; did you mean {', '.join(close)}?" if close else "")
+        + " ('awsemu call' lists them)",
+        param_hint="SERVICE",
+    )
 
 
 def resolve_operation(service: str, name: str) -> str:
@@ -69,11 +73,15 @@ def resolve_operation(service: str, name: str) -> str:
     by_key = {_key(op): op for op in known}
     if _key(name) in by_key:
         return by_key[_key(name)]
-    close = difflib.get_close_matches(name, known, n=3) or \
-        [by_key[k] for k in difflib.get_close_matches(_key(name), list(by_key), n=3)]
+    close = difflib.get_close_matches(name, known, n=3) or [
+        by_key[k] for k in difflib.get_close_matches(_key(name), list(by_key), n=3)
+    ]
     raise click.BadParameter(
-        f"{service} has no operation '{name}'" + (f"; did you mean {', '.join(close)}?" if close else "")
-        + f" ('awsemu call {service}' lists them)", param_hint="OPERATION")
+        f"{service} has no operation '{name}'"
+        + (f"; did you mean {', '.join(close)}?" if close else "")
+        + f" ('awsemu call {service}' lists them)",
+        param_hint="OPERATION",
+    )
 
 
 def snake(operation: str) -> str:
@@ -164,14 +172,22 @@ def _complete_operation(ctx, param, incomplete):
 @click.command(name="call")
 @click.argument("service", required=False, shell_complete=_complete_service)
 @click.argument("operation", required=False, shell_complete=_complete_operation)
-@click.option("--params", "params_text", metavar="JSON",
-              help="The request as JSON, '@file.json', or '-' for stdin.")
-@click.option("-p", "--param", "pairs", multiple=True, metavar="KEY=VALUE",
-              help="One parameter (JSON values parsed, '@file' for bytes). Repeatable.")
+@click.option("--params", "params_text", metavar="JSON", help="The request as JSON, '@file.json', or '-' for stdin.")
+@click.option(
+    "-p",
+    "--param",
+    "pairs",
+    multiple=True,
+    metavar="KEY=VALUE",
+    help="One parameter (JSON values parsed, '@file' for bytes). Repeatable.",
+)
 @click.option("--paginate", is_flag=True, help="Follow every page and merge them.")
 @click.option("--query", metavar="JMESPATH", help="Keep part of the response, like the AWS CLI's --query.")
-@click.option("--out", type=click.Path(dir_okay=False, path_type=Path),
-              help="Write a streaming body (S3 GetObject…) to this file.")
+@click.option(
+    "--out",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write a streaming body (S3 GetObject…) to this file.",
+)
 @click.option("--metadata", is_flag=True, help="Keep ResponseMetadata in the output.")
 @pass_ctx
 @handle_errors
@@ -212,8 +228,11 @@ def call(c: Ctx, service, operation, params_text, pairs, paginate, query, out, m
         else:
             resp = getattr(api, method)(**params)
     except ParamValidationError as exc:
-        ui.error(str(exc).replace("\n", " ").strip(),
-                 f"see the parameters: https://docs.aws.amazon.com/goto/boto3/{_model(service).metadata.get('uid', service)}/{op}")
+        uid = _model(service).metadata.get("uid", service)
+        ui.error(
+            str(exc).replace("\n", " ").strip(),
+            f"see the parameters: https://docs.aws.amazon.com/goto/boto3/{uid}/{op}",
+        )
         raise SystemExit(exitcodes.USAGE) from exc
 
     if not metadata:

@@ -18,8 +18,7 @@ from ._common import arn, ensure_service_role, is_error, load_json_arg
 
 DEFAULT_ROLE_NAME = "awsemu-sfn-role"
 FINAL = {"SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"}
-STATUS_STYLE = {"SUCCEEDED": "ok", "RUNNING": "info", "FAILED": "error", "TIMED_OUT": "error",
-                "ABORTED": "warn"}
+STATUS_STYLE = {"SUCCEEDED": "ok", "RUNNING": "info", "FAILED": "error", "TIMED_OUT": "error", "ABORTED": "warn"}
 
 
 def machine_arn(name: str) -> str:
@@ -55,8 +54,11 @@ def ls(c: Ctx, as_json: bool):
         ui.print_json(machines)
         return
     rows = [[m["name"], m.get("type", ""), str(m.get("creationDate", ""))[:19]] for m in machines]
-    ui.table(["state machine", "type", "created"], rows,
-             empty="No state machines. Try 'awsemu sfn deploy NAME definition.json'.")
+    ui.table(
+        ["state machine", "type", "created"],
+        rows,
+        empty="No state machines. Try 'awsemu sfn deploy NAME definition.json'.",
+    )
 
 
 @sfn.command(name="deploy")
@@ -90,10 +92,12 @@ def deploy(c: Ctx, name: str, definition: str, express: bool, role: str | None):
         s.update_state_machine(**kwargs)
         ui.success(f"updated {name}")
         return
-    role = role or ensure_service_role(client("iam", c.port), DEFAULT_ROLE_NAME,
-                                       "states.amazonaws.com", "Created by awsemu for Step Functions")
-    created = s.create_state_machine(name=name, definition=body, roleArn=role,
-                                     type="EXPRESS" if express else "STANDARD")
+    role = role or ensure_service_role(
+        client("iam", c.port), DEFAULT_ROLE_NAME, "states.amazonaws.com", "Created by awsemu for Step Functions"
+    )
+    created = s.create_state_machine(
+        name=name, definition=body, roleArn=role, type="EXPRESS" if express else "STANDARD"
+    )
     ui.success(f"created {name}")
     ui.echo(created["stateMachineArn"], "muted")
 
@@ -101,14 +105,16 @@ def deploy(c: Ctx, name: str, definition: str, express: bool, role: str | None):
 def _history_error(s, execution_arn: str) -> str | None:
     """Find a readable cause in the execution history when the output has none."""
     try:
-        events = s.get_execution_history(executionArn=execution_arn, reverseOrder=True,
-                                         maxResults=20).get("events", [])
+        events = s.get_execution_history(executionArn=execution_arn, reverseOrder=True, maxResults=20).get("events", [])
     except Exception:
         return None
     for e in events:
         for key, details in e.items():
-            if key.endswith("EventDetails") and isinstance(details, dict) and \
-                    ("error" in details or "cause" in details):
+            if (
+                key.endswith("EventDetails")
+                and isinstance(details, dict)
+                and ("error" in details or "cause" in details)
+            ):
                 return f"{details.get('error', '')}: {details.get('cause', '')}".strip(": ")
     return None
 
@@ -118,8 +124,14 @@ def _history_error(s, execution_arn: str) -> str | None:
 @click.argument("input_json", required=False, default="{}")
 @click.option("--file", "file_", type=click.File("r"), help="Input from a file ('-' = stdin).")
 @click.option("--no-wait", is_flag=True, help="Start and return without waiting for the result.")
-@click.option("--timeout", type=float, default=120, show_default=True, metavar="SECONDS",
-              help="How long to wait for the execution to finish.")
+@click.option(
+    "--timeout",
+    type=float,
+    default=120,
+    show_default=True,
+    metavar="SECONDS",
+    help="How long to wait for the execution to finish.",
+)
 @click.option("--raw", is_flag=True, help="Print only the output JSON.")
 @pass_ctx
 @handle_errors
@@ -129,8 +141,9 @@ def start(c: Ctx, name: str, input_json: str, file_, no_wait: bool, timeout: flo
         input_json = file_.read()
     load_json_arg(input_json, "input")
     s = client("stepfunctions", c.port)
-    exec_arn = s.start_execution(stateMachineArn=machine_arn(name), input=input_json,
-                                 name=f"awsemu-{uuid.uuid4().hex[:12]}")["executionArn"]
+    exec_arn = s.start_execution(
+        stateMachineArn=machine_arn(name), input=input_json, name=f"awsemu-{uuid.uuid4().hex[:12]}"
+    )["executionArn"]
     if no_wait:
         ui.success("started")
         ui.echo(exec_arn, "muted")
@@ -169,14 +182,19 @@ def start(c: Ctx, name: str, input_json: str, file_, no_wait: bool, timeout: flo
 @handle_errors
 def executions(c: Ctx, name: str, limit: int, as_json: bool):
     """Recent executions of a state machine."""
-    resp = client("stepfunctions", c.port).list_executions(stateMachineArn=machine_arn(name),
-                                                           maxResults=limit)
+    resp = client("stepfunctions", c.port).list_executions(stateMachineArn=machine_arn(name), maxResults=limit)
     if as_json:
         ui.print_json(resp.get("executions", []))
         return
-    rows = [[e["name"], ui.styled(e["status"], STATUS_STYLE.get(e["status"])),
-             str(e.get("startDate", ""))[:19], str(e.get("stopDate", "") or "")[:19]]
-            for e in resp.get("executions", [])]
+    rows = [
+        [
+            e["name"],
+            ui.styled(e["status"], STATUS_STYLE.get(e["status"])),
+            str(e.get("startDate", ""))[:19],
+            str(e.get("stopDate", "") or "")[:19],
+        ]
+        for e in resp.get("executions", [])
+    ]
     ui.table(["execution", "status", "started", "stopped"], rows, empty="No executions yet.")
 
 

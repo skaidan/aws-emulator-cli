@@ -58,8 +58,7 @@ def problems(text, base=None):
 
 def test_good_seed_loads(seed_dir):
     s = seed.load_file(seed_dir / "seed.yaml")
-    assert s.count() == {"buckets": 1, "queues": 2, "tables": 1, "topics": 1, "secrets": 2,
-                         "parameters": 3}
+    assert s.count() == {"buckets": 1, "queues": 2, "tables": 1, "topics": 1, "secrets": 2, "parameters": 3}
     assert s.warnings == []
 
 
@@ -85,45 +84,57 @@ def test_yaml_syntax_error_has_line():
     assert out[0].startswith("seed.yaml:3  invalid YAML")
 
 
-@pytest.mark.parametrize("text,needle", [
-    ("buckets:\n  - name: b\n    objects:\n      - {key: k}\n", "exactly one of 'content', 'json' or 'from'"),
-    ("buckets:\n  - name: b\n    objects:\n      - {key: k, from: ./nope}\n", "'./nope' not found"),
-    ("queues:\n  - {name: q, fifo: true}\n", "must end with '.fifo'"),
-    ("queues:\n  - {name: q, dlq: q}\n", "its own dead-letter queue"),
-    ("queues:\n  - {name: q, max_receive: 3}\n", "only makes sense with 'dlq'"),
-    ("tables:\n  - {name: t, pk: id:N, items: [{id: 'x'}]}\n", "must be a number"),
-    ("tables:\n  - {name: t, pk: id, items: [{other: 1}]}\n", "missing key attribute 'id'"),
-    ("topics:\n  - name: t\n    subscriptions: [{raw: true}]\n", "exactly one of 'sqs' or 'lambda'"),
-    ("secrets:\n  - {name: s}\n", "'value' is required"),
-    ("parameters:\n  - {name: /aws/x, value: 1}\n", "can't start with 'aws' or 'ssm'"),
-    ("parameters:\n  - {name: /x, value: [a], type: String}\n", "needs type StringList"),
-    ("streams:\n  - {name: s, shards: 0}\n", "between 1 and 500"),
-    ("streams:\n  - {name: s, retention_hours: 1}\n", "between 24 and 8760"),
-    ("functions:\n  - {name: f}\n", "'code' is required"),
-    ("functions:\n  - {name: f, code: ./nope}\n", "'./nope' not found"),
-    ("functions:\n  - {name: f, code: ., timeout: 901}\n", "between 1 and 900 seconds"),
-    ("functions:\n  - {name: f, code: ., env: {A: [1]}}\n", "must be text or a number"),
-    ("functions:\n  - name: f\n    code: .\n    triggers: [{batch_size: 1}]\n", "exactly one of 'sqs' or 'kinesis'"),
-    ("functions:\n  - name: f\n    code: .\n    triggers: [{sqs: q, starting_position: LATEST}]\n",
-     "only applies to Kinesis"),
-    ("state_machines:\n  - {name: m}\n", "'definition' is required"),
-    ("state_machines:\n  - {name: m, definition: {States: {}}}\n", "needs 'StartAt' and 'States'"),
-    ("rules:\n  - {name: r}\n", "exactly one of 'pattern' or 'schedule'"),
-    ("rules:\n  - {name: r, schedule: every day}\n", "rate(5 minutes)"),
-    ("rules:\n  - name: r\n    pattern: {source: [a]}\n    targets: [{http: x}]\n", "unknown field"),
-    ("rules:\n  - name: r\n    pattern: {source: [a]}\n    targets: [{}, {}, {}, {}, {}, {}]\n", "at most 5 targets"),
-    ("version: 2\n", "unsupported version 2"),
-    ("bucket:\n  - name: x\n", "did you mean 'buckets'?"),
-    ("- just a list\n", "top level must be a mapping"),
-    ("", "the file is empty"),
-])
+@pytest.mark.parametrize(
+    "text,needle",
+    [
+        ("buckets:\n  - name: b\n    objects:\n      - {key: k}\n", "exactly one of 'content', 'json' or 'from'"),
+        ("buckets:\n  - name: b\n    objects:\n      - {key: k, from: ./nope}\n", "'./nope' not found"),
+        ("queues:\n  - {name: q, fifo: true}\n", "must end with '.fifo'"),
+        ("queues:\n  - {name: q, dlq: q}\n", "its own dead-letter queue"),
+        ("queues:\n  - {name: q, max_receive: 3}\n", "only makes sense with 'dlq'"),
+        ("tables:\n  - {name: t, pk: id:N, items: [{id: 'x'}]}\n", "must be a number"),
+        ("tables:\n  - {name: t, pk: id, items: [{other: 1}]}\n", "missing key attribute 'id'"),
+        ("topics:\n  - name: t\n    subscriptions: [{raw: true}]\n", "exactly one of 'sqs' or 'lambda'"),
+        ("secrets:\n  - {name: s}\n", "'value' is required"),
+        ("parameters:\n  - {name: /aws/x, value: 1}\n", "can't start with 'aws' or 'ssm'"),
+        ("parameters:\n  - {name: /x, value: [a], type: String}\n", "needs type StringList"),
+        ("streams:\n  - {name: s, shards: 0}\n", "between 1 and 500"),
+        ("streams:\n  - {name: s, retention_hours: 1}\n", "between 24 and 8760"),
+        ("functions:\n  - {name: f}\n", "'code' is required"),
+        ("functions:\n  - {name: f, code: ./nope}\n", "'./nope' not found"),
+        ("functions:\n  - {name: f, code: ., timeout: 901}\n", "between 1 and 900 seconds"),
+        ("functions:\n  - {name: f, code: ., env: {A: [1]}}\n", "must be text or a number"),
+        (
+            "functions:\n  - name: f\n    code: .\n    triggers: [{batch_size: 1}]\n",
+            "exactly one of 'sqs' or 'kinesis'",
+        ),
+        (
+            "functions:\n  - name: f\n    code: .\n    triggers: [{sqs: q, starting_position: LATEST}]\n",
+            "only applies to Kinesis",
+        ),
+        ("state_machines:\n  - {name: m}\n", "'definition' is required"),
+        ("state_machines:\n  - {name: m, definition: {States: {}}}\n", "needs 'StartAt' and 'States'"),
+        ("rules:\n  - {name: r}\n", "exactly one of 'pattern' or 'schedule'"),
+        ("rules:\n  - {name: r, schedule: every day}\n", "rate(5 minutes)"),
+        ("rules:\n  - name: r\n    pattern: {source: [a]}\n    targets: [{http: x}]\n", "unknown field"),
+        (
+            "rules:\n  - name: r\n    pattern: {source: [a]}\n    targets: [{}, {}, {}, {}, {}, {}]\n",
+            "at most 5 targets",
+        ),
+        ("version: 2\n", "unsupported version 2"),
+        ("bucket:\n  - name: x\n", "did you mean 'buckets'?"),
+        ("- just a list\n", "top level must be a mapping"),
+        ("", "the file is empty"),
+    ],
+)
 def test_validation_messages(tmp_path, text, needle):
     assert any(needle in p for p in problems(text, tmp_path)), problems(text, tmp_path)
 
 
 def test_references_outside_the_seed_are_warnings():
-    s = seed.load_text("queues:\n  - {name: q, dlq: existing-dlq}\n"
-                       "topics:\n  - name: t\n    subscriptions: [{sqs: existing}]\n")
+    s = seed.load_text(
+        "queues:\n  - {name: q, dlq: existing-dlq}\ntopics:\n  - name: t\n    subscriptions: [{sqs: existing}]\n"
+    )
     assert len(s.warnings) == 2 and "must already exist" in s.warnings[0]
 
 
@@ -131,7 +142,8 @@ def test_new_sections_load_with_cross_references(tmp_path):
     (tmp_path / "fn").mkdir()
     (tmp_path / "fn" / "app.py").write_text("def handler(event, context):\n    return event\n")
     (tmp_path / "flow.yaml").write_text("StartAt: Hi\nStates:\n  Hi: {Type: Pass, End: true}\n")
-    s = seed.load_text("""
+    s = seed.load_text(
+        """
 queues: [{name: jobs}]
 streams: [{name: clicks, shards: 2}]
 functions:
@@ -142,7 +154,10 @@ rules:
   - name: r
     pattern: {source: [app]}
     targets: [{sqs: jobs}, {lambda: echo}, {stepfunctions: flow}, {kinesis: clicks}, {sns: alerts}]
-""", "seed.yaml", tmp_path)
+""",
+        "seed.yaml",
+        tmp_path,
+    )
     assert s.count() == {"queues": 1, "streams": 1, "functions": 1, "state_machines": 1, "rules": 1}
     assert len(s.warnings) == 2 and "'elsewhere'" in s.warnings[0] and "'alerts'" in s.warnings[1]
     assert seed.read_definition(s.section("state_machines")[0], tmp_path)["StartAt"] == "Hi"
@@ -182,8 +197,11 @@ def test_items_and_values(seed_dir):
 
 
 def test_dump_roundtrip():
-    data = {"version": 1, "secrets": [{"name": "s", "value": "multi\nline"}],
-            "tables": [{"name": "t", "pk": "id", "items": [{"id": "café", "n": 1.5}]}]}
+    data = {
+        "version": 1,
+        "secrets": [{"name": "s", "value": "multi\nline"}],
+        "tables": [{"name": "t", "pk": "id", "items": [{"id": "café", "n": 1.5}]}],
+    }
     text = seed.dump(data)
     assert "value: |" in text and "café" in text
     assert seed.load_text(text).data == data
@@ -212,5 +230,4 @@ def test_example_seed_is_valid():
     example = Path(__file__).resolve().parents[1] / "examples" / "seed.yaml"
     s = seed.load_file(example)
     assert s.warnings == []
-    assert s.count() == {"buckets": 1, "queues": 3, "tables": 2, "topics": 1, "secrets": 2,
-                         "parameters": 3}
+    assert s.count() == {"buckets": 1, "queues": 3, "tables": 2, "topics": 1, "secrets": 2, "parameters": 3}

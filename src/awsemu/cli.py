@@ -23,9 +23,16 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"], "max_content_width": 
 class AliasedGroup(click.Group):
     """Lets users type unambiguous prefixes (``awsemu st`` -> status) and a few aliases."""
 
-    ALIASES = {"ps": "status", "reset": "restart",
-               "ddb": "dynamodb", "ls": "overview", "fn": "lambda",
-               "eb": "events", "stepfunctions": "sfn", "secretsmanager": "secrets"}
+    ALIASES = {
+        "ps": "status",
+        "reset": "restart",
+        "ddb": "dynamodb",
+        "ls": "overview",
+        "fn": "lambda",
+        "eb": "events",
+        "stepfunctions": "sfn",
+        "secretsmanager": "secrets",
+    }
 
     def get_command(self, ctx, cmd_name):
         cmd_name = self.ALIASES.get(cmd_name, cmd_name)
@@ -45,11 +52,15 @@ class AliasedGroup(click.Group):
 
 
 @click.group(cls=AliasedGroup, context_settings=CONTEXT_SETTINGS)
-@click.option("-p", "--port", type=int, default=default_port,
-              show_default="$AWSEMU_PORT, else awsemu.toml, else 9297",
-              help="Port of the emulator instance to work with.")
-@click.option("--plain", is_flag=True, envvar="AWSEMU_PLAIN",
-              help="Plain text output (no colours or boxes).")
+@click.option(
+    "-p",
+    "--port",
+    type=int,
+    default=default_port,
+    show_default="$AWSEMU_PORT, else awsemu.toml, else 9297",
+    help="Port of the emulator instance to work with.",
+)
+@click.option("--plain", is_flag=True, envvar="AWSEMU_PLAIN", help="Plain text output (no colours or boxes).")
 @click.version_option(__version__, "-V", "--version", prog_name="awsemu")
 @click.pass_context
 def cli(ctx: click.Context, port: int, plain: bool):
@@ -89,37 +100,62 @@ def _start_options(port, docker, native, auth, telemetry, idle_timeout, image, m
     elif native:
         mode = "native"
     else:
-        mode = (proj.mode if proj and proj.mode else "auto")
+        mode = proj.mode if proj and proj.mode else "auto"
     return runtime.StartOptions(
-        port=port, mode=mode,
+        port=port,
+        mode=mode,
         auth=_pick(auth, proj and proj.auth, True),
         telemetry=_pick(telemetry, proj and proj.telemetry, None),
         idle_timeout=_pick(idle_timeout, proj and proj.idle_timeout, None),
-        image=_pick(image, proj and proj.image,
-                    f"{runtime.DEFAULT_IMAGE}:{proj.emulator_version}" if proj and proj.emulator_version
-                    else runtime.DEFAULT_IMAGE),
+        image=_pick(
+            image,
+            proj and proj.image,
+            f"{runtime.DEFAULT_IMAGE}:{proj.emulator_version}"
+            if proj and proj.emulator_version
+            else runtime.DEFAULT_IMAGE,
+        ),
         memory=_pick(memory, proj and proj.memory, "2g"),
-        extra_args=list(extra))
+        extra_args=list(extra),
+    )
 
 
 _start_params = [
     click.option("--docker", is_flag=True, help="Run in Docker even if the binary is installed."),
     click.option("--native", is_flag=True, help="Run the installed 'aws-emulator' binary."),
-    click.option("--auth/--no-auth", default=None, show_default="auth",
-                 help="Require SigV4-signed requests (emulator '-a')."),
-    click.option("--telemetry/--no-telemetry", default=None,
-                 help="Force telemetry on/off for this run (default: emulator settings)."),
-    click.option("--idle-timeout", type=click.IntRange(1, 31536000), metavar="SECONDS",
-                 help="Stop automatically after this many seconds without API calls."),
-    click.option("--image", default=None, show_default=runtime.DEFAULT_IMAGE,
-                 help="Docker image to run."),
+    click.option(
+        "--auth/--no-auth", default=None, show_default="auth", help="Require SigV4-signed requests (emulator '-a')."
+    ),
+    click.option(
+        "--telemetry/--no-telemetry",
+        default=None,
+        help="Force telemetry on/off for this run (default: emulator settings).",
+    ),
+    click.option(
+        "--idle-timeout",
+        type=click.IntRange(1, 31536000),
+        metavar="SECONDS",
+        help="Stop automatically after this many seconds without API calls.",
+    ),
+    click.option("--image", default=None, show_default=runtime.DEFAULT_IMAGE, help="Docker image to run."),
     click.option("--memory", default=None, show_default="2g", help="Docker memory limit."),
-    click.option("--wait", type=float, default=30, show_default=True, metavar="SECONDS",
-                 help="How long to wait for the health check."),
-    click.option("-f", "--foreground", is_flag=True,
-                 help="Run attached to this terminal instead of in the background."),
-    click.option("--seed", "seed_file", type=click.Path(dir_okay=False), metavar="FILE",
-                 help="Apply this seed file once the emulator is healthy."),
+    click.option(
+        "--wait",
+        type=float,
+        default=30,
+        show_default=True,
+        metavar="SECONDS",
+        help="How long to wait for the health check.",
+    ),
+    click.option(
+        "-f", "--foreground", is_flag=True, help="Run attached to this terminal instead of in the background."
+    ),
+    click.option(
+        "--seed",
+        "seed_file",
+        type=click.Path(dir_okay=False),
+        metavar="FILE",
+        help="Apply this seed file once the emulator is healthy.",
+    ),
 ]
 
 
@@ -150,12 +186,26 @@ def _warn_version_pin(mode: str) -> None:
         return
     mismatch = pin_mismatch()
     if mismatch:
-        ui.warn(f"this project pins emulator {mismatch[0]}, but {mismatch[1]} is installed. "
-                f"Install it with: awsemu install")
+        ui.warn(
+            f"this project pins emulator {mismatch[0]}, but {mismatch[1]} is installed. Install it with: awsemu install"
+        )
 
 
-def _do_start(port, docker, native, auth, telemetry, idle_timeout, image, memory, wait,
-              foreground, extra, seed_file=None, seed=None):
+def _do_start(
+    port,
+    docker,
+    native,
+    auth,
+    telemetry,
+    idle_timeout,
+    image,
+    memory,
+    wait,
+    foreground,
+    extra,
+    seed_file=None,
+    seed=None,
+):
     if docker and native:
         raise click.UsageError("--docker and --native are mutually exclusive.")
     if seed_file and foreground:
@@ -184,12 +234,14 @@ def _do_start(port, docker, native, auth, telemetry, idle_timeout, image, memory
     port = state.port
     files = InstanceFiles(port)
     ui.success(f"AWS Emulator is up at {files.endpoint_url}")
-    ui.kv([
-        ("mode", state.mode),
-        ("pid" if state.pid else "container", state.pid or state.container),
-        ("auth", "on" if files.auth_enabled() else "off"),
-        ("files", str(files.dir)),
-    ])
+    ui.kv(
+        [
+            ("mode", state.mode),
+            ("pid" if state.pid else "container", state.pid or state.container),
+            ("auth", "on" if files.auth_enabled() else "off"),
+            ("files", str(files.dir)),
+        ]
+    )
     if seed is not None:
         from .commands.seed import run_apply
 
@@ -219,8 +271,9 @@ def start(c: Ctx, **kwargs):
 @cli.command()
 @click.option("--all", "all_", is_flag=True, help="Stop every instance awsemu knows about.")
 @click.option("--force", is_flag=True, help="SIGKILL / docker kill (loses the clean shutdown).")
-@click.option("--timeout", type=float, default=15, show_default=True, metavar="SECONDS",
-              help="How long to wait for a clean stop.")
+@click.option(
+    "--timeout", type=float, default=15, show_default=True, metavar="SECONDS", help="How long to wait for a clean stop."
+)
 @pass_ctx
 @handle_errors
 def stop(c: Ctx, all_: bool, force: bool, timeout: float):
@@ -269,11 +322,22 @@ def restart(c: Ctx, **kwargs):
 
 
 @cli.command()
-@click.option("--seed", "seed_file", type=click.Path(dir_okay=False), metavar="FILE",
-              help="Seed to apply (default: 'seed' from awsemu.toml).")
+@click.option(
+    "--seed",
+    "seed_file",
+    type=click.Path(dir_okay=False),
+    metavar="FILE",
+    help="Seed to apply (default: 'seed' from awsemu.toml).",
+)
 @click.option("--no-seed", is_flag=True, help="Don't apply any seed.")
-@click.option("--wait", type=float, default=30, show_default=True, metavar="SECONDS",
-              help="How long to wait for the health check.")
+@click.option(
+    "--wait",
+    type=float,
+    default=30,
+    show_default=True,
+    metavar="SECONDS",
+    help="How long to wait for the health check.",
+)
 @pass_ctx
 @handle_errors
 def up(c: Ctx, seed_file: str | None, no_seed: bool, wait: float):
@@ -295,8 +359,20 @@ def up(c: Ctx, seed_file: str | None, no_seed: bool, wait: float):
         if seed is not None:
             run_apply(seed, c.port)
     else:
-        _do_start(c.port, docker=False, native=False, auth=None, telemetry=None, idle_timeout=None,
-                  image=None, memory=None, wait=wait, foreground=False, extra=(), seed=seed)
+        _do_start(
+            c.port,
+            docker=False,
+            native=False,
+            auth=None,
+            telemetry=None,
+            idle_timeout=None,
+            image=None,
+            memory=None,
+            wait=wait,
+            foreground=False,
+            extra=(),
+            seed=seed,
+        )
     if proj and proj.proxy:
         _up_proxy(c.port, proj)
 
@@ -310,8 +386,9 @@ def _up_proxy(port: int, proj) -> None:
         ui.success(f"Proxy already running at {state['endpoint_url']}")
         return
     state = px.start_detached(port, default_listen(port), proj.faults, bodies=proj.proxy_bodies)
-    ui.success(f"Proxy started at {state['endpoint_url']}"
-               + (f" with faults: {', '.join(proj.faults)}" if proj.faults else ""))
+    ui.success(
+        f"Proxy started at {state['endpoint_url']}" + (f" with faults: {', '.join(proj.faults)}" if proj.faults else "")
+    )
 
 
 @cli.command()
@@ -340,7 +417,8 @@ def init(ctx: click.Context, seed_rel: str | None, force: bool):
     if parent is not None and parent.get_parameter_source("port") == click.core.ParameterSource.DEFAULT:
         port = 9300 + sum(Path.cwd().name.encode()) % 100
     else:
-        port = ctx.find_object(Ctx).port
+        found = ctx.find_object(Ctx)
+        port = found.port if found else default_port()
     if seed_rel is None:
         for candidate in ("tests/seed.yaml", "seed.yaml", "awsemu-seed.yaml"):
             if (Path.cwd() / candidate).is_file():
@@ -365,8 +443,7 @@ def _all_ports() -> list[int]:
 @handle_errors
 def status(c: Ctx, all_: bool, as_json: bool):
     """Show whether the emulator is running and healthy."""
-    ports = sorted(set(known_ports()) | {c.port}
-                   | {p for _, p in runtime.list_cli_containers()}) if all_ else [c.port]
+    ports = sorted(set(known_ports()) | {c.port} | {p for _, p in runtime.list_cli_containers()}) if all_ else [c.port]
     infos = [runtime.instance_info(p) for p in ports]
     if as_json:
         ui.print_json(infos if all_ else infos[0])
@@ -377,8 +454,17 @@ def status(c: Ctx, all_: bool, as_json: bool):
     for i in infos:
         ident = i["pid"] or i["container"] or ""
         auth = "" if i["auth"] is None else ("on" if i["auth"] else "off")
-        rows.append([i["port"], ui.styled(i["status"], i["status"]), i["mode"], ident,
-                     ui.human_duration(i["uptime_seconds"]), auth, i["endpoint"]])
+        rows.append(
+            [
+                i["port"],
+                ui.styled(i["status"], i["status"]),
+                i["mode"],
+                ident,
+                ui.human_duration(i["uptime_seconds"]),
+                auth,
+                i["endpoint"],
+            ]
+        )
     ui.table(["port", "status", "mode", "pid/container", "uptime", "auth", "endpoint"], rows)
     for i in infos:
         if i["status"] != "healthy" and i["detail"] and i["status"] != "stopped":
@@ -401,12 +487,19 @@ def logs_cmd(c: Ctx, follow: bool, lines: int, raw: bool, grep: str | None):
     if not path.exists():
         if state and state.mode == "docker":
             # Started by an older awsemu that didn't keep a log file.
-            cmd = ["docker", "logs", "--tail", str(lines), *(["-f"] if follow else []),
-                   state.container or runtime.container_name(c.port)]
+            cmd = [
+                "docker",
+                "logs",
+                "--tail",
+                str(lines),
+                *(["-f"] if follow else []),
+                state.container or runtime.container_name(c.port),
+            ]
             sys.exit(subprocess.call(cmd))
         raise runtime.RuntimeErrorWithHint(
             f"No log for port {c.port}: awsemu didn't start an emulator there.",
-            "Start it with 'awsemu start' (or check 'awsemu status --all').")
+            "Start it with 'awsemu start' (or check 'awsemu status --all').",
+        )
 
     def emit(line: str):
         if grep and grep.lower() not in line.lower():
@@ -447,18 +540,28 @@ def logs_cmd(c: Ctx, follow: bool, lines: int, raw: bool, grep: str | None):
 
 
 @cli.command()
-@click.option("--shell", "shell", type=click.Choice(envvars.SHELLS + ("sh", "pwsh")),
-              default=None, help="Syntax to print (default: detected from $SHELL).")
-@click.option("--sdk", "extras", multiple=True, type=click.Choice(envvars.EXTRAS),
-              help="Also trust the certificate for SDKs that ignore AWS_CA_BUNDLE. Repeatable.")
+@click.option(
+    "--shell",
+    "shell",
+    type=click.Choice(envvars.SHELLS + ("sh", "pwsh")),
+    default=None,
+    help="Syntax to print (default: detected from $SHELL).",
+)
+@click.option(
+    "--sdk",
+    "extras",
+    multiple=True,
+    type=click.Choice(envvars.EXTRAS),
+    help="Also trust the certificate for SDKs that ignore AWS_CA_BUNDLE. Repeatable.",
+)
 @click.option("--unset", is_flag=True, help="Print the commands that undo 'awsemu env'.")
-@click.option("--keep-real-creds", is_flag=True,
-              help="Don't unset AWS_ACCESS_KEY_ID & co. (requests will then fail auth).")
+@click.option(
+    "--keep-real-creds", is_flag=True, help="Don't unset AWS_ACCESS_KEY_ID & co. (requests will then fail auth)."
+)
 @proxy_option
 @pass_ctx
 @handle_errors
-def env(c: Ctx, shell: str | None, extras: tuple[str, ...], unset: bool, keep_real_creds: bool,
-        use_proxy: bool | None):
+def env(c: Ctx, shell: str | None, extras: tuple[str, ...], unset: bool, keep_real_creds: bool, use_proxy: bool | None):
     """Print shell commands that point the AWS CLI and SDKs at the emulator.
 
     \b
@@ -479,16 +582,19 @@ def env(c: Ctx, shell: str | None, extras: tuple[str, ...], unset: bool, keep_re
         click.echo(envvars.render_unset(dict.fromkeys(names), shell), nl=False)
         return
     if not InstanceFiles(c.port).exists():
-        click.echo(f"# warning: no emulator is running on port {c.port} yet "
-                   "(start one with 'awsemu start')", err=True)
+        click.echo(f"# warning: no emulator is running on port {c.port} yet (start one with 'awsemu start')", err=True)
     click.echo(envvars.render(variables, shell, unset_real=not keep_real_creds), nl=False)
 
 
-@cli.command(name="exec", context_settings={"ignore_unknown_options": True,
-                                             "allow_interspersed_args": False})
+@cli.command(name="exec", context_settings={"ignore_unknown_options": True, "allow_interspersed_args": False})
 @click.argument("command", nargs=-1, required=True, type=click.UNPROCESSED)
-@click.option("--sdk", "extras", multiple=True, type=click.Choice(envvars.EXTRAS),
-              help="Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable.")
+@click.option(
+    "--sdk",
+    "extras",
+    multiple=True,
+    type=click.Choice(envvars.EXTRAS),
+    help="Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable.",
+)
 @proxy_option
 @pass_ctx
 @handle_errors
@@ -506,14 +612,19 @@ def exec_cmd(c: Ctx, command: tuple[str, ...], extras, use_proxy: bool | None):
     child.update(_proxy_env(c.port, use_proxy, _sdk(extras)))
     try:
         code = subprocess.call(list(command), env=child)
-    except FileNotFoundError:
-        raise runtime.RuntimeErrorWithHint(f"Command not found: {command[0]}")
+    except FileNotFoundError as exc:
+        raise runtime.RuntimeErrorWithHint(f"Command not found: {command[0]}") from exc
     sys.exit(code)
 
 
 @cli.command()
-@click.option("--sdk", "extras", multiple=True, type=click.Choice(envvars.EXTRAS),
-              help="Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable.")
+@click.option(
+    "--sdk",
+    "extras",
+    multiple=True,
+    type=click.Choice(envvars.EXTRAS),
+    help="Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable.",
+)
 @proxy_option
 @pass_ctx
 @handle_errors
@@ -530,16 +641,19 @@ def shell(c: Ctx, extras, use_proxy: bool | None):
     child["AWSEMU_ACTIVE"] = str(c.port)
     if os.path.basename(program[0]) == "bash":
         child["PS1"] = f"(awsemu:{c.port}) " + os.environ.get("PS1", r"\u@\h:\w\$ ")
-    ui.info(f"Sub-shell pointed at {through.get('AWS_ENDPOINT_URL', f'https://127.0.0.1:{c.port}')}"
-            f"{' (the proxy)' if through else ''}. Type 'exit' to leave.")
+    ui.info(
+        f"Sub-shell pointed at {through.get('AWS_ENDPOINT_URL', f'https://127.0.0.1:{c.port}')}"
+        f"{' (the proxy)' if through else ''}. Type 'exit' to leave."
+    )
     code = subprocess.call(program, env=child)
     ui.echo("Left the awsemu shell.", "muted")
     sys.exit(code)
 
 
-@cli.command(name="aws", context_settings={"ignore_unknown_options": True,
-                                           "allow_interspersed_args": False,
-                                           "help_option_names": []})
+@cli.command(
+    name="aws",
+    context_settings={"ignore_unknown_options": True, "allow_interspersed_args": False, "help_option_names": []},
+)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 @pass_ctx
 @handle_errors
@@ -551,7 +665,8 @@ def aws_cmd(c: Ctx, args: tuple[str, ...]):
     if not shutil.which("aws"):
         raise runtime.RuntimeErrorWithHint(
             "The AWS CLI ('aws') is not installed.",
-            "Install AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html")
+            "Install AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html",
+        )
     _require_healthy(c.port)
     child = envvars.child_env(c.port)
     child.update(_proxy_env(c.port, None, []))
@@ -570,8 +685,9 @@ def _proxy_env(port: int, use_proxy: bool | None, extras) -> dict[str, str]:
         if not (proj and proj.proxy and state):
             return {}
     if not state:
-        raise runtime.RuntimeErrorWithHint(f"no proxy is running in front of port {port}",
-                                           "Start one with: awsemu proxy start -d")
+        raise runtime.RuntimeErrorWithHint(
+            f"no proxy is running in front of port {port}", "Start one with: awsemu proxy start -d"
+        )
     env = px.client_env(state)
     if state.get("ca") and "node" in extras:
         env["NODE_EXTRA_CA_CERTS"] = state["ca"]
@@ -583,9 +699,11 @@ def _proxy_env(port: int, use_proxy: bool | None, extras) -> dict[str, str]:
         if password:
             env["JAVA_TOOL_OPTIONS"] = envvars.java_tool_options(current, store, password)
         else:
-            ui.warn("Java ignores AWS_CA_BUNDLE, and without keytool awsemu can't add the proxy's certificate "
-                    f"to a truststore: import it yourself (keytool -importcert -file {state['ca']}) "
-                    "or start the proxy with --no-tls")
+            ui.warn(
+                "Java ignores AWS_CA_BUNDLE, and without keytool awsemu can't add the proxy's certificate "
+                f"to a truststore: import it yourself (keytool -importcert -file {state['ca']}) "
+                "or start the proxy with --no-tls"
+            )
     return env
 
 
@@ -602,8 +720,8 @@ def _require_healthy(port: int) -> None:
     if not h.healthy:
         flag = "" if port == default_port() else f" --port {port}"
         raise runtime.RuntimeErrorWithHint(
-            f"No healthy emulator on port {port} ({h.detail}).",
-            f"Start one with 'awsemu{flag} start'.")
+            f"No healthy emulator on port {port} ({h.detail}).", f"Start one with 'awsemu{flag} start'."
+        )
 
 
 @cli.command()
@@ -615,8 +733,7 @@ def whoami(c: Ctx):
 
     ident = client("sts", c.port).get_caller_identity()
     ok = ident.get("Account") == ACCOUNT_ID
-    ui.kv([("account", ident.get("Account")), ("arn", ident.get("Arn")),
-           ("user id", ident.get("UserId"))])
+    ui.kv([("account", ident.get("Account")), ("arn", ident.get("Arn")), ("user id", ident.get("UserId"))])
     if ok:
         ui.success("Talking to AWS Emulator.")
     else:
@@ -648,8 +765,7 @@ def doctor(c: Ctx, as_json: bool):
         else:
             result = "fail"
             problems += 1
-        checks.append({"check": name, "result": result, "detail": detail,
-                       "fix": fix if result != "ok" else None})
+        checks.append({"check": name, "result": result, "detail": detail, "fix": fix if result != "ok" else None})
         mark = ui.styled(result, {"ok": "ok", "warn": "warn", "fail": "error"}[result])
         sep = "\n→ " if ui.rich_enabled() else "  → "
         rows.append([name, mark, detail + (f"{sep}{fix}" if fix and ok is not True else "")])
@@ -665,30 +781,47 @@ def doctor(c: Ctx, as_json: bool):
         shown = " ".join(binary)
         add("aws-emulator", True, f"{shown}  {out.splitlines()[0] if out else ''}".strip())
     else:
-        add("aws-emulator", None, "binary not on PATH",
-            "Linux: awsemu install (or the .rpm/.deb package); macOS/Windows: use Docker")
+        add(
+            "aws-emulator",
+            None,
+            "binary not on PATH",
+            "Linux: awsemu install (or the .rpm/.deb package); macOS/Windows: use Docker",
+        )
 
     pinned = proj.emulator_version if proj else None
     if pinned and binary:
         mismatch = pin_mismatch()
-        add("emulator version", None if mismatch else True,
+        add(
+            "emulator version",
+            None if mismatch else True,
             f"project pins {pinned}, installed {mismatch[1]}" if mismatch else f"{pinned}, as pinned",
-            f"awsemu install {pinned}")
+            f"awsemu install {pinned}",
+        )
 
     if runtime.docker_available():
-        image_name = proj.image if proj and proj.image else (
-            f"{runtime.DEFAULT_IMAGE}:{pinned}" if pinned else runtime.DEFAULT_IMAGE)
+        image_name = (
+            proj.image
+            if proj and proj.image
+            else (f"{runtime.DEFAULT_IMAGE}:{pinned}" if pinned else runtime.DEFAULT_IMAGE)
+        )
         has_image = runtime.docker_image_exists(image_name)
         add("docker", True, "found")
-        add("docker image", has_image or None,
+        add(
+            "docker image",
+            has_image or None,
             f"'{image_name}' {'found' if has_image else 'not built'}",
-            f"awsemu install --docker{f' {pinned}' if pinned else ''}")
+            f"awsemu install --docker{f' {pinned}' if pinned else ''}",
+        )
     else:
         add("docker", None, "not found", "only needed if you don't use the native binary")
 
     if not binary and not runtime.docker_available():
-        add("emulator runtime", False, "neither the aws-emulator binary nor Docker is available",
-            "install the Linux package, set AWSEMU_BINARY, or install Docker")
+        add(
+            "emulator runtime",
+            False,
+            "neither the aws-emulator binary nor Docker is available",
+            "install the Linux package, set AWSEMU_BINARY, or install Docker",
+        )
 
     aws = shutil.which("aws")
     if aws:
@@ -698,23 +831,30 @@ def doctor(c: Ctx, as_json: bool):
         add("aws cli", None, "not found", "optional; needed for 'awsemu aws ...'")
 
     try:
-        import boto3  # noqa: F401
+        import boto3
 
         add("boto3", True, getattr(boto3, "__version__", "installed"))
     except ImportError:
         add("boto3", False, "not installed", "pip install boto3")
 
-    add("rich", ui.HAVE_RICH or None, "installed" if ui.HAVE_RICH else "not installed (plain output)",
-        "pip install rich")
+    add(
+        "rich",
+        ui.HAVE_RICH or None,
+        "installed" if ui.HAVE_RICH else "not installed (plain output)",
+        "pip install rich",
+    )
 
     h = health.check(c.port)
-    add(f"emulator :{c.port}", h.healthy or None, h.detail,
-        None if h.healthy else f"awsemu --port {c.port} start")
+    add(f"emulator :{c.port}", h.healthy or None, h.detail, None if h.healthy else f"awsemu --port {c.port} start")
 
     real = [v for v in envvars.REAL_CREDENTIAL_VARS if os.environ.get(v)]
     if real:
-        add("shell creds", None, f"{', '.join(real)} set in this shell",
-            "awsemu env/exec/aws unset them for you; your own scripts must too")
+        add(
+            "shell creds",
+            None,
+            f"{', '.join(real)} set in this shell",
+            "awsemu env/exec/aws unset them for you; your own scripts must too",
+        )
 
     endpoint = os.environ.get("AWS_ENDPOINT_URL")
     if endpoint and not any(h in endpoint for h in ("127.0.0.1", "localhost", "[::1]")):
@@ -727,8 +867,11 @@ def doctor(c: Ctx, as_json: bool):
 
     tele = settings.telemetry_enabled()
     env_tele = os.environ.get("EMULATOR_TELEMETRY")
-    detail = f"EMULATOR_TELEMETRY={env_tele}" if env_tele else (
-        "default (on)" if tele is None else ("on" if tele else "off") + f" in {emulator_settings_file()}")
+    detail = (
+        f"EMULATOR_TELEMETRY={env_tele}"
+        if env_tele
+        else ("default (on)" if tele is None else ("on" if tele else "off") + f" in {emulator_settings_file()}")
+    )
     add("telemetry", True, detail)
 
     if as_json:
@@ -758,10 +901,18 @@ def image():
 
 @image.command(name="build")
 @click.option("--tag", default=runtime.DEFAULT_IMAGE, show_default=True, help="Image name to build.")
-@click.option("--arch", type=click.Choice(["x86_64", "aarch64"]), default=None,
-              help="Package architecture (default: this machine's).")
-@click.option("--version", "version", metavar="VERSION",
-              help="Emulator version to put in the image (default: latest). See 'awsemu install --docker'.")
+@click.option(
+    "--arch",
+    type=click.Choice(["x86_64", "aarch64"]),
+    default=None,
+    help="Package architecture (default: this machine's).",
+)
+@click.option(
+    "--version",
+    "version",
+    metavar="VERSION",
+    help="Emulator version to put in the image (default: latest). See 'awsemu install --docker'.",
+)
 @handle_errors
 def image_build(tag: str, arch: str | None, version: str | None):
     """Build the image from the official Dockerfile recipe."""
@@ -779,8 +930,12 @@ def image_build(tag: str, arch: str | None, version: str | None):
 
 
 @image.command(name="dockerfile")
-@click.option("--arch", type=click.Choice(["x86_64", "aarch64"]), default=None,
-              help="Package architecture (default: this machine's).")
+@click.option(
+    "--arch",
+    type=click.Choice(["x86_64", "aarch64"]),
+    default=None,
+    help="Package architecture (default: this machine's).",
+)
 @click.option("--version", "version", metavar="VERSION", help="Emulator version (default: latest).")
 @handle_errors
 def image_dockerfile(arch: str | None, version: str | None):
@@ -812,12 +967,25 @@ def config_show():
     if proj is None:
         ui.echo("No project settings (awsemu.toml) here or above. Create one with 'awsemu init'.", "muted")
         return
-    ui.kv([(k, v) for k, v in (
-        ("project file", proj.path), ("port", proj.port), ("mode", proj.mode), ("auth", proj.auth),
-        ("telemetry", proj.telemetry), ("idle_timeout", proj.idle_timeout), ("seed", proj.seed),
-        ("sdk", ", ".join(proj.sdk) or None), ("image", proj.image), ("memory", proj.memory),
-        ("emulator_version", proj.emulator_version),
-    ) if v is not None])
+    ui.kv(
+        [
+            (k, v)
+            for k, v in (
+                ("project file", proj.path),
+                ("port", proj.port),
+                ("mode", proj.mode),
+                ("auth", proj.auth),
+                ("telemetry", proj.telemetry),
+                ("idle_timeout", proj.idle_timeout),
+                ("seed", proj.seed),
+                ("sdk", ", ".join(proj.sdk) or None),
+                ("image", proj.image),
+                ("memory", proj.memory),
+                ("emulator_version", proj.emulator_version),
+            )
+            if v is not None
+        ]
+    )
 
 
 @config.command(name="telemetry")
@@ -909,7 +1077,8 @@ def ui_cmd(c: Ctx):
     except ImportError as exc:
         raise runtime.RuntimeErrorWithHint(
             "The terminal UI needs Textual, which isn't installed.",
-            f"{_meta.install_hint('ui')}  (or: pip install textual)") from exc
+            f"{_meta.install_hint('ui')}  (or: pip install textual)",
+        ) from exc
     _require_healthy(c.port)
     tui.run(c.port)
 
@@ -941,4 +1110,3 @@ def main() -> None:
 
 if __name__ == "__main__":  # pragma: no cover
     main()
-

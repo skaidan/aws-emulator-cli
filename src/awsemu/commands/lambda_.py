@@ -25,8 +25,7 @@ from ..paths import cli_root
 from ._common import ensure_service_role, is_error, parse_kv
 
 DEFAULT_ROLE_NAME = "awsemu-lambda-role"
-SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules/.cache", ".pytest_cache",
-             ".mypy_cache"}
+SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules/.cache", ".pytest_cache", ".mypy_cache"}
 SKIP_SUFFIXES = (".pyc", ".pyo")
 
 # Guess the runtime from the handler file when --runtime isn't given.
@@ -91,8 +90,9 @@ def _pip() -> list[str]:
         return [sys.executable, "-m", "pip"]
     found = shutil.which("pip3") or shutil.which("pip")
     if not found:
-        raise click.ClickException("requirements.txt needs pip, and there's none "
-                                   "(install it, or pass --no-deps and package them yourself)")
+        raise click.ClickException(
+            "requirements.txt needs pip, and there's none (install it, or pass --no-deps and package them yourself)"
+        )
     return [found]
 
 
@@ -113,9 +113,21 @@ def python_dependencies(source: Path, runtime: str | None) -> Path | None:
     shutil.rmtree(partial, ignore_errors=True)
     partial.mkdir(parents=True)
     ui.info(f"installing {req.name} for the function…")
-    done = subprocess.run([*_pip(), "install", "--quiet", "--disable-pip-version-check",
-                           "--no-compile", "-r", str(req), "-t", str(partial)],
-                          capture_output=True, text=True)
+    done = subprocess.run(
+        [
+            *_pip(),
+            "install",
+            "--quiet",
+            "--disable-pip-version-check",
+            "--no-compile",
+            "-r",
+            str(req),
+            "-t",
+            str(partial),
+        ],
+        capture_output=True,
+        text=True,
+    )
     if done.returncode != 0:
         shutil.rmtree(partial, ignore_errors=True)
         tail = "\n".join((done.stderr or done.stdout).strip().splitlines()[-5:])
@@ -149,10 +161,13 @@ def guess_handler_and_runtime(source: Path) -> tuple[str | None, str | None]:
     if source.is_file() and source.suffix != ".zip":
         candidates = [source]
     elif source.is_dir():
-        preferred = [source / n for n in ("lambda_function.py", "app.py", "handler.py",
-                                          "main.py", "index.mjs", "index.js", "app.js")]
-        others = sorted(p for p in source.iterdir()
-                        if p.is_file() and p.suffix in RUNTIME_BY_SUFFIX and p not in preferred)
+        preferred = [
+            source / n
+            for n in ("lambda_function.py", "app.py", "handler.py", "main.py", "index.mjs", "index.js", "app.js")
+        ]
+        others = sorted(
+            p for p in source.iterdir() if p.is_file() and p.suffix in RUNTIME_BY_SUFFIX and p not in preferred
+        )
         candidates = preferred + others
     else:
         return None, None
@@ -161,11 +176,15 @@ def guess_handler_and_runtime(source: Path) -> tuple[str | None, str | None]:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for fn in ("lambda_handler", "handler", "main"):
-            if (path.suffix == ".py" and f"def {fn}(" in text) or \
-                    (path.suffix in (".js", ".mjs") and (f"exports.{fn}" in text or
-                                                         f"export const {fn}" in text or
-                                                         f"export async function {fn}" in text or
-                                                         f"export function {fn}" in text)):
+            if (path.suffix == ".py" and f"def {fn}(" in text) or (
+                path.suffix in (".js", ".mjs")
+                and (
+                    f"exports.{fn}" in text
+                    or f"export const {fn}" in text
+                    or f"export async function {fn}" in text
+                    or f"export function {fn}" in text
+                )
+            ):
                 return f"{path.stem}.{fn}", RUNTIME_BY_SUFFIX.get(path.suffix)
     return None, None
 
@@ -175,8 +194,7 @@ def parse_env(pairs) -> dict[str, str]:
 
 
 def ensure_role(iam) -> str:
-    return ensure_service_role(iam, DEFAULT_ROLE_NAME, "lambda.amazonaws.com",
-                               "Created by awsemu for Lambda functions")
+    return ensure_service_role(iam, DEFAULT_ROLE_NAME, "lambda.amazonaws.com", "Created by awsemu for Lambda functions")
 
 
 def _wait(lam, waiter_name: str, name: str) -> None:
@@ -219,11 +237,22 @@ def ls(c: Ctx, as_json: bool):
     if as_json:
         ui.print_json(functions)
         return
-    rows = [[f["FunctionName"], f.get("Runtime", f.get("PackageType", "")), f.get("Handler", ""),
-             f.get("MemorySize", ""), f.get("Timeout", ""), (f.get("LastModified") or "")[:19]]
-            for f in functions]
-    ui.table(["function", "runtime", "handler", "MB", "timeout", "modified"], rows,
-             empty="No functions. Try 'awsemu lambda deploy NAME ./src'.")
+    rows = [
+        [
+            f["FunctionName"],
+            f.get("Runtime", f.get("PackageType", "")),
+            f.get("Handler", ""),
+            f.get("MemorySize", ""),
+            f.get("Timeout", ""),
+            (f.get("LastModified") or "")[:19],
+        ]
+        for f in functions
+    ]
+    ui.table(
+        ["function", "runtime", "handler", "MB", "timeout", "modified"],
+        rows,
+        empty="No functions. Try 'awsemu lambda deploy NAME ./src'.",
+    )
 
 
 @lambda_.command(name="deploy")
@@ -232,19 +261,22 @@ def ls(c: Ctx, as_json: bool):
 @click.option("--handler", help="e.g. app.handler (guessed from the code if omitted).")
 @click.option("--runtime", help="e.g. python3.12, nodejs20.x (guessed if omitted).")
 @click.option("--role", metavar="ARN", help=f"Execution role (default: creates '{DEFAULT_ROLE_NAME}').")
-@click.option("-e", "--env", "env_pairs", multiple=True, metavar="KEY=VALUE",
-              help="Environment variable. Repeatable.")
+@click.option("-e", "--env", "env_pairs", multiple=True, metavar="KEY=VALUE", help="Environment variable. Repeatable.")
 @click.option("--timeout", type=click.IntRange(1, 900), help="Seconds.")
 @click.option("--memory", type=click.IntRange(128, 10240), help="MB.")
-@click.option("--deps/--no-deps", default=True, show_default=True,
-              help="Install a folder's requirements.txt into the package (Python).")
+@click.option(
+    "--deps/--no-deps",
+    default=True,
+    show_default=True,
+    help="Install a folder's requirements.txt into the package (Python).",
+)
 @click.option("-w", "--watch", is_flag=True, help="Keep running and redeploy when a file changes.")
-@click.option("--invoke", "invoke_payload", metavar="JSON",
-              help="Invoke the function with this payload after each deploy.")
+@click.option(
+    "--invoke", "invoke_payload", metavar="JSON", help="Invoke the function with this payload after each deploy."
+)
 @pass_ctx
 @handle_errors
-def deploy(c: Ctx, name, source, handler, runtime, role, env_pairs, timeout, memory, deps, watch,
-           invoke_payload):
+def deploy(c: Ctx, name, source, handler, runtime, role, env_pairs, timeout, memory, deps, watch, invoke_payload):
     """Create or update a function from a folder, a single file or a .zip.
 
     With only a path, the function is named after it (./orders -> orders).
@@ -392,8 +424,9 @@ def _watch(lam, name, source, runtime, deps, invoke_payload, code, *, max_rounds
 @click.argument("payload", required=False)
 @click.option("--file", "file_", type=click.File("r"), help="Payload from a file ('-' = stdin).")
 @click.option("--async", "is_async", is_flag=True, help="Event invocation (don't wait for the result).")
-@click.option("--logs/--no-logs", "show_logs", default=True, show_default=True,
-              help="Show the log tail returned by Lambda.")
+@click.option(
+    "--logs/--no-logs", "show_logs", default=True, show_default=True, help="Show the log tail returned by Lambda."
+)
 @click.option("--raw", is_flag=True, help="Print only the response payload.")
 @pass_ctx
 @handle_errors
@@ -438,15 +471,19 @@ def invoke(c: Ctx, name: str, payload: str | None, file_, is_async: bool, show_l
     if error:
         ui.error(f"function error ({error}) after {elapsed:.2f}s")
         raise SystemExit(exitcodes.FAILED)
-    ui.echo(f"HTTP {resp.get('StatusCode')} in {elapsed:.2f}s"
-            + (f", version {resp['ExecutedVersion']}" if resp.get("ExecutedVersion") else ""), "muted")
+    ui.echo(
+        f"HTTP {resp.get('StatusCode')} in {elapsed:.2f}s"
+        + (f", version {resp['ExecutedVersion']}" if resp.get("ExecutedVersion") else ""),
+        "muted",
+    )
 
 
 @lambda_.command(name="logs")
 @click.argument("name", shell_complete=complete("function"))
 @click.option("-f", "--follow", is_flag=True, help="Keep printing new log events.")
-@click.option("--since", type=int, default=60, show_default=True, metavar="MINUTES",
-              help="Start this many minutes ago.")
+@click.option(
+    "--since", type=int, default=60, show_default=True, metavar="MINUTES", help="Start this many minutes ago."
+)
 @pass_ctx
 @handle_errors
 def logs_cmd(c: Ctx, name: str, follow: bool, since: int):
@@ -476,9 +513,12 @@ def logs_cmd(c: Ctx, name: str, follow: bool, since: int):
                     raise
                 if not follow:
                     ui.warn(f"No log group {group}.")
-                    ui.echo("AWS Emulator doesn't send Lambda output to CloudWatch Logs. "
-                            f"'awsemu lambda invoke {name}' shows the log of each invocation.",
-                            "muted", err=True)
+                    ui.echo(
+                        "AWS Emulator doesn't send Lambda output to CloudWatch Logs. "
+                        f"'awsemu lambda invoke {name}' shows the log of each invocation.",
+                        "muted",
+                        err=True,
+                    )
                     return
             if not follow:
                 return
@@ -495,12 +535,21 @@ def info(c: Ctx, name: str):
     """Show a function's configuration."""
     cfg = client("lambda", c.port).get_function(FunctionName=name)["Configuration"]
     env = cfg.get("Environment", {}).get("Variables", {})
-    ui.kv([("arn", cfg.get("FunctionArn")), ("runtime", cfg.get("Runtime")),
-           ("handler", cfg.get("Handler")), ("role", cfg.get("Role")),
-           ("memory", f"{cfg.get('MemorySize')} MB"), ("timeout", f"{cfg.get('Timeout')} s"),
-           ("state", cfg.get("State")), ("code size", ui.human_size(cfg.get("CodeSize"))),
-           ("modified", cfg.get("LastModified")),
-           ("env", ", ".join(f"{k}={v}" for k, v in env.items()))], title=name)
+    ui.kv(
+        [
+            ("arn", cfg.get("FunctionArn")),
+            ("runtime", cfg.get("Runtime")),
+            ("handler", cfg.get("Handler")),
+            ("role", cfg.get("Role")),
+            ("memory", f"{cfg.get('MemorySize')} MB"),
+            ("timeout", f"{cfg.get('Timeout')} s"),
+            ("state", cfg.get("State")),
+            ("code size", ui.human_size(cfg.get("CodeSize"))),
+            ("modified", cfg.get("LastModified")),
+            ("env", ", ".join(f"{k}={v}" for k, v in env.items())),
+        ],
+        title=name,
+    )
 
 
 @lambda_.command(name="rm")

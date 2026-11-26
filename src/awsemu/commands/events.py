@@ -65,22 +65,34 @@ def rules(c: Ctx, bus: str, as_json: bool):
         what = r.get("ScheduleExpression") or r.get("EventPattern", "")
         targets = ", ".join(t["Arn"].split(":", 5)[-1] for t in r["Targets"])
         rows.append([r["Name"], r.get("State", ""), what if len(what) <= 60 else what[:57] + "…", targets])
-    ui.table(["rule", "state", "pattern / schedule", "targets"], rows,
-             title=f"bus: {bus}", empty="No rules. Try 'awsemu events rule NAME --pattern ... --to-sqs QUEUE'.")
+    ui.table(
+        ["rule", "state", "pattern / schedule", "targets"],
+        rows,
+        title=f"bus: {bus}",
+        empty="No rules. Try 'awsemu events rule NAME --pattern ... --to-sqs QUEUE'.",
+    )
 
 
 @events.command(name="rule")
 @click.argument("name", shell_complete=complete("rule"))
 @click.option("--pattern", metavar="JSON", help='Event pattern, e.g. \'{"source": ["app.orders"]}\'.')
-@click.option("--source", "sources", multiple=True,
-              help="Shortcut for a pattern matching these sources. Repeatable.")
+@click.option("--source", "sources", multiple=True, help="Shortcut for a pattern matching these sources. Repeatable.")
 @click.option("--schedule", metavar="EXPR", help="e.g. 'rate(5 minutes)' (instead of a pattern).")
-@click.option("--to-sqs", "queue", metavar="QUEUE", help="Send matches to this queue (sets its policy).",
-              shell_complete=complete("queue"))
-@click.option("--to-lambda", "function", metavar="FUNCTION", help="Invoke this function (adds permission).",
-              shell_complete=complete("function"))
-@click.option("--to-sns", "topic", metavar="TOPIC", help="Publish to this SNS topic.",
-              shell_complete=complete("topic"))
+@click.option(
+    "--to-sqs",
+    "queue",
+    metavar="QUEUE",
+    help="Send matches to this queue (sets its policy).",
+    shell_complete=complete("queue"),
+)
+@click.option(
+    "--to-lambda",
+    "function",
+    metavar="FUNCTION",
+    help="Invoke this function (adds permission).",
+    shell_complete=complete("function"),
+)
+@click.option("--to-sns", "topic", metavar="TOPIC", help="Publish to this SNS topic.", shell_complete=complete("topic"))
 @bus_option
 @pass_ctx
 @handle_errors
@@ -135,8 +147,9 @@ def rule(c: Ctx, name: str, pattern, sources, schedule, queue, function, topic, 
 def put(c: Ctx, source: str, detail_type: str, detail: str, bus: str):
     """Send an event: 'awsemu events put app.orders OrderCreated '{"id": 42}''."""
     load_json_arg(detail, "DETAIL")
-    resp = client("events", c.port).put_events(Entries=[{
-        "Source": source, "DetailType": detail_type, "Detail": detail, "EventBusName": bus}])
+    resp = client("events", c.port).put_events(
+        Entries=[{"Source": source, "DetailType": detail_type, "Detail": detail, "EventBusName": bus}]
+    )
     if resp.get("FailedEntryCount"):
         entry = resp["Entries"][0]
         raise click.ClickException(f"event rejected: {entry.get('ErrorCode')}: {entry.get('ErrorMessage')}")

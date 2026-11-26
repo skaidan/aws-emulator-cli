@@ -45,10 +45,16 @@ def ls(c: Ctx, as_json: bool):
     if as_json:
         ui.print_json(summaries)
         return
-    rows = [[s.get("StreamName", ""), s.get("StreamStatus", ""), s.get("OpenShardCount", ""),
-             s.get("RetentionPeriodHours", "")] for s in summaries]
-    ui.table(["stream", "status", "shards", "retention h"], rows,
-             empty="No streams. Try 'awsemu kinesis create NAME'.")
+    rows = [
+        [
+            s.get("StreamName", ""),
+            s.get("StreamStatus", ""),
+            s.get("OpenShardCount", ""),
+            s.get("RetentionPeriodHours", ""),
+        ]
+        for s in summaries
+    ]
+    ui.table(["stream", "status", "shards", "retention h"], rows, empty="No streams. Try 'awsemu kinesis create NAME'.")
 
 
 @kinesis.command(name="create")
@@ -79,15 +85,20 @@ def put(c: Ctx, stream: str, data: str | None, file_, key: str | None):
         payload = file_.read()
     else:
         payload = data.encode("utf-8")
-    resp = client("kinesis", c.port).put_record(StreamName=stream, Data=payload,
-                                                PartitionKey=key or uuid.uuid4().hex)
+    resp = client("kinesis", c.port).put_record(StreamName=stream, Data=payload, PartitionKey=key or uuid.uuid4().hex)
     ui.success(f"{resp['ShardId']} seq {resp['SequenceNumber']}")
 
 
 @kinesis.command(name="read")
 @click.argument("stream", shell_complete=complete("stream"))
-@click.option("--from", "start", type=click.Choice(["start", "latest"]), default="start",
-              show_default=True, help="Read from the oldest record or only new ones.")
+@click.option(
+    "--from",
+    "start",
+    type=click.Choice(["start", "latest"]),
+    default="start",
+    show_default=True,
+    help="Read from the oldest record or only new ones.",
+)
 @click.option("-n", "--limit", type=int, default=100, show_default=True, help="Max records (0 = no limit).")
 @click.option("-f", "--follow", is_flag=True, help="Keep polling for new records.")
 @json_option
@@ -100,17 +111,27 @@ def read(c: Ctx, stream: str, start: str, limit: int, follow: bool, as_json: boo
     for page in k.get_paginator("list_shards").paginate(StreamName=stream):
         shards += [s["ShardId"] for s in page.get("Shards", [])]
     iterator_type = "TRIM_HORIZON" if start == "start" else "LATEST"
-    iterators = {s: k.get_shard_iterator(StreamName=stream, ShardId=s,
-                                         ShardIteratorType=iterator_type)["ShardIterator"]
-                 for s in shards}
+    iterators = {
+        s: k.get_shard_iterator(StreamName=stream, ShardId=s, ShardIteratorType=iterator_type)["ShardIterator"]
+        for s in shards
+    }
     count = 0
-    empty_polls = {s: 0 for s in iterators}
+    empty_polls = dict.fromkeys(iterators, 0)
 
     def emit(shard: str, r: dict) -> None:
         if as_json:
-            click.echo(ui.to_json({"shard": shard, "sequence": r["SequenceNumber"],
-                                   "key": r["PartitionKey"], "data": decode(r["Data"]),
-                                   "arrived": r.get("ApproximateArrivalTimestamp")}, indent=None))
+            click.echo(
+                ui.to_json(
+                    {
+                        "shard": shard,
+                        "sequence": r["SequenceNumber"],
+                        "key": r["PartitionKey"],
+                        "data": decode(r["Data"]),
+                        "arrived": r.get("ApproximateArrivalTimestamp"),
+                    },
+                    indent=None,
+                )
+            )
         else:
             ui.echo(f"{r['PartitionKey'][:12]:<12}  {decode(r['Data'])}")
 

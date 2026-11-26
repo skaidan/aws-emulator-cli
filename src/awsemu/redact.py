@@ -24,15 +24,15 @@ import re
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 MASK = "***"
-SENSITIVE_HEADERS = {"authorization", "x-amz-security-token", "cookie", "set-cookie",
-                     "proxy-authorization"}
-SENSITIVE_QUERY = {"x-amz-signature", "x-amz-credential", "x-amz-security-token", "signature",
-                   "awsaccesskeyid"}
+SENSITIVE_HEADERS = {"authorization", "x-amz-security-token", "cookie", "set-cookie", "proxy-authorization"}
+SENSITIVE_QUERY = {"x-amz-signature", "x-amz-credential", "x-amz-security-token", "signature", "awsaccesskeyid"}
 SECRET_RE = re.compile(r"secret|passw(or)?d|token|credential|private_?key|access_?key", re.IGNORECASE)
 NOT_SECRET_RE = re.compile(
     r"(id|ids|arn|arns|name|names|type|types|policy|count|length|version|versionid|stage|stages|"
     r"rotation\w*|nexttoken|continuationtoken|paginationtoken|clienttoken|clientrequesttoken|"
-    r"idempotencytoken|starttoken|marker|duration\w*|expir\w*|tokentype)$", re.IGNORECASE)
+    r"idempotencytoken|starttoken|marker|duration\w*|expir\w*|tokentype)$",
+    re.IGNORECASE,
+)
 XML_TAG_RE = re.compile(r"<(?P<tag>[A-Za-z_][\w.\-]*)>(?P<value>[^<]*)</(?P=tag)>")
 
 
@@ -50,16 +50,20 @@ def url(path: str) -> str:
     parts = urlsplit(path)
     if not parts.query:
         return path
-    query = [(k, MASK if k.lower() in SENSITIVE_QUERY or sensitive_key(k) else v)
-             for k, v in parse_qsl(parts.query, keep_blank_values=True)]
+    query = [
+        (k, MASK if k.lower() in SENSITIVE_QUERY or sensitive_key(k) else v)
+        for k, v in parse_qsl(parts.query, keep_blank_values=True)
+    ]
     return urlunsplit(parts._replace(query=urlencode(query, quote_via=quote, safe="*")))
 
 
 def _json_value(value):
     if isinstance(value, dict):
         secure = value.get("Type") == "SecureString"  # SSM: the parameter's value is the secret
-        return {k: MASK if isinstance(k, str) and (sensitive_key(k) or (secure and k == "Value"))
-                else _json_value(v) for k, v in value.items()}
+        return {
+            k: MASK if isinstance(k, str) and (sensitive_key(k) or (secure and k == "Value")) else _json_value(v)
+            for k, v in value.items()
+        }
     if isinstance(value, list):
         return [_json_value(v) for v in value]
     return value
@@ -75,8 +79,7 @@ def text_body(text: str, content_type: str = "") -> str:
         except ValueError:
             pass
     if stripped.startswith("<"):
-        return XML_TAG_RE.sub(lambda m: f"<{m['tag']}>{MASK}</{m['tag']}>" if sensitive_key(m["tag"]) else m[0],
-                              text)
+        return XML_TAG_RE.sub(lambda m: f"<{m['tag']}>{MASK}</{m['tag']}>" if sensitive_key(m["tag"]) else m[0], text)
     if "x-www-form-urlencoded" in ct or ("=" in text and "&" in text and " " not in text):
         pairs = parse_qsl(text, keep_blank_values=True)
         if pairs:

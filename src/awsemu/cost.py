@@ -50,9 +50,21 @@ DDB_TX_WRITES = {"TransactWriteItems"}
 DDB_READS = {"GetItem", "Query", "Scan", "BatchGetItem"}
 DDB_TX_READS = {"TransactGetItems"}
 S3_FREE = {"DeleteObject", "DeleteObjects", "AbortMultipartUpload", "DeleteBucket"}
-S3_PUT_CLASS = {"PutObject", "CopyObject", "CompleteMultipartUpload", "CreateMultipartUpload", "UploadPart",
-                "UploadPartCopy", "ListObjects", "ListObjectsV2", "ListObjectVersions", "ListBuckets",
-                "ListMultipartUploads", "ListParts", "CreateBucket"}
+S3_PUT_CLASS = {
+    "PutObject",
+    "CopyObject",
+    "CompleteMultipartUpload",
+    "CreateMultipartUpload",
+    "UploadPart",
+    "UploadPartCopy",
+    "ListObjects",
+    "ListObjectsV2",
+    "ListObjectVersions",
+    "ListBuckets",
+    "ListMultipartUploads",
+    "ListParts",
+    "CreateBucket",
+}
 LAMBDA_MEMORY_GB = 0.125
 
 
@@ -86,13 +98,27 @@ class Estimate:
         return out
 
     def as_dict(self, runs: int = 1) -> dict:
-        return {"estimate": True, "region": REGION, "prices_as_of": PRICES_AS_OF, "calls": self.calls,
-                "runs": runs, "total_usd": round(self.total * runs, 6),
-                "lines": [{"service": x.service, "item": x.item, "units": x.units * runs,
-                           "usd_per_unit": x.price, "unit": x.unit_label, "usd": round(x.cost * runs, 6)}
-                          for x in self.lines],
-                "not_priced": self.unpriced,
-                "excludes": ["free tier", "storage", "data transfer", "provisioned capacity", "discounts"]}
+        return {
+            "estimate": True,
+            "region": REGION,
+            "prices_as_of": PRICES_AS_OF,
+            "calls": self.calls,
+            "runs": runs,
+            "total_usd": round(self.total * runs, 6),
+            "lines": [
+                {
+                    "service": x.service,
+                    "item": x.item,
+                    "units": x.units * runs,
+                    "usd_per_unit": x.price,
+                    "unit": x.unit_label,
+                    "usd": round(x.cost * runs, 6),
+                }
+                for x in self.lines
+            ],
+            "not_priced": self.unpriced,
+            "excludes": ["free tier", "storage", "data transfer", "provisioned capacity", "discounts"],
+        }
 
 
 def load_prices(path: Path | None) -> dict[str, tuple[float, str]]:

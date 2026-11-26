@@ -68,12 +68,15 @@ def test_env_sdk_extras():
         envvars.emulator_env(9297, ["cobol"])
 
 
-@pytest.mark.parametrize("shell,needle", [
-    ("bash", "export AWS_REGION=us-east-1"),
-    ("fish", "set -gx AWS_REGION 'us-east-1'"),
-    ("powershell", "$env:AWS_REGION = 'us-east-1'"),
-    ("dotenv", "AWS_REGION=us-east-1"),
-])
+@pytest.mark.parametrize(
+    "shell,needle",
+    [
+        ("bash", "export AWS_REGION=us-east-1"),
+        ("fish", "set -gx AWS_REGION 'us-east-1'"),
+        ("powershell", "$env:AWS_REGION = 'us-east-1'"),
+        ("dotenv", "AWS_REGION=us-east-1"),
+    ],
+)
 def test_render_shells(shell, needle):
     out = envvars.render({"AWS_REGION": "us-east-1"}, shell)
     assert needle in out
@@ -100,9 +103,15 @@ def test_child_env_drops_real_credentials():
 
 
 def test_parse_startup_line():
-    line = json.dumps({"timestamp": "2026-11-15T10:11:12.345678Z", "level": "INFO",
-                       "message": "emulator server information",
-                       "endpoint_url": "https://127.0.0.1:9297", "ca_file": "/x/ca.pem"})
+    line = json.dumps(
+        {
+            "timestamp": "2026-11-15T10:11:12.345678Z",
+            "level": "INFO",
+            "message": "emulator server information",
+            "endpoint_url": "https://127.0.0.1:9297",
+            "ca_file": "/x/ca.pem",
+        }
+    )
     entry = logs.parse(line)
     assert entry.is_startup
     assert entry.time == "10:11:12.345"
@@ -137,8 +146,7 @@ def test_settings_preserves_other_content(tmp_path):
     settings.set_value("telemetry", "enabled", False, path)
     text = path.read_text()
     assert "# my settings" in text and "[more]\ny = 2" in text
-    assert settings.load(path) == {"other": {"x": 1}, "telemetry": {"enabled": False},
-                                   "more": {"y": 2}}
+    assert settings.load(path) == {"other": {"x": 1}, "telemetry": {"enabled": False}, "more": {"y": 2}}
 
 
 def test_settings_adds_key_to_existing_section(tmp_path):
@@ -159,10 +167,19 @@ def test_settings_honours_emulator_config(tmp_path, monkeypatch):
 
 
 def test_native_command_flags():
-    opts = runtime.StartOptions(port=9300, auth=False, telemetry=False, idle_timeout=60,
-                                extra_args=["--foo"])
+    opts = runtime.StartOptions(port=9300, auth=False, telemetry=False, idle_timeout=60, extra_args=["--foo"])
     assert runtime.native_command(opts) == [
-        "aws-emulator", "-p", "9300", "-a", "off", "-t", "off", "--idle-timeout", "60", "--foo"]
+        "aws-emulator",
+        "-p",
+        "9300",
+        "-a",
+        "off",
+        "-t",
+        "off",
+        "--idle-timeout",
+        "60",
+        "--foo",
+    ]
 
 
 def test_docker_command_linux_matches_docs(isolated_home):
@@ -209,8 +226,15 @@ def test_split_uri():
 
 
 def test_dynamodb_roundtrip():
-    data = {"id": "u1", "age": 30, "score": Decimal("9.5"), "ok": True, "none": None,
-            "tags": ["a", 1], "nested": {"x": {"y": [False]}}}
+    data = {
+        "id": "u1",
+        "age": 30,
+        "score": Decimal("9.5"),
+        "ok": True,
+        "none": None,
+        "tags": ["a", 1],
+        "nested": {"x": {"y": [False]}},
+    }
     item = ddb.to_item(data)
     assert item["age"] == {"N": "30"}
     assert item["nested"]["M"]["x"]["M"]["y"]["L"][0] == {"BOOL": False}
@@ -236,14 +260,17 @@ class FakeClientError(Exception):
         self.response = {"Error": {"Code": code, "Message": message}}
 
 
-@pytest.mark.parametrize("exc,needle", [
-    (FakeClientError("AccessDenied", "Sign the request with the emulator credentials"), "awsemu env"),
-    (FakeClientError("SignatureDoesNotMatch"), "restart"),
-    (FakeClientError("InvalidClientTokenId"), "--no-auth"),
-    (FakeClientError("UnknownService"), "aws-emulator/issues"),
-    (FakeClientError("RequestTimeTooSkewed"), "clock"),
-    (Exception("SSL: CERTIFICATE_VERIFY_FAILED"), "ca.pem"),
-])
+@pytest.mark.parametrize(
+    "exc,needle",
+    [
+        (FakeClientError("AccessDenied", "Sign the request with the emulator credentials"), "awsemu env"),
+        (FakeClientError("SignatureDoesNotMatch"), "restart"),
+        (FakeClientError("InvalidClientTokenId"), "--no-auth"),
+        (FakeClientError("UnknownService"), "aws-emulator/issues"),
+        (FakeClientError("RequestTimeTooSkewed"), "clock"),
+        (Exception("SSL: CERTIFICATE_VERIFY_FAILED"), "ca.pem"),
+    ],
+)
 def test_error_hints(exc, needle):
     from awsemu.clients import hint_for
 
@@ -263,10 +290,14 @@ def test_split_binary():
 
 def test_parse_real_tracing_format():
     """The real emulator nests message and fields under "fields" (seen in CI)."""
-    line = json.dumps({"timestamp": "2026-11-15T12:57:03.273Z", "level": "INFO",
-                       "fields": {"message": "emulator server information",
-                                  "endpoint_url": "https://127.0.0.1:49275"},
-                       "target": "aws_emulator_router"})
+    line = json.dumps(
+        {
+            "timestamp": "2026-11-15T12:57:03.273Z",
+            "level": "INFO",
+            "fields": {"message": "emulator server information", "endpoint_url": "https://127.0.0.1:49275"},
+            "target": "aws_emulator_router",
+        }
+    )
     entry = logs.parse(line)
     assert entry.message == "emulator server information" and entry.is_startup
     assert "message" not in entry.extra and entry.extra["endpoint_url"].endswith(":49275")
@@ -333,13 +364,19 @@ def test_every_command_and_option_has_help():
         if not (cmd.help or cmd.short_help):
             missing.append(" ".join(path) or "awsemu")
         for p in cmd.params:
-            if isinstance(p, click.Option) and not p.help and not p.hidden and "--help" not in p.opts \
-                    and "--version" not in p.opts:
+            if (
+                isinstance(p, click.Option)
+                and not p.help
+                and not p.hidden
+                and "--help" not in p.opts
+                and "--version" not in p.opts
+            ):
                 missing.append(f"{' '.join(path)} {p.opts[-1]}")
         if isinstance(cmd, click.Group):
             ctx = click.Context(cmd)
             for n in cmd.list_commands(ctx):
                 walk(cmd.get_command(ctx, n), path + [n])
+
     walk(cli, [])
     assert missing == []
 
@@ -419,7 +456,8 @@ def test_trap_hidden_config(isolated_home, tmp_path):
     assert traps.hidden_config({}, home) == []
     (home / ".aws" / "config").write_text(
         "[default]\nregion = eu-west-1\nretry_mode = standard\nmax_attempts = 7\n"
-        "s3 =\n  addressing_style = virtual\n[profile prod]\nretry_mode = adaptive\n")
+        "s3 =\n  addressing_style = virtual\n[profile prod]\nretry_mode = adaptive\n"
+    )
     (finding,) = traps.hidden_config({}, home)
     assert "sets retry_mode, max_attempts, s3" in finding.detail
     assert "export AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=7" in finding.fix
@@ -443,11 +481,18 @@ def test_doctor_reports_traps(runner, monkeypatch):
 
 
 def test_java_tool_options_keeps_yours():
-    out = envvars.java_tool_options("-Xmx512m -Dhttps.proxyHost=corp -Djavax.net.ssl.trustStore=/etc/cacerts "
-                                    "-Djavax.net.ssl.trustStoreType=JKS", "/home/me/.aws/emulator/9297/truststore.p12")
-    assert out == ("-Xmx512m -Dhttps.proxyHost=corp -Djavax.net.ssl.trustStore=/home/me/.aws/emulator/9297/truststore.p12 "
-                   "-Djavax.net.ssl.trustStoreType=PKCS12")
-    assert envvars.java_tool_options("", "/t.p12") == "-Djavax.net.ssl.trustStore=/t.p12 -Djavax.net.ssl.trustStoreType=PKCS12"
+    out = envvars.java_tool_options(
+        "-Xmx512m -Dhttps.proxyHost=corp -Djavax.net.ssl.trustStore=/etc/cacerts -Djavax.net.ssl.trustStoreType=JKS",
+        "/home/me/.aws/emulator/9297/truststore.p12",
+    )
+    assert out == (
+        "-Xmx512m -Dhttps.proxyHost=corp -Djavax.net.ssl.trustStore=/home/me/.aws/emulator/9297/truststore.p12 "
+        "-Djavax.net.ssl.trustStoreType=PKCS12"
+    )
+    assert (
+        envvars.java_tool_options("", "/t.p12")
+        == "-Djavax.net.ssl.trustStore=/t.p12 -Djavax.net.ssl.trustStoreType=PKCS12"
+    )
 
 
 def test_java_tool_options_quotes_only_spaces():
@@ -472,8 +517,9 @@ def test_java_truststore_trusts_the_emulator_and_what_java_trusted(isolated_home
 
     store, password = javatrust.combined(9297)
     assert password == javatrust.PASSWORD and store.name == "truststore-9297.p12"
-    listing = subprocess.run([tool, "-list", "-keystore", str(store), "-storepass", password],
-                             capture_output=True, text=True).stdout
+    listing = subprocess.run(
+        [tool, "-list", "-keystore", str(store), "-storepass", password], capture_output=True, text=True
+    ).stdout
     assert "awsemu-emulator-9297" in listing
     assert int(listing.split("contains ")[1].split()[0]) > 10  # the JDK's certificates are still there
     built = store.stat().st_mtime_ns

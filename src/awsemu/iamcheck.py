@@ -63,14 +63,14 @@ def _terraform(text: str, rel: str, grants: Grants) -> None:
     for m in TF_ACTIONS_RE.finditer(text):
         # skip a Deny statement: look back to the start of its block
         block_start = text.rfind("statement", 0, m.start())
-        if block_start != -1 and TF_EFFECT_DENY_RE.search(text[block_start:m.start()]):
+        if block_start != -1 and TF_EFFECT_DENY_RE.search(text[block_start : m.start()]):
             continue
         for q in QUOTED_RE.finditer(m.group(1)):
             if ACTION_RE.match(q.group(1)):
                 grants.actions.append(Grant(q.group(1), rel, _line(text, m.start())))
     for m in TF_JSON_ACTION_RE.finditer(text):
-        before = text[max(0, m.start() - 300):m.start()]
-        if re.search(r"\"?Effect\"?\s*[:=]\s*\"Deny\"", before[before.rfind("{"):] if "{" in before else before):
+        before = text[max(0, m.start() - 300) : m.start()]
+        if re.search(r"\"?Effect\"?\s*[:=]\s*\"Deny\"", before[before.rfind("{") :] if "{" in before else before):
             continue
         for q in QUOTED_RE.finditer(m.group(1)):
             if ACTION_RE.match(q.group(1)):
@@ -98,7 +98,7 @@ def _template(text: str, rel: str, grants: Grants) -> None:
     if "AWS::" not in text and "Statement" not in text:
         return
     try:
-        data = json.loads(text) if text.lstrip().startswith("{") else yaml.load(text, Loader=_AnyTagLoader)  # noqa: S506
+        data = json.loads(text) if text.lstrip().startswith("{") else yaml.load(text, Loader=_AnyTagLoader)
     except (ValueError, yaml.YAMLError):
         return
     if not isinstance(data, dict):
@@ -167,9 +167,14 @@ class Comparison:
 
     def as_dict(self) -> dict:
         return {
-            "needed": [{"action": a, "used_in": w,
-                        "granted_by": [f"{g.pattern} ({g.file}:{g.line})" for g in self.grants.allows(a)]}
-                       for a, w in sorted(self.needed.items())],
+            "needed": [
+                {
+                    "action": a,
+                    "used_in": w,
+                    "granted_by": [f"{g.pattern} ({g.file}:{g.line})" for g in self.grants.allows(a)],
+                }
+                for a, w in sorted(self.needed.items())
+            ],
             "missing": self.missing,
             "unused_grants": [{"action": g.pattern, "file": g.file, "line": g.line} for g in self.unused],
             "not_expanded": [{"policy": p, "file": f} for p, f in self.grants.unexpanded],
@@ -200,7 +205,7 @@ class BotoIndex:
         if service not in self._ops:
             try:
                 names = self._session.get_service_model(service).operation_names
-            except Exception:  # noqa: BLE001
+            except Exception:
                 names = []
             self._ops[service] = {sc.key(n): n for n in names}
         return self._ops[service]

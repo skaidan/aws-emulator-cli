@@ -10,6 +10,7 @@ stale files it left in ``~/.aws/emulator/<port>/``.
 from __future__ import annotations
 
 import json
+import atexit
 import os
 import platform
 import shlex
@@ -86,7 +87,7 @@ class State:
         files.state.write_text(json.dumps(asdict(self), indent=2), encoding="utf-8")
 
     @classmethod
-    def load(cls, port: int) -> "State | None":
+    def load(cls, port: int) -> State | None:
         path = CliFiles(port).state
         if not path.exists():
             return None
@@ -165,14 +166,21 @@ def native_command(opts: StartOptions) -> list[str]:
     return [*prefix, *emulator_args(opts)]
 
 
-def docker_command(opts: StartOptions, detach: bool = True,
-                   system: str | None = None) -> list[str]:
+def docker_command(opts: StartOptions, detach: bool = True, system: str | None = None) -> list[str]:
     """``docker run`` following the official "Getting started with Docker" recipe."""
     system = system or platform.system()
     port = opts.port
-    cmd = ["docker", "run", "--rm", "--name", container_name(port),
-           f"--memory={opts.memory}", f"--memory-swap={opts.memory}",
-           "-p", f"127.0.0.1:{port}:{port}"]
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "--name",
+        container_name(port),
+        f"--memory={opts.memory}",
+        f"--memory-swap={opts.memory}",
+        "-p",
+        f"127.0.0.1:{port}:{port}",
+    ]
     cmd.insert(2, "-d" if detach else "-it")
     root = emulator_root()
     if system == "Windows":
@@ -191,15 +199,12 @@ def docker_command(opts: StartOptions, detach: bool = True,
 
 
 def docker_image_exists(image: str) -> bool:
-    result = subprocess.run(["docker", "image", "inspect", image],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result = subprocess.run(["docker", "image", "inspect", image], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return result.returncode == 0
 
 
 def docker_container_running(name: str) -> bool:
-    result = subprocess.run(
-        ["docker", "inspect", "-f", "{{.State.Running}}", name],
-        capture_output=True, text=True)
+    result = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", name], capture_output=True, text=True)
     return result.returncode == 0 and result.stdout.strip() == "true"
 
 
@@ -209,10 +214,12 @@ def list_cli_containers() -> list[tuple[str, int]]:
         return []
     result = subprocess.run(
         ["docker", "ps", "--filter", f"name=^{CONTAINER_PREFIX}", "--format", "{{.Names}}"],
-        capture_output=True, text=True)
+        capture_output=True,
+        text=True,
+    )
     out = []
     for name in result.stdout.split():
-        suffix = name[len(CONTAINER_PREFIX):]
+        suffix = name[len(CONTAINER_PREFIX) :]
         if suffix.isdigit():
             out.append((name, int(suffix)))
     return out
@@ -222,8 +229,9 @@ def pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
     if IS_WINDOWS:  # pragma: no cover - windows only
-        result = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
-                                capture_output=True, text=True)
+        result = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], capture_output=True, text=True
+        )
         return f'"{pid}"' in result.stdout
     _reap(pid)
     try:
@@ -311,8 +319,9 @@ def is_running(port: int) -> bool:
     return health.port_open(port)
 
 
-def _popen_detached(cmd: list[str], log_file: Path, append: bool = False,
-                    env: dict[str, str] | None = None) -> subprocess.Popen:
+def _popen_detached(
+    cmd: list[str], log_file: Path, append: bool = False, env: dict[str, str] | None = None
+) -> subprocess.Popen:
     log_file.parent.mkdir(parents=True, exist_ok=True)
     with log_file.open("a" if append else "w", encoding="utf-8") as fh:
         kwargs: dict = {"stdout": fh, "stderr": subprocess.STDOUT, "stdin": subprocess.DEVNULL, "env": env}
@@ -321,7 +330,23 @@ def _popen_detached(cmd: list[str], log_file: Path, append: bool = False,
             kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
         else:
             kwargs["start_new_session"] = True
-        return subprocess.Popen(cmd, **kwargs)
+        proc = subprocess.Popen(cmd, **kwargs)
+    _DETACHED.append(proc)  # outlives this function on purpose: don't warn when the object goes
+    return proc
+
+
+# Background processes awsemu started and left running (the emulator, the proxy). Holding
+# them keeps Python from warning "subprocess is still running" when the Popen is collected.
+_DETACHED: list[subprocess.Popen] = []
+
+
+@atexit.register
+def _forget_detached() -> None:
+    """Reap the ones that ended; the others keep running after awsemu exits, on purpose."""
+    for proc in _DETACHED:
+        if proc.poll() is None:
+            proc.returncode = 0  # detached: not ours to wait for (silences Popen.__del__)
+    _DETACHED.clear()
 
 
 def _wait_for_startup(log_file: Path, proc: subprocess.Popen, timeout: float) -> dict | None:
@@ -355,16 +380,20 @@ def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]
     if random_port and mode == "docker":
         raise RuntimeErrorWithHint(
             "Port 0 doesn't work with Docker: Docker can't forward a port chosen at startup.",
-            "Pick a port with --port, or use --native.")
+            "Pick a port with --port, or use --native.",
+        )
     if not random_port and health.port_open(opts.port):
         raise RuntimeErrorWithHint(
             f"Something is already listening on 127.0.0.1:{opts.port}.",
-            "Run 'awsemu status --all' or pick another port with '--port'.")
+            "Run 'awsemu status --all' or pick another port with '--port'.",
+        )
 
     if mode == "native":
         if not native_available(opts.binary):
-            raise RuntimeErrorWithHint(f"'{split_binary(opts.binary)[0]}' not found on PATH.",
-                                       "Install the package, set AWSEMU_BINARY, or use '--docker'.")
+            raise RuntimeErrorWithHint(
+                f"'{split_binary(opts.binary)[0]}' not found on PATH.",
+                "Install the package, set AWSEMU_BINARY, or use '--docker'.",
+            )
         cmd = native_command(opts)
         if random_port:
             log_file = cli_root() / "pending" / f"{time.time_ns()}.log"
@@ -382,24 +411,25 @@ def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]
             port = _port_from_url(str((info or {}).get("endpoint_url", ""))) or 0
             if not port:
                 reason = abort() or "no startup line with endpoint_url in the log"
-                return (State(port=0, mode="native", started_at=time.time(), command=cmd,
-                              pid=proc.pid, log=str(log_file)),
-                        health.Health(0, False, False, reason))
+                return (
+                    State(port=0, mode="native", started_at=time.time(), command=cmd, pid=proc.pid, log=str(log_file)),
+                    health.Health(0, False, False, reason),
+                )
             final_log = CliFiles(port).log
             if not IS_WINDOWS:  # an open file can be renamed on POSIX
                 final_log.parent.mkdir(parents=True, exist_ok=True)
                 log_file.replace(final_log)
                 log_file = final_log
 
-        state = State(port=port, mode="native", started_at=time.time(),
-                      command=cmd, pid=proc.pid, log=str(log_file))
+        state = State(port=port, mode="native", started_at=time.time(), command=cmd, pid=proc.pid, log=str(log_file))
     else:
         if not docker_available():
             raise RuntimeErrorWithHint("Docker not found on PATH.")
         if not docker_image_exists(opts.image):
             raise RuntimeErrorWithHint(
                 f"Docker image '{opts.image}' not found.",
-                "Build it once with 'awsemu image build' (AWS doesn't publish a prebuilt image).")
+                "Build it once with 'awsemu image build' (AWS doesn't publish a prebuilt image).",
+            )
         emulator_root().mkdir(parents=True, exist_ok=True)
         cmd = docker_command(opts, detach=True)
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -409,8 +439,9 @@ def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]
         # Keep a copy of the log on disk: with --rm, 'docker logs' is gone after a stop.
         log_file = CliFiles(opts.port).log
         _popen_detached(["docker", "logs", "-f", name], log_file)
-        state = State(port=opts.port, mode="docker", started_at=time.time(),
-                      command=cmd, container=name, log=str(log_file))
+        state = State(
+            port=opts.port, mode="docker", started_at=time.time(), command=cmd, container=name, log=str(log_file)
+        )
 
         def abort() -> str | None:
             if not docker_container_running(name):
@@ -470,7 +501,8 @@ def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
         elif health.port_open(port):
             raise RuntimeErrorWithHint(
                 f"An emulator is listening on port {port} but wasn't started by awsemu.",
-                "Stop it where it runs (Ctrl+C or SIGTERM).")
+                "Stop it where it runs (Ctrl+C or SIGTERM).",
+            )
         else:
             cleaned = cleanup_instance_files(port)
             return "not running" + (" (removed stale files)" if cleaned else "")
@@ -494,8 +526,7 @@ def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
 
     _send_stop(pid, force)
     if not _wait_gone(pid, timeout):
-        raise RuntimeErrorWithHint(f"pid {pid} is still running after {timeout:.0f}s.",
-                                   "Try 'awsemu stop --force'.")
+        raise RuntimeErrorWithHint(f"pid {pid} is still running after {timeout:.0f}s.", "Try 'awsemu stop --force'.")
     # Give the port a moment to close before deciding the files are stale.
     for _ in range(10):
         if not health.port_open(port):

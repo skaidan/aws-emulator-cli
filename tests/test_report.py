@@ -13,25 +13,50 @@ pytest.importorskip("botocore")
 
 
 def _call(i, op, resource, status=200, error=None, fault=None, bodies=True, body='{"TableName": "orders"}'):
-    call = {"id": i, "time": f"2026-11-26T12:00:0{i}.000+00:00", "service": "dynamodb", "operation": op,
-            "resource": resource, "method": "POST", "path": "/", "status": status, "error": error,
-            "latency_ms": 3.0, "request_id": f"rid-{i}", "fault": fault, "bytes_in": 10, "bytes_out": 20}
+    call = {
+        "id": i,
+        "time": f"2026-11-26T12:00:0{i}.000+00:00",
+        "service": "dynamodb",
+        "operation": op,
+        "resource": resource,
+        "method": "POST",
+        "path": "/",
+        "status": status,
+        "error": error,
+        "latency_ms": 3.0,
+        "request_id": f"rid-{i}",
+        "fault": fault,
+        "bytes_in": 10,
+        "bytes_out": 20,
+    }
     if bodies:
-        call["request"] = {"method": "POST", "path": "/", "headers": [
-            ["Authorization", "***"], ["X-Amz-Date", "20261126T120000Z"], ["Content-Type", "application/x-amz-json-1.0"],
-            ["X-Amz-Target", f"DynamoDB_20120810.{op}"], ["User-Agent", "Boto3/1.44 md/Botocore#1.44"]],
-            "body": {"size": len(body), "text": body}}
-        call["response"] = {"status": status, "headers": [["Content-Type", "application/x-amz-json-1.0"],
-                                                          ["x-amzn-RequestId", "rid"]],
-                            "body": {"size": 2, "text": json.dumps({"__type": error or "", "message": "nope"})}}
+        call["request"] = {
+            "method": "POST",
+            "path": "/",
+            "headers": [
+                ["Authorization", "***"],
+                ["X-Amz-Date", "20261126T120000Z"],
+                ["Content-Type", "application/x-amz-json-1.0"],
+                ["X-Amz-Target", f"DynamoDB_20120810.{op}"],
+                ["User-Agent", "Boto3/1.44 md/Botocore#1.44"],
+            ],
+            "body": {"size": len(body), "text": body},
+        }
+        call["response"] = {
+            "status": status,
+            "headers": [["Content-Type", "application/x-amz-json-1.0"], ["x-amzn-RequestId", "rid"]],
+            "body": {"size": 2, "text": json.dumps({"__type": error or "", "message": "nope"})},
+        }
     return call
 
 
 def test_the_draft_follows_the_issue_form():
     earlier = [_call(1, "CreateTable", "orders"), _call(2, "PutItem", "users")]
     call = _call(3, "TransactWriteItems", "orders", 400, "ValidationException")
-    log = ['{"timestamp": "2026-11-26T12:00:03.100Z", "level": "WARN", "message": "transact failed"}',
-           '{"timestamp": "2026-11-26T11:00:00Z", "level": "INFO", "message": "long before"}']
+    log = [
+        '{"timestamp": "2026-11-26T12:00:03.100Z", "level": "WARN", "message": "transact failed"}',
+        '{"timestamp": "2026-11-26T11:00:00Z", "level": "INFO", "message": "long before"}',
+    ]
     draft = rp.build(call, earlier, "aws-emulator 1.0.611", log)
     assert draft.title.startswith("dynamodb TransactWriteItems: ValidationException")
     f = draft.fields
@@ -40,7 +65,7 @@ def test_the_draft_follows_the_issue_form():
     assert "Authorization" not in f["reproduction"] and "X-Amz-Date" not in f["reproduction"]
     assert "X-Amz-Target: DynamoDB_20120810.TransactWriteItems" in f["reproduction"]
     assert "`dynamodb` `CreateTable` → 200" in f["reproduction"] and "users" not in f["reproduction"]
-    assert "awsemu call dynamodb transact-write-items --params '{\"TableName\": \"orders\"}'" in f["reproduction"]
+    assert 'awsemu call dynamodb transact-write-items --params \'{"TableName": "orders"}\'' in f["reproduction"]
     assert "Client: `Boto3/1.44" in f["reproduction"]
     assert "docs.aws.amazon.com/goto/WebAPI/dynamodb-2012-08-10/TransactWriteItems" in f["expected"]
     assert f["version"] == "aws-emulator 1.0.611" and "request ID `rid-3`" in f["context"]
@@ -73,8 +98,11 @@ def test_command(runner, isolated_home, monkeypatch, tmp_path):
     monkeypatch.setattr(fid, "installed_version", lambda binary=None: "1.0.611")
     files = px.ProxyFiles(9297)
     files.dir.mkdir(parents=True)
-    calls = [_call(1, "CreateTable", "orders"), _call(2, "PutItem", "orders", 400, "ValidationException"),
-             _call(3, "PutItem", "orders", 400, "ThrottlingException", fault="dynamodb=throttle")]
+    calls = [
+        _call(1, "CreateTable", "orders"),
+        _call(2, "PutItem", "orders", 400, "ValidationException"),
+        _call(3, "PutItem", "orders", 400, "ThrottlingException", fault="dynamodb=throttle"),
+    ]
     files.calls.write_text("".join(json.dumps(c) + "\n" for c in calls))
     last = runner.invoke(cli, ["report"])  # 'last' skips the injected fault
     assert last.exit_code == 0, last.output

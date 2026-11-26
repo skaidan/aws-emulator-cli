@@ -25,20 +25,31 @@ def load_calls(port: int, calls_file: Path | None) -> tuple[list[dict], Path]:
     log = calls_file or px.ProxyFiles(port).calls
     calls = read_calls(log)
     if not calls:
-        raise RuntimeErrorWithHint(f"no calls in {log}",
-                                   "Run your tests through the proxy first: awsemu proxy start -d, "
-                                   "then awsemu exec --proxy -- pytest.")
+        raise RuntimeErrorWithHint(
+            f"no calls in {log}",
+            "Run your tests through the proxy first: awsemu proxy start -d, then awsemu exec --proxy -- pytest.",
+        )
     return calls, log
 
 
 @iam.command()
-@click.option("--calls-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), metavar="FILE",
-              help="A calls log (default: the proxy's, for --port).")
+@click.option(
+    "--calls-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    metavar="FILE",
+    help="A calls log (default: the proxy's, for --port).",
+)
 @click.option("--region", default="*", show_default=True, help="Region in the ARNs.")
 @click.option("--account", default="*", show_default=True, help="Account ID in the ARNs.")
 @click.option("--service", "services", multiple=True, metavar="NAME", help="Only this service. Repeatable.")
-@click.option("--format", "fmt", type=click.Choice(["json", "terraform"]), default="json", show_default=True,
-              help="A policy document, or a Terraform aws_iam_policy_document.")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "terraform"]),
+    default="json",
+    show_default=True,
+    help="A policy document, or a Terraform aws_iam_policy_document.",
+)
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), help="Write it to this file.")
 @pass_ctx
 @handle_errors
@@ -70,5 +81,8 @@ def policy(c: Ctx, calls_file, region, account, services, fmt, output):
         ui.echo(f"Need no permission or unrecognised: {', '.join(result.skipped)}", "muted", err=True)
     wide = sorted(a for a, r in result.actions.items() if r == {"*"})
     if wide:
-        ui.echo(f"Resource \"*\" (no resource in the calls, or the action allows no other): {', '.join(wide)}",
-                "muted", err=True)
+        ui.echo(
+            f'Resource "*" (no resource in the calls, or the action allows no other): {", ".join(wide)}',
+            "muted",
+            err=True,
+        )

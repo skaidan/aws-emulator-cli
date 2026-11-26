@@ -27,8 +27,9 @@ def topic_name(arn: str) -> str:
 
 def queue_policy_for_topic(queue_arn: str, topic_arn_: str, existing: str | None = None) -> str:
     """A queue policy that lets ``topic_arn_`` send messages, merged with ``existing``."""
-    return queue_policy_allowing(queue_arn, "sns.amazonaws.com", topic_arn_,
-                                 f"awsemu-sns-{topic_name(topic_arn_)}", existing)
+    return queue_policy_allowing(
+        queue_arn, "sns.amazonaws.com", topic_arn_, f"awsemu-sns-{topic_name(topic_arn_)}", existing
+    )
 
 
 def _list_subscriptions(sns, arn: str | None = None) -> list[dict]:
@@ -67,16 +68,13 @@ def ls(c: Ctx, as_json: bool):
     for sub in subs:
         by_topic.setdefault(sub["TopicArn"], []).append(sub)
     if as_json:
-        ui.print_json([{"name": topic_name(t), "arn": t, "subscriptions": by_topic.get(t, [])}
-                       for t in topics])
+        ui.print_json([{"name": topic_name(t), "arn": t, "subscriptions": by_topic.get(t, [])} for t in topics])
         return
     rows = []
     for arn in topics:
-        targets = ", ".join(f"{x['Protocol']}:{x['Endpoint'].rsplit(':', 1)[-1]}"
-                            for x in by_topic.get(arn, []))
+        targets = ", ".join(f"{x['Protocol']}:{x['Endpoint'].rsplit(':', 1)[-1]}" for x in by_topic.get(arn, []))
         rows.append([topic_name(arn), len(by_topic.get(arn, [])), targets])
-    ui.table(["topic", "subs", "targets"], rows,
-             empty="No topics. Try 'awsemu sns create NAME'.")
+    ui.table(["topic", "subs", "targets"], rows, empty="No topics. Try 'awsemu sns create NAME'.")
 
 
 @sns.command(name="create")
@@ -101,8 +99,7 @@ def create(c: Ctx, name: str, fifo: bool):
 @click.argument("message", required=False)
 @click.option("--file", "file_", type=click.File("r"), help="Read the message from a file ('-' = stdin).")
 @click.option("--subject", help="Subject (used by email subscriptions).")
-@click.option("-a", "--attr", "attrs", multiple=True, metavar="KEY=VALUE",
-              help="String message attribute. Repeatable.")
+@click.option("-a", "--attr", "attrs", multiple=True, metavar="KEY=VALUE", help="String message attribute. Repeatable.")
 @click.option("--group", help="MessageGroupId (FIFO).")
 @click.option("--dedup-id", help="MessageDeduplicationId (FIFO).")
 @pass_ctx
@@ -128,12 +125,23 @@ def publish(c: Ctx, topic: str, message: str | None, file_, subject, attrs, grou
 
 @sns.command(name="subscribe")
 @click.argument("topic", shell_complete=complete("topic"))
-@click.option("--to-sqs", "queue", metavar="QUEUE", shell_complete=complete("queue"),
-              help="Deliver to this SQS queue (name or URL). Sets the queue policy for you.")
-@click.option("--to-lambda", "function", metavar="FUNCTION", help="Invoke this Lambda function.",
-              shell_complete=complete("function"))
-@click.option("--endpoint", metavar="PROTOCOL:ENDPOINT",
-              help="Any other target, e.g. 'https:https://example.test/hook'.")
+@click.option(
+    "--to-sqs",
+    "queue",
+    metavar="QUEUE",
+    shell_complete=complete("queue"),
+    help="Deliver to this SQS queue (name or URL). Sets the queue policy for you.",
+)
+@click.option(
+    "--to-lambda",
+    "function",
+    metavar="FUNCTION",
+    help="Invoke this Lambda function.",
+    shell_complete=complete("function"),
+)
+@click.option(
+    "--endpoint", metavar="PROTOCOL:ENDPOINT", help="Any other target, e.g. 'https:https://example.test/hook'."
+)
 @click.option("--raw", is_flag=True, help="Raw message delivery (no SNS JSON envelope).")
 @click.option("--filter", "filter_policy", metavar="JSON", help="Subscription filter policy.")
 @pass_ctx
@@ -166,8 +174,9 @@ def subscribe(c: Ctx, topic: str, queue, function, endpoint, raw: bool, filter_p
     if filter_policy:
         json.loads(filter_policy)  # fail early on bad JSON
         attributes["FilterPolicy"] = filter_policy
-    sub_arn = s.subscribe(TopicArn=arn, Protocol=protocol, Endpoint=target,
-                          Attributes=attributes, ReturnSubscriptionArn=True)["SubscriptionArn"]
+    sub_arn = s.subscribe(
+        TopicArn=arn, Protocol=protocol, Endpoint=target, Attributes=attributes, ReturnSubscriptionArn=True
+    )["SubscriptionArn"]
     ui.success(f"{topic_name(arn)} → {protocol}:{target.rsplit(':', 1)[-1]}")
     ui.echo(sub_arn, "muted")
 

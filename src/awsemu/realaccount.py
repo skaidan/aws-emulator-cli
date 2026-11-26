@@ -17,13 +17,41 @@ import re
 
 READ_PREFIXES = ("Describe", "List", "Get", "Head")
 DATA_READS = {
-    "GetSecretValue", "BatchGetSecretValue", "GetObject", "GetObjectTorrent", "SelectObjectContent",
-    "GetItem", "BatchGetItem", "Query", "Scan", "ExecuteStatement", "BatchExecuteStatement",
-    "GetRecords", "GetShardIterator", "ReceiveMessage", "GetParameter", "GetParameters",
-    "GetParametersByPath", "GetParameterHistory", "GetLogEvents", "FilterLogEvents", "GetQueryResults",
-    "GetFunction", "GetLayerVersion", "GetExecutionHistory", "GetMetricData", "GetMetricStatistics",
-    "Decrypt", "GenerateDataKey", "GetCredentialsForIdentity", "GetSessionToken", "GetFederationToken",
-    "GetAuthorizationToken", "GetPasswordData", "GetConsoleOutput", "GetLoginProfile",
+    "GetSecretValue",
+    "BatchGetSecretValue",
+    "GetObject",
+    "GetObjectTorrent",
+    "SelectObjectContent",
+    "GetItem",
+    "BatchGetItem",
+    "Query",
+    "Scan",
+    "ExecuteStatement",
+    "BatchExecuteStatement",
+    "GetRecords",
+    "GetShardIterator",
+    "ReceiveMessage",
+    "GetParameter",
+    "GetParameters",
+    "GetParametersByPath",
+    "GetParameterHistory",
+    "GetLogEvents",
+    "FilterLogEvents",
+    "GetQueryResults",
+    "GetFunction",
+    "GetLayerVersion",
+    "GetExecutionHistory",
+    "GetMetricData",
+    "GetMetricStatistics",
+    "Decrypt",
+    "GenerateDataKey",
+    "GetCredentialsForIdentity",
+    "GetSessionToken",
+    "GetFederationToken",
+    "GetAuthorizationToken",
+    "GetPasswordData",
+    "GetConsoleOutput",
+    "GetLoginProfile",
 }
 ARN_RE = re.compile(r"arn:aws:([a-z0-9-]+):([a-z0-9-]*):(\d{12}):")
 
@@ -47,10 +75,14 @@ def allowed(operation: str, params: dict | None = None, data_reads: bool = False
 def guard(data_reads: bool = False):
     """A botocore ``before-parameter-build`` handler (it runs before anything is sent)
     that refuses anything but reads."""
+
     def check(params, model, **_):
         if not allowed(model.name, params, data_reads):
-            raise NotReadOnly(f"refusing {model.service_model.service_name}:{model.name} against a real AWS "
-                              "account: awsemu only reads configuration there")
+            raise NotReadOnly(
+                f"refusing {model.service_model.service_name}:{model.name} against a real AWS "
+                "account: awsemu only reads configuration there"
+            )
+
     return check
 
 
@@ -68,15 +100,21 @@ def session(profile: str, region: str | None = None, data_reads: bool = False):
 def client(sess, service: str):
     from botocore.config import Config
 
-    return sess.client(service, config=Config(ignore_configured_endpoint_urls=True,
-                                              retries={"max_attempts": 3, "mode": "standard"}))
+    return sess.client(
+        service, config=Config(ignore_configured_endpoint_urls=True, retries={"max_attempts": 3, "mode": "standard"})
+    )
 
 
 def localize(value, account: str, emulator_account: str = "000000000000", emulator_region: str = "us-east-1"):
     """Rewrite the real account's ARNs (in strings, dicts, lists) to the emulator's account and Region."""
     if isinstance(value, str):
-        return ARN_RE.sub(lambda m: f"arn:aws:{m.group(1)}:{emulator_region if m.group(2) else ''}:"
-                                    f"{emulator_account if m.group(3) == account else m.group(3)}:", value)
+        return ARN_RE.sub(
+            lambda m: (
+                f"arn:aws:{m.group(1)}:{emulator_region if m.group(2) else ''}:"
+                f"{emulator_account if m.group(3) == account else m.group(3)}:"
+            ),
+            value,
+        )
     if isinstance(value, dict):
         return {k: localize(v, account, emulator_account, emulator_region) for k, v in value.items()}
     if isinstance(value, list):
@@ -105,7 +143,7 @@ def import_seed(sess, sections: set[str]) -> tuple[dict, list[str]]:
         for b in s3.list_buckets().get("Buckets", []):
             try:
                 where = s3.get_bucket_location(Bucket=b["Name"]).get("LocationConstraint") or "us-east-1"
-            except Exception:  # noqa: BLE001 - a bucket we can't read the location of is skipped
+            except Exception:
                 notes.append(f"skipped bucket {b['Name']} (couldn't read its Region)")
                 continue
             if where == region:
@@ -152,7 +190,9 @@ def import_seed(sess, sections: set[str]) -> tuple[dict, list[str]]:
                 types = {d["AttributeName"]: d["AttributeType"] for d in t["AttributeDefinitions"]}
                 entry = {"name": name}
                 for k in t["KeySchema"]:
-                    spec = k["AttributeName"] + ("" if types[k["AttributeName"]] == "S" else f":{types[k['AttributeName']]}")
+                    spec = k["AttributeName"] + (
+                        "" if types[k["AttributeName"]] == "S" else f":{types[k['AttributeName']]}"
+                    )
                     entry["pk" if k["KeyType"] == "HASH" else "sk"] = spec
                 if t.get("GlobalSecondaryIndexes") or t.get("LocalSecondaryIndexes"):
                     notes.append(f"table {name}: its secondary indexes aren't in seeds yet; left out")
@@ -222,7 +262,7 @@ def import_seed(sess, sections: set[str]) -> tuple[dict, list[str]]:
                 params.append(entry)
         plain = [p for p in params if p["value"] is None]
         for i in range(0, len(plain), 10):
-            batch = {p["name"]: p for p in plain[i:i + 10]}
+            batch = {p["name"]: p for p in plain[i : i + 10]}
             # DescribeParameters doesn't return values; GetParameters without decryption is allowed
             for p in ssm.get_parameters(Names=list(batch), WithDecryption=False).get("Parameters", []):
                 if p["Type"] in ("String", "StringList") and p["Name"] in batch:
@@ -261,51 +301,57 @@ def import_seed(sess, sections: set[str]) -> tuple[dict, list[str]]:
                 machines.append(entry)
         if machines:
             data["state_machines"] = machines
-            notes.append("state machine definitions point at the emulator's account and Region now; "
-                         "the resources they use must exist locally")
+            notes.append(
+                "state machine definitions point at the emulator's account and Region now; "
+                "the resources they use must exist locally"
+            )
 
     if "rules" in sections:
         import json
 
         ev = client(sess, "events")
-        local_targets = {"sqs": queue_names, "sns": {t["name"] for t in data.get("topics", [])},
-                         "stepfunctions": {m["name"] for m in data.get("state_machines", [])},
-                         "kinesis": {s["name"] for s in data.get("streams", [])}}
+        local_targets = {
+            "sqs": queue_names,
+            "sns": {t["name"] for t in data.get("topics", [])},
+            "stepfunctions": {m["name"] for m in data.get("state_machines", [])},
+            "kinesis": {s["name"] for s in data.get("streams", [])},
+        }
         rules = []
         for page in ev.get_paginator("list_rules").paginate():
             for r in page.get("Rules", []):
                 if r.get("ManagedBy"):
                     continue
-                entry: dict = {"name": r["Name"]}
+                rule: dict = {"name": r["Name"]}
                 if r.get("EventPattern"):
-                    entry["pattern"] = json.loads(r["EventPattern"])
+                    rule["pattern"] = json.loads(r["EventPattern"])
                 elif r.get("ScheduleExpression"):
-                    entry["schedule"] = r["ScheduleExpression"]
+                    rule["schedule"] = r["ScheduleExpression"]
                 if r.get("State") == "DISABLED":
-                    entry["enabled"] = False
+                    rule["enabled"] = False
                 if r.get("Description"):
-                    entry["description"] = r["Description"]
+                    rule["description"] = r["Description"]
                 targets = []
                 for tp in ev.get_paginator("list_targets_by_rule").paginate(Rule=r["Name"]):
                     for t in tp.get("Targets", []):
                         from .commands.seed import _target_from_arn
 
                         target = _target_from_arn(t["Arn"])
-                        kind = next(iter(target)) if target else None
+                        kind = next(iter(target)) if target else ""
                         if not target or target[kind] not in local_targets.get(kind, set()):
-                            notes.append(f"rule {r['Name']}: left out target {t['Arn'].split(':')[2]}:"
-                                         f"{t['Arn'].rsplit(':', 1)[-1]}")
+                            notes.append(
+                                f"rule {r['Name']}: left out target {t['Arn'].split(':')[2]}:"
+                                f"{t['Arn'].rsplit(':', 1)[-1]}"
+                            )
                             continue
                         if t.get("Input"):
                             target["input"] = json.loads(t["Input"])
                         targets.append(target)
                 if targets:
-                    entry["targets"] = targets
-                rules.append(entry)
+                    rule["targets"] = targets
+                rules.append(rule)
         if rules:
             data["rules"] = rules
 
     if "functions" in sections:
         notes.append("functions aren't imported: their code isn't read from the account")
     return data, notes
-

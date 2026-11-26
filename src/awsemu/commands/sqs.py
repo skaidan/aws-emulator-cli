@@ -11,8 +11,11 @@ from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
 
-COUNT_ATTRS = ["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible",
-               "ApproximateNumberOfMessagesDelayed"]
+COUNT_ATTRS = [
+    "ApproximateNumberOfMessages",
+    "ApproximateNumberOfMessagesNotVisible",
+    "ApproximateNumberOfMessagesDelayed",
+]
 
 
 def queue_url(sqs, queue: str) -> str:
@@ -40,33 +43,43 @@ def ls(c: Ctx, prefix: str, as_json: bool):
     for url in urls:
         attrs = q.get_queue_attributes(QueueUrl=url, AttributeNames=COUNT_ATTRS).get("Attributes", {})
         name = url.rsplit("/", 1)[-1]
-        data.append({"name": name, "url": url,
-                     "visible": int(attrs.get("ApproximateNumberOfMessages", 0)),
-                     "in_flight": int(attrs.get("ApproximateNumberOfMessagesNotVisible", 0)),
-                     "delayed": int(attrs.get("ApproximateNumberOfMessagesDelayed", 0))})
-        rows.append([name, attrs.get("ApproximateNumberOfMessages", "?"),
-                     attrs.get("ApproximateNumberOfMessagesNotVisible", "?"),
-                     attrs.get("ApproximateNumberOfMessagesDelayed", "?")])
+        data.append(
+            {
+                "name": name,
+                "url": url,
+                "visible": int(attrs.get("ApproximateNumberOfMessages", 0)),
+                "in_flight": int(attrs.get("ApproximateNumberOfMessagesNotVisible", 0)),
+                "delayed": int(attrs.get("ApproximateNumberOfMessagesDelayed", 0)),
+            }
+        )
+        rows.append(
+            [
+                name,
+                attrs.get("ApproximateNumberOfMessages", "?"),
+                attrs.get("ApproximateNumberOfMessagesNotVisible", "?"),
+                attrs.get("ApproximateNumberOfMessagesDelayed", "?"),
+            ]
+        )
     if as_json:
         ui.print_json(data)
         return
-    ui.table(["queue", "visible", "in flight", "delayed"], rows,
-             empty="No queues. Try 'awsemu sqs create NAME'.")
+    ui.table(["queue", "visible", "in flight", "delayed"], rows, empty="No queues. Try 'awsemu sqs create NAME'.")
 
 
 @sqs.command(name="create")
 @click.argument("name")
 @click.option("--fifo", is_flag=True, help="FIFO queue ('.fifo' is added if missing).")
 @click.option("--dedup", is_flag=True, help="Content-based deduplication (FIFO only).")
-@click.option("--visibility-timeout", type=int, metavar="SECONDS",
-              help="How long a received message stays hidden.")
+@click.option("--visibility-timeout", type=int, metavar="SECONDS", help="How long a received message stays hidden.")
 @click.option("--dlq", metavar="QUEUE", help="Dead-letter queue (name or URL).", shell_complete=complete("queue"))
-@click.option("--max-receive", type=int, default=5, show_default=True,
-              help="Receives before a message goes to the DLQ.")
+@click.option(
+    "--max-receive", type=int, default=5, show_default=True, help="Receives before a message goes to the DLQ."
+)
 @pass_ctx
 @handle_errors
-def create(c: Ctx, name: str, fifo: bool, dedup: bool, visibility_timeout: int | None,
-           dlq: str | None, max_receive: int):
+def create(
+    c: Ctx, name: str, fifo: bool, dedup: bool, visibility_timeout: int | None, dlq: str | None, max_receive: int
+):
     """Create a queue."""
     q = client("sqs", c.port)
     attrs: dict[str, str] = {}
@@ -81,8 +94,7 @@ def create(c: Ctx, name: str, fifo: bool, dedup: bool, visibility_timeout: int |
     if dlq:
         dlq_url = queue_url(q, dlq)
         arn = q.get_queue_attributes(QueueUrl=dlq_url, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
-        attrs["RedrivePolicy"] = json.dumps({"deadLetterTargetArn": arn,
-                                             "maxReceiveCount": str(max_receive)})
+        attrs["RedrivePolicy"] = json.dumps({"deadLetterTargetArn": arn, "maxReceiveCount": str(max_receive)})
     url = q.create_queue(QueueName=name, Attributes=attrs)["QueueUrl"]
     ui.success(f"created {name}")
     ui.echo(url, "muted")
@@ -95,8 +107,7 @@ def create(c: Ctx, name: str, fifo: bool, dedup: bool, visibility_timeout: int |
 @click.option("--group", help="MessageGroupId (FIFO).")
 @click.option("--dedup-id", help="MessageDeduplicationId (FIFO).")
 @click.option("--delay", type=int, metavar="SECONDS", help="Delay before the message becomes visible.")
-@click.option("-a", "--attr", "attrs", multiple=True, metavar="KEY=VALUE",
-              help="String message attribute. Repeatable.")
+@click.option("-a", "--attr", "attrs", multiple=True, metavar="KEY=VALUE", help="String message attribute. Repeatable.")
 @pass_ctx
 @handle_errors
 def send(c: Ctx, queue: str, body: str | None, file_, group, dedup_id, delay, attrs):
@@ -127,10 +138,12 @@ def send(c: Ctx, queue: str, body: str | None, file_, group, dedup_id, delay, at
 
 @sqs.command(name="receive")
 @click.argument("queue", shell_complete=complete("queue"))
-@click.option("-n", "--max", "max_", type=click.IntRange(1, 10), default=10, show_default=True,
-              help="Maximum number of messages.")
-@click.option("--wait", type=click.IntRange(0, 20), default=1, show_default=True, metavar="SECONDS",
-              help="Long-poll time.")
+@click.option(
+    "-n", "--max", "max_", type=click.IntRange(1, 10), default=10, show_default=True, help="Maximum number of messages."
+)
+@click.option(
+    "--wait", type=click.IntRange(0, 20), default=1, show_default=True, metavar="SECONDS", help="Long-poll time."
+)
 @click.option("--delete", is_flag=True, help="Delete messages after printing them.")
 @json_option
 @pass_ctx
@@ -139,8 +152,13 @@ def receive(c: Ctx, queue: str, max_: int, wait: int, delete: bool, as_json: boo
     """Receive messages (they stay in the queue unless --delete)."""
     q = client("sqs", c.port)
     url = queue_url(q, queue)
-    msgs = q.receive_message(QueueUrl=url, MaxNumberOfMessages=max_, WaitTimeSeconds=wait,
-                             MessageAttributeNames=["All"], AttributeNames=["All"]).get("Messages", [])
+    msgs = q.receive_message(
+        QueueUrl=url,
+        MaxNumberOfMessages=max_,
+        WaitTimeSeconds=wait,
+        MessageAttributeNames=["All"],
+        AttributeNames=["All"],
+    ).get("Messages", [])
     if as_json:
         ui.print_json(msgs)
     else:
@@ -151,10 +169,18 @@ def receive(c: Ctx, queue: str, max_: int, wait: int, delete: bool, as_json: boo
                 body = json.dumps(json.loads(body), ensure_ascii=False)
             except (ValueError, TypeError):
                 pass
-            attrs = ", ".join(f"{k}={v.get('StringValue', v.get('BinaryValue', ''))}"
-                              for k, v in m.get("MessageAttributes", {}).items())
-            rows.append([m["MessageId"][:8], m.get("Attributes", {}).get("ApproximateReceiveCount", ""),
-                         body if len(body) <= 200 else body[:197] + "…", attrs])
+            attrs = ", ".join(
+                f"{k}={v.get('StringValue', v.get('BinaryValue', ''))}"
+                for k, v in m.get("MessageAttributes", {}).items()
+            )
+            rows.append(
+                [
+                    m["MessageId"][:8],
+                    m.get("Attributes", {}).get("ApproximateReceiveCount", ""),
+                    body if len(body) <= 200 else body[:197] + "…",
+                    attrs,
+                ]
+            )
         ui.table(["id", "receives", "body", "attributes"], rows, empty="No messages.")
     if delete and msgs:
         entries = [{"Id": str(i), "ReceiptHandle": m["ReceiptHandle"]} for i, m in enumerate(msgs)]

@@ -10,16 +10,26 @@ from awsemu.cli import cli
 
 
 def c(service, op, resource="", **extra):
-    return {"service": service, "operation": op, "resource": resource, "status": 200, "latency_ms": 100.0,
-            "bytes_in": 0, **extra}
+    return {
+        "service": service,
+        "operation": op,
+        "resource": resource,
+        "status": 200,
+        "latency_ms": 100.0,
+        "bytes_in": 0,
+        **extra,
+    }
 
 
-CALLS = ([c("dynamodb", "PutItem")] * 4 + [c("dynamodb", "TransactWriteItems"), c("dynamodb", "GetItem"),
-         c("dynamodb", "CreateTable")]
-         + [c("sqs", "SendMessage", "jobs")] * 10 + [c("sqs", "SendMessage", "jobs.fifo")]
-         + [c("s3", "PutObject", "b/k"), c("s3", "GetObject", "b/k"), c("s3", "DeleteObject", "b/k")]
-         + [c("lambda", "Invoke", "fn", latency_ms=2000.0), c("logs", "PutLogEvents", bytes_in=1_000_000_000)]
-         + [c("sts", "GetCallerIdentity"), c("apigateway", "GetRestApis"), c("sqs", "SendMessage", status=0)])
+CALLS = (
+    [c("dynamodb", "PutItem")] * 4
+    + [c("dynamodb", "TransactWriteItems"), c("dynamodb", "GetItem"), c("dynamodb", "CreateTable")]
+    + [c("sqs", "SendMessage", "jobs")] * 10
+    + [c("sqs", "SendMessage", "jobs.fifo")]
+    + [c("s3", "PutObject", "b/k"), c("s3", "GetObject", "b/k"), c("s3", "DeleteObject", "b/k")]
+    + [c("lambda", "Invoke", "fn", latency_ms=2000.0), c("logs", "PutLogEvents", bytes_in=1_000_000_000)]
+    + [c("sts", "GetCallerIdentity"), c("apigateway", "GetRestApis"), c("sqs", "SendMessage", status=0)]
+)
 
 
 def test_units_and_prices():

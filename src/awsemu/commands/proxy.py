@@ -39,8 +39,9 @@ def _parse_rules(specs) -> list[faults.Fault]:
 def _need(port: int) -> dict:
     state = px.running(port)
     if not state:
-        raise RuntimeErrorWithHint(f"no proxy is running in front of the emulator on port {port}",
-                                   "Start one with: awsemu proxy start -d")
+        raise RuntimeErrorWithHint(
+            f"no proxy is running in front of the emulator on port {port}", "Start one with: awsemu proxy start -d"
+        )
     return state
 
 
@@ -77,31 +78,71 @@ def proxy():
 
 
 @proxy.command()
-@click.option("--listen", "listen", type=int, metavar="PORT",
-              help="Port for the proxy (default: proxy_port in awsemu.toml, else the emulator's + 1; 0 = free).")
-@click.option("--fault", "specs", multiple=True, metavar="RULE",
-              help="Fault rule, like 'dynamodb=throttle@10%' or 's3=latency:500ms'. Repeatable "
-                   "(default: faults in awsemu.toml).")
+@click.option(
+    "--listen",
+    "listen",
+    type=int,
+    metavar="PORT",
+    help="Port for the proxy (default: proxy_port in awsemu.toml, else the emulator's + 1; 0 = free).",
+)
+@click.option(
+    "--fault",
+    "specs",
+    multiple=True,
+    metavar="RULE",
+    help="Fault rule, like 'dynamodb=throttle@10%' or 's3=latency:500ms'. Repeatable (default: faults in awsemu.toml).",
+)
 @click.option("-d", "--detach", is_flag=True, help="Run in the background ('awsemu proxy stop' stops it).")
 @click.option("--quiet", is_flag=True, help="Don't print each call (they're still logged).")
 @click.option("--no-tls", is_flag=True, help="Plain HTTP instead of HTTPS (no certificate to trust).")
-@click.option("--host", default="127.0.0.1", show_default=True, metavar="ADDRESS",
-              help="Address to listen on. 0.0.0.0 lets containers reach it (at host.docker.internal), "
-                   "and anyone on your network: the emulator's keys and the admin token still apply.")
-@click.option("--bodies", is_flag=True,
-              help="Also log headers and bodies (up to 64 KB each), with secrets and credentials masked.")
-@click.option("--shadow", "shadow_profile", metavar="PROFILE",
-              help="Shadow mode: also send read-only calls to the real AWS account of this profile, and log "
-                   "where the answers differ (see 'awsemu proxy shadow').")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    show_default=True,
+    metavar="ADDRESS",
+    help="Address to listen on. 0.0.0.0 lets containers reach it (at host.docker.internal), "
+    "and anyone on your network: the emulator's keys and the admin token still apply.",
+)
+@click.option(
+    "--bodies",
+    is_flag=True,
+    help="Also log headers and bodies (up to 64 KB each), with secrets and credentials masked.",
+)
+@click.option(
+    "--shadow",
+    "shadow_profile",
+    metavar="PROFILE",
+    help="Shadow mode: also send read-only calls to the real AWS account of this profile, and log "
+    "where the answers differ (see 'awsemu proxy shadow').",
+)
 @click.option("--shadow-region", metavar="REGION", help="Region for shadow mode (default: the profile's).")
-@click.option("--shadow-max", type=click.IntRange(1), default=500, show_default=True, metavar="N",
-              help="Send at most N calls to AWS.")
+@click.option(
+    "--shadow-max",
+    type=click.IntRange(1),
+    default=500,
+    show_default=True,
+    metavar="N",
+    help="Send at most N calls to AWS.",
+)
 @click.option("--yes", is_flag=True, help="Don't ask before using a real account for shadow mode.")
 @click.option("--foreground", is_flag=True, hidden=True)
 @pass_ctx
 @handle_errors
-def start(c: Ctx, listen, specs, detach, quiet, no_tls, host, bodies, shadow_profile, shadow_region, shadow_max,
-          yes, foreground):
+def start(
+    c: Ctx,
+    listen,
+    specs,
+    detach,
+    quiet,
+    no_tls,
+    host,
+    bodies,
+    shadow_profile,
+    shadow_region,
+    shadow_max,
+    yes,
+    foreground,
+):
     """Start the proxy in front of the emulator on --port.
 
     In the foreground it prints each call until Ctrl-C; with -d it runs in the
@@ -113,9 +154,11 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, host, bodies, shadow_pro
     rules = _parse_rules(specs)
     listen = default_listen(c.port) if listen is None else listen
     if px.running(c.port):
-        state = px.read_state(c.port)
-        raise RuntimeErrorWithHint(f"a proxy is already running in front of port {c.port}: {state['endpoint_url']}",
-                                   "Stop it first: awsemu proxy stop")
+        state = px.read_state(c.port) or {}
+        raise RuntimeErrorWithHint(
+            f"a proxy is already running in front of port {c.port}: {state.get('endpoint_url', '?')}",
+            "Stop it first: awsemu proxy stop",
+        )
     if not foreground and not health.check(c.port).healthy:
         ui.warn(f"no emulator answers on port {c.port} yet; calls will get a 502 until it does")
     shadow = None
@@ -135,11 +178,21 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, host, bodies, shadow_pro
         ui.echo("Calls (Ctrl-C to stop):", "muted")
 
     try:
-        px.serve(c.port, listen, rules, tls=not no_tls, on_call=None if quiet else print_call, on_ready=ready,
-                 bodies=bodies, host=host, shadow=shadow)
+        px.serve(
+            c.port,
+            listen,
+            rules,
+            tls=not no_tls,
+            on_call=None if quiet else print_call,
+            on_ready=ready,
+            bodies=bodies,
+            host=host,
+            shadow=shadow,
+        )
     except OSError as exc:
-        raise RuntimeErrorWithHint(f"the proxy can't listen on port {listen}: {exc}",
-                                   "Pick another with --listen PORT (0 = any free port).") from exc
+        raise RuntimeErrorWithHint(
+            f"the proxy can't listen on port {listen}: {exc}", "Pick another with --listen PORT (0 = any free port)."
+        ) from exc
 
 
 def _confirm_shadow(shadow: dict, yes: bool) -> None:
@@ -158,8 +211,10 @@ def _confirm_shadow(shadow: dict, yes: bool) -> None:
     except Exception as exc:
         raise RuntimeErrorWithHint(f"can't use profile '{shadow['profile']}' for shadow mode: {exc}") from exc
     shadow["region"] = sess.region_name
-    ui.warn(f"Shadow mode: read-only calls also go to AWS account {who['Account']} ({who['Arn']}), "
-            f"{sess.region_name}, at most {shadow['max']}. Writes and data reads are never sent.")
+    ui.warn(
+        f"Shadow mode: read-only calls also go to AWS account {who['Account']} ({who['Arn']}), "
+        f"{sess.region_name}, at most {shadow['max']}. Writes and data reads are never sent."
+    )
     if not yes:
         if not sys.stdin.isatty():
             raise click.UsageError("shadow mode needs --yes when there's no terminal to ask")
@@ -169,11 +224,16 @@ def _confirm_shadow(shadow: dict, yes: bool) -> None:
 def _started(state: dict, rules: list[faults.Fault]) -> None:
     ui.success(f"Proxy listening on {state['endpoint_url']} -> emulator on port {state['emulator_port']}")
     if state.get("container_endpoint_url"):
-        ui.echo(f"Containers: {state['container_endpoint_url']} (awsemu compose --proxy writes their settings)",
-                "muted")
-    ui.kv([("use it", "awsemu exec --proxy -- COMMAND   ·   eval \"$(awsemu env --proxy)\""),
-           ("watch", "awsemu watch --calls"),
-           ("faults", ", ".join(r.spec for r in rules) or "none (awsemu proxy faults add RULE)")])
+        ui.echo(
+            f"Containers: {state['container_endpoint_url']} (awsemu compose --proxy writes their settings)", "muted"
+        )
+    ui.kv(
+        [
+            ("use it", 'awsemu exec --proxy -- COMMAND   ·   eval "$(awsemu env --proxy)"'),
+            ("watch", "awsemu watch --calls"),
+            ("faults", ", ".join(r.spec for r in rules) or "none (awsemu proxy faults add RULE)"),
+        ]
+    )
 
 
 @proxy.command()
@@ -202,16 +262,31 @@ def status(c: Ctx, as_json):
         sys.exit(exitcodes.NOT_HEALTHY)
     health_data = px.admin(state, "GET", "health")
     rules = px.admin(state, "GET", "faults")["rules"]
-    data = {"running": True, "emulator_port": c.port, "port": state["port"],
-            "endpoint_url": state["endpoint_url"], "pid": state["pid"], "ca": state.get("ca"),
-            "calls": health_data["calls"], "faults": [r["spec"] for r in rules],
-            "calls_file": state["calls"]}
+    data = {
+        "running": True,
+        "emulator_port": c.port,
+        "port": state["port"],
+        "endpoint_url": state["endpoint_url"],
+        "pid": state["pid"],
+        "ca": state.get("ca"),
+        "calls": health_data["calls"],
+        "faults": [r["spec"] for r in rules],
+        "calls_file": state["calls"],
+    }
     if as_json:
         ui.print_json(data)
         return
-    ui.kv([("endpoint", data["endpoint_url"]), ("emulator", f"port {c.port}"), ("pid", str(data["pid"])),
-           ("calls", str(data["calls"])), ("faults", ", ".join(data["faults"]) or "none"),
-           ("certificate", data["ca"] or "none (--no-tls)"), ("log", data["calls_file"])])
+    ui.kv(
+        [
+            ("endpoint", data["endpoint_url"]),
+            ("emulator", f"port {c.port}"),
+            ("pid", str(data["pid"])),
+            ("calls", str(data["calls"])),
+            ("faults", ", ".join(data["faults"]) or "none"),
+            ("certificate", data["ca"] or "none (--no-tls)"),
+            ("log", data["calls_file"]),
+        ]
+    )
 
 
 # --------------------------------------------------------------------------- faults
@@ -249,8 +324,17 @@ def _rule_state(r: dict) -> str:
 
 def _show_rules(rules: list[dict], as_json: bool) -> None:
     if as_json:
-        ui.print_json([{"rule": r["spec"], "hits": r["hits"], "active": r.get("active", True),
-                        "remaining_s": r.get("remaining_s")} for r in rules])
+        ui.print_json(
+            [
+                {
+                    "rule": r["spec"],
+                    "hits": r["hits"],
+                    "active": r.get("active", True),
+                    "remaining_s": r.get("remaining_s"),
+                }
+                for r in rules
+            ]
+        )
         return
     if not rules:
         ui.echo("No fault rules: every call goes through unchanged.", "muted")
@@ -287,7 +371,6 @@ def faults_clear(c: Ctx):
     """Remove every fault rule."""
     px.admin(_need(c.port), "DELETE", "faults")
     ui.success("No fault rules: every call goes through unchanged.")
-
 
 
 # --------------------------------------------------------------------------- calls
@@ -327,15 +410,18 @@ def show_calls(port: int, last: int, follow: bool, services, errors_only: bool, 
         if not calls:
             ui.echo(f"No calls logged for the proxy in front of port {port} yet ({path}).", "muted")
             if not px.running(port):
-                ui.echo("Start it with 'awsemu proxy start -d' and send your code through it "
-                        "('awsemu exec --proxy -- …').", "muted")
+                ui.echo(
+                    "Start it with 'awsemu proxy start -d' and send your code through it ('awsemu exec --proxy -- …').",
+                    "muted",
+                )
             return
         for call in calls:
             print_call(call)
         return
     if not px.running(port):
-        raise RuntimeErrorWithHint(f"no proxy is running in front of port {port}",
-                                   "Start one with: awsemu proxy start -d")
+        raise RuntimeErrorWithHint(
+            f"no proxy is running in front of port {port}", "Start one with: awsemu proxy start -d"
+        )
     for call in [c for c in read_calls(path) if _keep(c, services, errors_only)][-last:] if last else []:
         _emit(call, as_json)
     position = path.stat().st_size if path.exists() else 0
@@ -391,8 +477,14 @@ def calls(c: Ctx, last, follow, services, errors_only, as_json):
 
 
 @proxy.command(name="har")
-@click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default="awsemu-calls.har",
-              show_default=True, help="The file to write ('-' for stdout).")
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default="awsemu-calls.har",
+    show_default=True,
+    help="The file to write ('-' for stdout).",
+)
 @click.option("-n", "--last", type=int, default=0, help="Only the latest N calls (default: all logged).")
 @click.option("--service", "services", multiple=True, metavar="NAME", help="Only this service. Repeatable.")
 @click.option("--errors", "errors_only", is_flag=True, help="Only calls that failed.")
@@ -420,8 +512,10 @@ def har_cmd(c: Ctx, output, last, services, errors_only):
         return
     output.write_text(text, encoding="utf-8")
     with_bodies = sum(1 for x in calls if "request" in x)
-    ui.success(f"{len(calls)} call(s) in {output}"
-               + ("" if with_bodies or not calls else " (no headers or bodies: start the proxy with --bodies)"))
+    ui.success(
+        f"{len(calls)} call(s) in {output}"
+        + ("" if with_bodies or not calls else " (no headers or bodies: start the proxy with --bodies)")
+    )
 
 
 def _usd(value: float) -> str:
@@ -431,12 +525,27 @@ def _usd(value: float) -> str:
 
 
 @proxy.command(name="cost")
-@click.option("--runs", type=click.IntRange(1), default=1, show_default=True, metavar="N",
-              help="As if the logged calls happened N times (say, CI runs a month).")
-@click.option("--calls-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), metavar="FILE",
-              help="A calls log (default: the proxy's, for --port).")
-@click.option("--prices", "prices_file", type=click.Path(exists=True, dir_okay=False, path_type=Path), metavar="FILE",
-              help="JSON with your own prices (USD per unit), like {\"dynamodb.write\": 0.0000007}.")
+@click.option(
+    "--runs",
+    type=click.IntRange(1),
+    default=1,
+    show_default=True,
+    metavar="N",
+    help="As if the logged calls happened N times (say, CI runs a month).",
+)
+@click.option(
+    "--calls-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    metavar="FILE",
+    help="A calls log (default: the proxy's, for --port).",
+)
+@click.option(
+    "--prices",
+    "prices_file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    metavar="FILE",
+    help='JSON with your own prices (USD per unit), like {"dynamodb.write": 0.0000007}.',
+)
 @json_option
 @pass_ctx
 @handle_errors
@@ -463,22 +572,28 @@ def cost_cmd(c: Ctx, runs, calls_file, prices_file, as_json):
     if as_json:
         ui.print_json(est.as_dict(runs))
         return
-    ui.kv([("calls", f"{est.calls} in {log.name}" + (f", × {runs:,} runs" if runs > 1 else "")),
-           ("prices", f"AWS list prices, {cs.REGION}, as of {cs.PRICES_AS_OF}" + (" + yours" if prices_file else ""))])
+    ui.kv(
+        [
+            ("calls", f"{est.calls} in {log.name}" + (f", × {runs:,} runs" if runs > 1 else "")),
+            ("prices", f"AWS list prices, {cs.REGION}, as of {cs.PRICES_AS_OF}" + (" + yours" if prices_file else "")),
+        ]
+    )
     ui.echo()
     if not est.lines:
         ui.echo("None of these calls has a request charge in the price list.", "muted")
     else:
-        rows = [[x.service, x.unit_label, f"{x.units * runs:,.4g}", _usd(x.price), _usd(x.cost * runs)]
-                for x in est.lines]
+        rows = [
+            [x.service, x.unit_label, f"{x.units * runs:,.4g}", _usd(x.price), _usd(x.cost * runs)] for x in est.lines
+        ]
         ui.table(["service", "unit", "units", "per unit", "cost"], rows, title="Estimated request charges")
-        ui.echo(f"Estimated total: {_usd(est.total * runs)}"
-                + (f" ({_usd(est.total)} per run)" if runs > 1 else ""))
+        ui.echo(f"Estimated total: {_usd(est.total * runs)}" + (f" ({_usd(est.total)} per run)" if runs > 1 else ""))
     if est.unpriced:
-        ui.echo("Not priced here: " + ", ".join(f"{s} ({n} call(s))" for s, n in sorted(est.unpriced.items())),
-                "muted")
-    ui.echo("An estimate: no free tier, storage, data transfer or discounts; some units are approximations "
-            "(docs/proxy.md).", "muted")
+        ui.echo("Not priced here: " + ", ".join(f"{s} ({n} call(s))" for s, n in sorted(est.unpriced.items())), "muted")
+    ui.echo(
+        "An estimate: no free tier, storage, data transfer or discounts; some units are approximations "
+        "(docs/proxy.md).",
+        "muted",
+    )
 
 
 @proxy.command(name="shadow")
@@ -502,8 +617,14 @@ def shadow_cmd(c: Ctx, show_all, as_json):
     differing = [e for e in entries if e.get("differs")]
     failed = [e for e in entries if e.get("differs") is None]
     if as_json:
-        ui.print_json({"compared": len(entries) - len(failed), "differ": len(differing), "failed": len(failed),
-                       "calls": entries if show_all else differing})
+        ui.print_json(
+            {
+                "compared": len(entries) - len(failed),
+                "differ": len(differing),
+                "failed": len(failed),
+                "calls": entries if show_all else differing,
+            }
+        )
         return
     if not entries:
         ui.echo(f"No shadow comparisons yet ({path}).", "muted")
@@ -516,17 +637,27 @@ def shadow_cmd(c: Ctx, show_all, as_json):
             what = f"not compared: {e.get('failed', '')[:60]}"
         else:
             emu, aws = e["emulator"], e["aws"]
-            what = []
+            parts: list[str] = []
             if not e["same_status"] or not e["same_error"]:
-                what.append(f"AWS {aws['status']} {aws['error'] or ''}".strip() + ", emulator "
-                            + f"{emu['status']} {emu['error'] or ''}".strip())
+                parts.append(
+                    f"AWS {aws['status']} {aws['error'] or ''}".strip()
+                    + ", emulator "
+                    + f"{emu['status']} {emu['error'] or ''}".strip()
+                )
             if e.get("missing_in_emulator"):
-                what.append("missing: " + ", ".join(e["missing_in_emulator"][:4]))
+                parts.append("missing: " + ", ".join(e["missing_in_emulator"][:4]))
             if e.get("extra_in_emulator"):
-                what.append("extra: " + ", ".join(e["extra_in_emulator"][:4]))
-            what = "; ".join(what) or "same"
+                parts.append("extra: " + ", ".join(e["extra_in_emulator"][:4]))
+            what = "; ".join(parts) or "same"
         rows.append([e.get("id"), f"{e['service']} {e['operation']}", e.get("resource") or "", what])
-    ui.table(["call", "operation", "resource", "difference"], rows,
-             empty="Every compared call got the same answer from both.")
-    ui.echo(f"{len(entries) - len(failed)} call(s) compared, {len(differing)} differ"
-            + (f", {len(failed)} couldn't be sent" if failed else "") + ".", "muted")
+    ui.table(
+        ["call", "operation", "resource", "difference"],
+        rows,
+        empty="Every compared call got the same answer from both.",
+    )
+    ui.echo(
+        f"{len(entries) - len(failed)} call(s) compared, {len(differing)} differ"
+        + (f", {len(failed)} couldn't be sent" if failed else "")
+        + ".",
+        "muted",
+    )

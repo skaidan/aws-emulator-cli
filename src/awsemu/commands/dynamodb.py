@@ -62,7 +62,7 @@ def _num(text: str):
 
 
 def from_attr(attr: dict) -> Any:
-    (kind, value), = attr.items()
+    ((kind, value),) = attr.items()
     if kind == "S":
         return value
     if kind == "N":
@@ -92,8 +92,8 @@ def from_item(item: dict) -> dict:
 
 def parse_key_spec(spec: str) -> tuple[str, str]:
     """``id``, ``id:S``, ``ts:N`` -> ``(name, type)``."""
-    name, _, kind = spec.partition(":")
-    kind = TYPES.get((kind or "S").upper())
+    name, _, raw = spec.partition(":")
+    kind = TYPES.get((raw or "S").upper())
     if not name or not kind:
         raise click.BadParameter(f"'{spec}' should look like NAME or NAME:S|N|B")
     return name, kind
@@ -129,20 +129,21 @@ def ls(c: Ctx, as_json: bool):
         t = d.describe_table(TableName=name)["Table"]
         types = {a["AttributeName"]: a["AttributeType"] for a in t.get("AttributeDefinitions", [])}
         key = {k["KeyType"]: k["AttributeName"] for k in t["KeySchema"]}
-        data.append({
-            "name": name,
-            "partition_key": {"name": key.get("HASH"), "type": types.get(key.get("HASH"))},
-            "sort_key": {"name": key["RANGE"], "type": types.get(key["RANGE"])} if "RANGE" in key else None,
-            "item_count": t.get("ItemCount"),
-            "status": t.get("TableStatus"),
-        })
+        data.append(
+            {
+                "name": name,
+                "partition_key": {"name": key.get("HASH"), "type": types.get(key.get("HASH"))},
+                "sort_key": {"name": key["RANGE"], "type": types.get(key["RANGE"])} if "RANGE" in key else None,
+                "item_count": t.get("ItemCount"),
+                "status": t.get("TableStatus"),
+            }
+        )
         keys = " / ".join(f"{k['AttributeName']} ({k['KeyType'].lower()})" for k in t["KeySchema"])
         rows.append([name, keys, t.get("ItemCount", ""), t.get("TableStatus", "")])
     if as_json:
         ui.print_json(data)
         return
-    ui.table(["table", "key", "items", "status"], rows,
-             empty="No tables. Try 'awsemu dynamodb create NAME --pk id'.")
+    ui.table(["table", "key", "items", "status"], rows, empty="No tables. Try 'awsemu dynamodb create NAME --pk id'.")
 
 
 @dynamodb.command(name="describe")
@@ -208,8 +209,12 @@ def scan(c: Ctx, table: str, limit: int, as_json: bool):
         text = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, default=str)
         return text if len(text) <= 60 else text[:57] + "…"
 
-    ui.table(columns, [[cell(i.get(col)) for col in columns] for i in items],
-             title=f"{table} ({len(items)} item(s){' shown' if limit else ''})", empty="No items.")
+    ui.table(
+        columns,
+        [[cell(i.get(col)) for col in columns] for i in items],
+        title=f"{table} ({len(items)} item(s){' shown' if limit else ''})",
+        empty="No items.",
+    )
 
 
 @dynamodb.command(name="get")
@@ -229,8 +234,7 @@ def get(c: Ctx, table: str, key_json: str):
 @dynamodb.command(name="put")
 @click.argument("table", shell_complete=complete("table"))
 @click.argument("item_json", required=False)
-@click.option("--file", "file_", type=click.File("r"),
-              help="JSON object, or a JSON array of objects ('-' = stdin).")
+@click.option("--file", "file_", type=click.File("r"), help="JSON object, or a JSON array of objects ('-' = stdin).")
 @pass_ctx
 @handle_errors
 def put(c: Ctx, table: str, item_json: str | None, file_):
@@ -241,12 +245,12 @@ def put(c: Ctx, table: str, item_json: str | None, file_):
     items = data if isinstance(data, list) else [data]
     d = client("dynamodb", c.port)
     for start in range(0, len(items), 25):
-        chunk = items[start:start + 25]
+        chunk = items[start : start + 25]
         if len(chunk) == 1:
             d.put_item(TableName=table, Item=to_item(chunk[0]))
         else:
             requests = [{"PutRequest": {"Item": to_item(i)}} for i in chunk]
-            pending = {table: requests}
+            pending: dict | None = {table: requests}
             while pending:
                 pending = d.batch_write_item(RequestItems=pending).get("UnprocessedItems") or None
     ui.success(f"wrote {len(items)} item(s) to {table}")

@@ -37,14 +37,20 @@ def entry(call: dict, base_url: str) -> dict:
     except ValueError:
         status_text = "Connection reset" if status == 0 else ""
     request = {
-        "method": call["method"], "url": url, "httpVersion": "HTTP/1.1", "cookies": [],
+        "method": call["method"],
+        "url": url,
+        "httpVersion": "HTTP/1.1",
+        "cookies": [],
         "headers": _headers(req_headers),
         "queryString": [{"name": k, "value": v} for k, v in parse_qsl(urlsplit(path).query, keep_blank_values=True)],
-        "headersSize": -1, "bodySize": call.get("bytes_in", 0),
+        "headersSize": -1,
+        "bodySize": call.get("bytes_in", 0),
     }
     if req_body.get("text") is not None or req_body.get("base64") is not None or call.get("bytes_in"):
-        request["postData"] = {"mimeType": _find(req_headers, "content-type", "application/octet-stream"),
-                               "text": req_body.get("text") or _decoded(req_body)}
+        request["postData"] = {
+            "mimeType": _find(req_headers, "content-type", "application/octet-stream"),
+            "text": req_body.get("text") or _decoded(req_body),
+        }
     content = {"size": call.get("bytes_out", 0), "mimeType": _find(resp_headers, "content-type", "")}
     if "text" in resp_body:
         content["text"] = resp_body["text"]
@@ -55,15 +61,32 @@ def entry(call: dict, base_url: str) -> dict:
         "startedDateTime": call["time"],
         "time": latency,
         "request": request,
-        "response": {"status": status, "statusText": status_text, "httpVersion": "HTTP/1.1", "cookies": [],
-                     "headers": _headers(resp_headers), "content": content, "redirectURL": "",
-                     "headersSize": -1, "bodySize": call.get("bytes_out", 0)},
+        "response": {
+            "status": status,
+            "statusText": status_text,
+            "httpVersion": "HTTP/1.1",
+            "cookies": [],
+            "headers": _headers(resp_headers),
+            "content": content,
+            "redirectURL": "",
+            "headersSize": -1,
+            "bodySize": call.get("bytes_out", 0),
+        },
         "cache": {},
         "timings": {"send": 0, "wait": latency, "receive": 0},
-        "comment": " ".join(filter(None, [call.get("service"), call.get("operation"), call.get("resource"),
-                                          call.get("error"), call.get("fault") and f"fault: {call['fault']}"])),
-        "_awsemu": {k: call.get(k) for k in ("id", "service", "operation", "resource", "error", "fault",
-                                             "request_id")},
+        "comment": " ".join(
+            filter(
+                None,
+                [
+                    call.get("service"),
+                    call.get("operation"),
+                    call.get("resource"),
+                    call.get("error"),
+                    call.get("fault") and f"fault: {call['fault']}",
+                ],
+            )
+        ),
+        "_awsemu": {k: call.get(k) for k in ("id", "service", "operation", "resource", "error", "fault", "request_id")},
     }
 
 
@@ -77,5 +100,11 @@ def _decoded(body: dict) -> str:
 
 
 def har(calls: list[dict], base_url: str) -> dict:
-    return {"log": {"version": "1.2", "creator": {"name": "awsemu proxy", "version": __version__},
-                    "pages": [], "entries": [entry(c, base_url) for c in calls]}}
+    return {
+        "log": {
+            "version": "1.2",
+            "creator": {"name": "awsemu proxy", "version": __version__},
+            "pages": [],
+            "entries": [entry(c, base_url) for c in calls],
+        }
+    }

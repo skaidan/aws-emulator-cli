@@ -43,18 +43,23 @@ def test_handshake_list_and_unknowns():
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
         {"jsonrpc": "2.0", "id": 3, "method": "ping"},
         {"jsonrpc": "2.0", "id": 4, "method": "nope"},
-        {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "nope"}})
+        {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "nope"}},
+    )
     assert init["result"]["protocolVersion"] == "2025-03-26" and "127.0.0.1" in init["result"]["instructions"]
     names = [t["name"] for t in tools["result"]["tools"]]
     assert {"emulator_start", "aws_call", "proxy_calls", "explain_failure", "fidelity"} <= set(names)
     for t in tools["result"]["tools"]:
         props = t["inputSchema"]["properties"]
-        assert not {"endpoint", "endpoint_url", "region", "profile", "access_key"} & set(props)  # nothing to aim it elsewhere
+        assert not {"endpoint", "endpoint_url", "region", "profile", "access_key"} & set(
+            props
+        )  # nothing to aim it elsewhere
         assert t["annotations"]["openWorldHint"] is False and t["description"]
     stop = next(t for t in tools["result"]["tools"] if t["name"] == "emulator_stop")
     assert stop["annotations"]["destructiveHint"] is True
     assert ping["result"] == {} and missing["error"]["code"] == -32601 and bad_tool["error"]["code"] == -32602
-    newer = rpc(server, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2099-01-01"}})
+    newer = rpc(
+        server, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2099-01-01"}}
+    )
     assert newer[0]["result"]["protocolVersion"] == mcp.PROTOCOL_VERSIONS[0]
     assert rpc(server, "not json")[0]["error"]["code"] in (-32700, -32600)
 
@@ -67,10 +72,19 @@ def test_tools_run_awsemu_and_say_where(running):
     assert result["content"][0]["text"].startswith("AWS Emulator on 127.0.0.1:9297 (this machine, not AWS")
     assert result["structuredContent"]["result"] == {"services": []} and result["isError"] is False
 
-    server.call_tool("aws_call", {"service": "dynamodb", "operation": "put-item",
-                                  "params": {"TableName": "t"}, "query": "Attributes"})
-    assert runner.calls[-1] == ["call", "dynamodb", "put-item", "--params", '{"TableName": "t"}',
-                                "--query", "Attributes"]
+    server.call_tool(
+        "aws_call",
+        {"service": "dynamodb", "operation": "put-item", "params": {"TableName": "t"}, "query": "Attributes"},
+    )
+    assert runner.calls[-1] == [
+        "call",
+        "dynamodb",
+        "put-item",
+        "--params",
+        '{"TableName": "t"}',
+        "--query",
+        "Attributes",
+    ]
     server.call_tool("proxy_faults", {"action": "add", "rules": ["s3=503 for 30s"]})
     assert runner.calls[-1] == ["proxy", "faults", "add", "s3=503 for 30s"]
     assert server.call_tool("proxy_faults", {"action": "add"})["isError"]  # no rules
@@ -83,7 +97,11 @@ def test_tools_run_awsemu_and_say_where(running):
 def test_failures_and_exit_codes(running):
     failing = mcp.Server(9297, runner=FakeRunner(1, "", "✗ NoSuchBucket"))
     result = failing.call_tool("describe_resource", {"arn": "arn:aws:s3:::nope"})
-    assert result["isError"] and "NoSuchBucket" in result["content"][0]["text"] and "code 1" in result["content"][0]["text"]
+    assert (
+        result["isError"]
+        and "NoSuchBucket" in result["content"][0]["text"]
+        and "code 1" in result["content"][0]["text"]
+    )
     stopped = mcp.Server(9297, runner=FakeRunner(3, json.dumps({"status": "stopped"})))
     status = stopped.call_tool("emulator_status", {})
     assert status["isError"] is False and status["structuredContent"]["result"]["status"] == "stopped"

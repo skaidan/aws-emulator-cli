@@ -3,11 +3,9 @@
 import json
 from datetime import datetime
 
-import pytest
 
 from awsemu.cli import cli
 from awsemu.commands import dynamodb, overview, s3, sqs
-from awsemu.paths import InstanceFiles
 
 
 class FakePaginator:
@@ -33,15 +31,8 @@ class FakeClient:
             self.calls.append((op, kwargs))
             value = self.responses.get(op, {})
             return value(**kwargs) if callable(value) else value
+
         return call
-
-
-@pytest.fixture
-def running(isolated_home):
-    files = InstanceFiles(9297)
-    files.dir.mkdir(parents=True)
-    files.ca.write_text("cert")
-    return files
 
 
 def patch_client(monkeypatch, module, fake):
@@ -49,8 +40,7 @@ def patch_client(monkeypatch, module, fake):
 
 
 def test_s3_ls_buckets(runner, monkeypatch, running):
-    fake = FakeClient(list_buckets={"Buckets": [{"Name": "photos",
-                                                 "CreationDate": datetime(2026, 11, 15, 9, 0)}]})
+    fake = FakeClient(list_buckets={"Buckets": [{"Name": "photos", "CreationDate": datetime(2026, 11, 15, 9, 0)}]})
     patch_client(monkeypatch, s3, fake)
     result = runner.invoke(cli, ["s3", "ls"])
     assert result.exit_code == 0, result.output
@@ -58,10 +48,14 @@ def test_s3_ls_buckets(runner, monkeypatch, running):
 
 
 def test_s3_ls_objects(runner, monkeypatch, running):
-    fake = FakeClient(list_objects_v2=[{
-        "CommonPrefixes": [{"Prefix": "2026/"}],
-        "Contents": [{"Key": "a.txt", "Size": 2048, "LastModified": datetime(2026, 1, 1)}],
-    }])
+    fake = FakeClient(
+        list_objects_v2=[
+            {
+                "CommonPrefixes": [{"Prefix": "2026/"}],
+                "Contents": [{"Key": "a.txt", "Size": 2048, "LastModified": datetime(2026, 1, 1)}],
+            }
+        ]
+    )
     patch_client(monkeypatch, s3, fake)
     result = runner.invoke(cli, ["s3", "ls", "s3://photos/"])
     assert result.exit_code == 0, result.output
@@ -80,9 +74,13 @@ def test_sqs_ls_and_send(runner, monkeypatch, running):
     url = "https://127.0.0.1:9297/000000000000/jobs"
     fake = FakeClient(
         list_queues={"QueueUrls": [url]},
-        get_queue_attributes={"Attributes": {"ApproximateNumberOfMessages": "3",
-                                             "ApproximateNumberOfMessagesNotVisible": "1",
-                                             "ApproximateNumberOfMessagesDelayed": "0"}},
+        get_queue_attributes={
+            "Attributes": {
+                "ApproximateNumberOfMessages": "3",
+                "ApproximateNumberOfMessagesNotVisible": "1",
+                "ApproximateNumberOfMessagesDelayed": "0",
+            }
+        },
         get_queue_url={"QueueUrl": url},
         send_message={"MessageId": "m-1"},
     )
@@ -117,14 +115,28 @@ def test_overview_survives_failing_service(runner, monkeypatch, running):
         if service == "s3":
             return FakeClient(list_buckets={"Buckets": [{"Name": "b1"}]})
         if service == "sqs":
+
             def fail(**_):
                 raise Boom("not implemented")
+
             return FakeClient(list_queues=fail)
-        return FakeClient(list_tables={"TableNames": []}, list_event_buses={"EventBuses": []},
-                          **{op: [{}] for op in ("list_topics", "list_functions", "list_secrets",
-                                                 "describe_parameters", "list_streams",
-                                                 "list_state_machines", "describe_log_groups",
-                                                 "list_roles")})
+        return FakeClient(
+            list_tables={"TableNames": []},
+            list_event_buses={"EventBuses": []},
+            **{
+                op: [{}]
+                for op in (
+                    "list_topics",
+                    "list_functions",
+                    "list_secrets",
+                    "describe_parameters",
+                    "list_streams",
+                    "list_state_machines",
+                    "describe_log_groups",
+                    "list_roles",
+                )
+            },
+        )
 
     monkeypatch.setattr(overview, "client", fake_client)
     result = runner.invoke(cli, ["overview"])
@@ -142,8 +154,7 @@ def test_service_command_without_emulator(runner):
 
 def test_client_errors_show_hint(runner, monkeypatch, running):
     class ClientError(Exception):  # same name as botocore's, which is what awsemu checks
-        response = {"Error": {"Code": "AccessDenied",
-                              "Message": "Sign the request with the emulator credentials"}}
+        response = {"Error": {"Code": "AccessDenied", "Message": "Sign the request with the emulator credentials"}}
 
     def boom(**_):
         raise ClientError("denied")

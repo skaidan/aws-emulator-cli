@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 META = ROOT / "src" / "awsemu" / "_meta.py"
-KEEP = {"CHANGELOG.md"}          # historical record: old names stay
+KEEP = {"CHANGELOG.md"}  # historical record: old names stay
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 REPO_RE = re.compile(r"^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$")
 
@@ -37,7 +37,13 @@ def current() -> tuple[str, str]:
 
 def tracked_files() -> list[Path]:
     try:
-        out = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+        out = subprocess.run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
         files = [ROOT / line for line in out.splitlines() if line]
     except (OSError, subprocess.CalledProcessError):  # not a git checkout: walk the tree
         files = [p for p in ROOT.rglob("*") if p.is_file() and ".git" not in p.parts]
@@ -69,8 +75,7 @@ def occurrences(dist: str, repo: str) -> dict[Path, list[tuple[int, str]]]:
 
 def rename(new_dist: str, new_repo: str, dry_run: bool) -> int:
     old_dist, old_repo = current()
-    pairs = [(old_repo, new_repo), (old_dist, new_dist),
-             (old_dist.replace("-", "_"), new_dist.replace("-", "_"))]
+    pairs = [(old_repo, new_repo), (old_dist, new_dist), (old_dist.replace("-", "_"), new_dist.replace("-", "_"))]
     changed = 0
     for f in tracked_files():
         text = f.read_text(encoding="utf-8")
@@ -95,8 +100,7 @@ def rename(new_dist: str, new_repo: str, dry_run: bool) -> int:
     dist, repo = current()
     assert (dist, repo) == (new_dist, new_repo), (dist, repo)
     print(f"Renamed {old_dist} -> {new_dist}, {old_repo} -> {new_repo} in {changed} file(s).")
-    print("Next: rename the GitHub repository, update your git remote, run the tests "
-          "and add a CHANGELOG entry.")
+    print("Next: rename the GitHub repository, update your git remote, run the tests and add a CHANGELOG entry.")
     return 0
 
 
@@ -120,8 +124,7 @@ def main(argv: list[str] | None = None) -> int:
         for f, lines in found.items():
             for n, line in lines:
                 print(f"{f.relative_to(ROOT).as_posix()}:{n}: {line[:120]}")
-        print(f"\n'{dist}' / '{repo}': {total} line(s) in {len(found)} file(s) "
-              f"(CHANGELOG.md not counted).")
+        print(f"\n'{dist}' / '{repo}': {total} line(s) in {len(found)} file(s) (CHANGELOG.md not counted).")
         return 0
 
     new_dist = args.package.lower()

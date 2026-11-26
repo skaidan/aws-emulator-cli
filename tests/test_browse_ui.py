@@ -14,24 +14,41 @@ from tests.test_services import FakeClient
 @pytest.fixture
 def fake_emulator(monkeypatch):
     fakes = {
-        "s3": FakeClient(list_buckets={"Buckets": [{"Name": "photos"}]},
-                         list_objects_v2={"Contents": [{"Key": "a.txt", "Size": 4,
-                                                        "LastModified": datetime(2026, 11, 16)}]}),
-        "sqs": FakeClient(list_queues={"QueueUrls": ["https://x/000000000000/jobs"]},
-                          get_queue_url={"QueueUrl": "https://x/000000000000/jobs"},
-                          get_queue_attributes={"Attributes": {"ApproximateNumberOfMessages": "3"}}),
-        "secretsmanager": FakeClient(describe_secret={"Name": "db", "ARN": "arn:x",
-                                                      "ResponseMetadata": {}}),
-        "ssm": FakeClient(get_parameter={"Parameter": {"Name": "/k", "Type": "SecureString",
-                                                       "Value": "plain-secret"}}),
+        "s3": FakeClient(
+            list_buckets={"Buckets": [{"Name": "photos"}]},
+            list_objects_v2={"Contents": [{"Key": "a.txt", "Size": 4, "LastModified": datetime(2026, 11, 16)}]},
+        ),
+        "sqs": FakeClient(
+            list_queues={"QueueUrls": ["https://x/000000000000/jobs"]},
+            get_queue_url={"QueueUrl": "https://x/000000000000/jobs"},
+            get_queue_attributes={"Attributes": {"ApproximateNumberOfMessages": "3"}},
+        ),
+        "secretsmanager": FakeClient(describe_secret={"Name": "db", "ARN": "arn:x", "ResponseMetadata": {}}),
+        "ssm": FakeClient(get_parameter={"Parameter": {"Name": "/k", "Type": "SecureString", "Value": "plain-secret"}}),
     }
 
     def fake_client(service, port):
-        return fakes.get(service) or FakeClient(**{
-            "list_tables": {"TableNames": []}, "list_event_buses": {"EventBuses": []},
-            **{op: [{}] for op in ("list_topics", "list_functions", "list_secrets",
-                                   "describe_parameters", "list_streams", "list_state_machines",
-                                   "describe_log_groups", "list_roles", "list_tables")}})
+        return fakes.get(service) or FakeClient(
+            **{
+                "list_tables": {"TableNames": []},
+                "list_event_buses": {"EventBuses": []},
+                **{
+                    op: [{}]
+                    for op in (
+                        "list_topics",
+                        "list_functions",
+                        "list_secrets",
+                        "describe_parameters",
+                        "list_streams",
+                        "list_state_machines",
+                        "describe_log_groups",
+                        "list_roles",
+                        "list_tables",
+                    )
+                },
+            }
+        )
+
     import awsemu.commands.overview as overview
 
     monkeypatch.setattr(browse, "client", fake_client)
@@ -59,6 +76,7 @@ def test_ui_without_textual_explains(runner, monkeypatch):
         if name == "textual" or name.startswith("textual.") or name.endswith("tui"):
             raise ImportError("no textual")
         return real_import(name, *a, **k)
+
     monkeypatch.setattr(builtins, "__import__", no_textual)
     result = runner.invoke(cli, ["ui"])
     from awsemu import _meta
@@ -138,9 +156,22 @@ def _write_calls(port, calls):
 
 
 def _call(op, error=None, fault=None, n=1):
-    return {"id": n, "time": "2026-11-25T10:00:00.123+00:00", "service": "dynamodb", "operation": op,
-            "resource": "orders", "method": "POST", "path": "/", "status": 400 if error else 200,
-            "error": error, "latency_ms": 3.2, "request_id": None, "fault": fault, "bytes_in": 1, "bytes_out": 2}
+    return {
+        "id": n,
+        "time": "2026-11-25T10:00:00.123+00:00",
+        "service": "dynamodb",
+        "operation": op,
+        "resource": "orders",
+        "method": "POST",
+        "path": "/",
+        "status": 400 if error else 200,
+        "error": error,
+        "latency_ms": 3.2,
+        "request_id": None,
+        "fault": fault,
+        "bytes_in": 1,
+        "bytes_out": 2,
+    }
 
 
 def test_proxy_calls_tail():

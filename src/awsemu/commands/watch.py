@@ -72,6 +72,7 @@ def _ddb(c) -> Snapshot:
 def _names(kind: str, lister: Callable) -> Callable:
     def collect(c) -> Snapshot:
         return {(kind, n): None for n in lister(c)}
+
     return collect
 
 
@@ -86,15 +87,19 @@ COLLECTORS: dict[str, tuple[str, Callable]] = {
     "s3": ("s3", _s3),
     "sqs": ("sqs", _sqs),
     "dynamodb": ("dynamodb", _ddb),
-    "sns": ("sns", _names("topic", lambda c: [t["TopicArn"].rsplit(":", 1)[-1]
-                                              for t in _pages(c, "list_topics", "Topics")])),
+    "sns": (
+        "sns",
+        _names("topic", lambda c: [t["TopicArn"].rsplit(":", 1)[-1] for t in _pages(c, "list_topics", "Topics")]),
+    ),
     "lambda": ("lambda", _names("function", lambda c: _pages(c, "list_functions", "Functions", "FunctionName"))),
     "secrets": ("secretsmanager", _names("secret", lambda c: _pages(c, "list_secrets", "SecretList", "Name"))),
     "ssm": ("ssm", _names("parameter", lambda c: _pages(c, "describe_parameters", "Parameters", "Name"))),
     "kinesis": ("kinesis", _names("stream", lambda c: _pages(c, "list_streams", "StreamNames"))),
     "events": ("events", _names("rule", lambda c: _pages(c, "list_rules", "Rules", "Name"))),
-    "sfn": ("stepfunctions", _names("state machine",
-                                    lambda c: _pages(c, "list_state_machines", "stateMachines", "name"))),
+    "sfn": (
+        "stepfunctions",
+        _names("state machine", lambda c: _pages(c, "list_state_machines", "stateMachines", "name")),
+    ),
 }
 
 UNITS = {"bucket": "object(s)", "queue": "message(s)", "table": "item(s)"}
@@ -106,6 +111,7 @@ def snapshot(port: int, services: list[str]) -> tuple[dict[str, Snapshot], dict[
     Returns ``({service: snapshot}, {service: error})``. A service that fails is
     left out, so a hiccup is never reported as everything being deleted.
     """
+
     def one(name):
         boto_name, fn = COLLECTORS[name]
         try:
@@ -139,8 +145,9 @@ def diff(before: Snapshot, after: Snapshot) -> list[tuple[str, str, str, str]]:
         old, new = before[key], after[key]
         if old != new and old is not None and new is not None:
             delta = new - old
-            events.append(("~", key[0], key[1],
-                           f"{old} → {new} {UNITS.get(key[0], '')} ({'+' if delta > 0 else ''}{delta})"))
+            events.append(
+                ("~", key[0], key[1], f"{old} → {new} {UNITS.get(key[0], '')} ({'+' if delta > 0 else ''}{delta})")
+            )
     return events
 
 
@@ -154,13 +161,29 @@ def _print_event(sign: str, kind: str, name: str, detail: str) -> None:
 
 
 @click.command()
-@click.option("-s", "--service", "services", multiple=True, metavar="NAME",
-              help=f"Only these services. Repeatable (default: all; resources: {', '.join(sorted(COLLECTORS))}).")
-@click.option("-i", "--interval", type=click.FloatRange(0.5, 3600), default=2, show_default=True,
-              metavar="SECONDS", help="Time between looks.")
+@click.option(
+    "-s",
+    "--service",
+    "services",
+    multiple=True,
+    metavar="NAME",
+    help=f"Only these services. Repeatable (default: all; resources: {', '.join(sorted(COLLECTORS))}).",
+)
+@click.option(
+    "-i",
+    "--interval",
+    type=click.FloatRange(0.5, 3600),
+    default=2,
+    show_default=True,
+    metavar="SECONDS",
+    help="Time between looks.",
+)
 @click.option("--once", is_flag=True, help="Print the current state and exit.")
-@click.option("--calls", is_flag=True,
-              help="Show every API call instead (service, operation, result, latency), through the proxy.")
+@click.option(
+    "--calls",
+    is_flag=True,
+    help="Show every API call instead (service, operation, result, latency), through the proxy.",
+)
 @click.option("--errors", "errors_only", is_flag=True, help="With --calls: only failed calls.")
 @pass_ctx
 @handle_errors
@@ -186,14 +209,17 @@ def watch(c: Ctx, services, interval: float, once: bool, calls: bool, errors_onl
         return
     unknown = [s for s in services if s not in COLLECTORS]
     if unknown:
-        raise click.BadParameter(f"{', '.join(unknown)} (choose from {', '.join(sorted(COLLECTORS))}, "
-                                 "or use --calls)", param_hint="'--service'")
+        raise click.BadParameter(
+            f"{', '.join(unknown)} (choose from {', '.join(sorted(COLLECTORS))}, or use --calls)",
+            param_hint="'--service'",
+        )
     h = health.check(c.port)
     if not h.healthy:
         from ..runtime import RuntimeErrorWithHint
 
-        raise RuntimeErrorWithHint(f"No healthy emulator on port {c.port} ({h.detail}).",
-                                   "Start one with 'awsemu up' or 'awsemu start'.")
+        raise RuntimeErrorWithHint(
+            f"No healthy emulator on port {c.port} ({h.detail}).", "Start one with 'awsemu up' or 'awsemu start'."
+        )
     selected = list(services) or sorted(COLLECTORS)
     current, errors = snapshot(c.port, selected)
     for name, err in errors.items():
@@ -201,10 +227,11 @@ def watch(c: Ctx, services, interval: float, once: bool, calls: bool, errors_onl
     watched = [s for s in selected if s not in errors]
 
     everything = {k: v for part in current.values() for k, v in part.items()}
-    rows = [[kind, name, f"{v} {UNITS.get(kind, '')}".strip() if v is not None else ""]
-            for (kind, name), v in sorted(everything.items())]
-    ui.table(["kind", "name", "count"], rows, title=f"AWS Emulator on port {c.port}",
-             empty="(empty)")
+    rows = [
+        [kind, name, f"{v} {UNITS.get(kind, '')}".strip() if v is not None else ""]
+        for (kind, name), v in sorted(everything.items())
+    ]
+    ui.table(["kind", "name", "count"], rows, title=f"AWS Emulator on port {c.port}", empty="(empty)")
     if once:
         return
     ui.echo(f"Watching {', '.join(watched)} every {interval:g}s. Ctrl+C to stop.", "muted")

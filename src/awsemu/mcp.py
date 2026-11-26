@@ -24,7 +24,8 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 from urllib.parse import urlsplit
 
 from . import __version__
@@ -32,11 +33,23 @@ from .paths import InstanceFiles
 
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
-SCRUBBED = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN",
-            "AWS_PROFILE", "AWS_DEFAULT_PROFILE", "AWS_ENDPOINT_URL", "AWS_CONFIG_FILE",
-            "AWS_SHARED_CREDENTIALS_FILE", "AWS_CA_BUNDLE", "AWS_ROLE_ARN", "AWS_WEB_IDENTITY_TOKEN_FILE",
-            "AWS_CONTAINER_CREDENTIALS_FULL_URI", "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-            "AWS_CONTAINER_AUTHORIZATION_TOKEN")
+SCRUBBED = (
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AWS_SECURITY_TOKEN",
+    "AWS_PROFILE",
+    "AWS_DEFAULT_PROFILE",
+    "AWS_ENDPOINT_URL",
+    "AWS_CONFIG_FILE",
+    "AWS_SHARED_CREDENTIALS_FILE",
+    "AWS_CA_BUNDLE",
+    "AWS_ROLE_ARN",
+    "AWS_WEB_IDENTITY_TOKEN_FILE",
+    "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+    "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+    "AWS_CONTAINER_AUTHORIZATION_TOKEN",
+)
 MAX_TEXT = 60_000
 INSTRUCTIONS = """\
 Tools for AWS Emulator, a local emulator of AWS services, managed by awsemu. Use them to run
@@ -54,8 +67,11 @@ errors and latency."""
 
 
 def scrubbed_env(base: dict[str, str] | None = None) -> dict[str, str]:
-    env = {k: v for k, v in (os.environ if base is None else base).items()
-           if k not in SCRUBBED and not k.startswith("AWS_ENDPOINT_URL_")}
+    env = {
+        k: v
+        for k, v in (os.environ if base is None else base).items()
+        if k not in SCRUBBED and not k.startswith("AWS_ENDPOINT_URL_")
+    }
     env["AWSEMU_PLAIN"] = "1"
     env["NO_COLOR"] = "1"
     return env
@@ -77,15 +93,18 @@ def local_endpoint(port: int) -> str:
         parser = configparser.ConfigParser()
         try:
             parser.read(files.config, encoding="utf-8")
-            urls += [parser.get(sec, "endpoint_url") for sec in parser.sections()
-                     if parser.has_option(sec, "endpoint_url")]
+            urls += [
+                parser.get(sec, "endpoint_url") for sec in parser.sections() if parser.has_option(sec, "endpoint_url")
+            ]
         except configparser.Error:
             pass
     for url in urls:
         host = urlsplit(url).hostname or ""
         if host not in LOCAL_HOSTS:
-            raise GuardError(f"refusing: the endpoint {url} isn't on this machine (127.0.0.1); "
-                             "these tools only work against a local AWS Emulator")
+            raise GuardError(
+                f"refusing: the endpoint {url} isn't on this machine (127.0.0.1); "
+                "these tools only work against a local AWS Emulator"
+            )
     return urls[0]
 
 
@@ -111,12 +130,24 @@ class Tool:
     ok_codes: tuple[int, ...] = (0,)  # exit codes that aren't an error
 
     def spec(self) -> dict:
-        return {"name": self.name, "title": self.title, "description": self.description,
-                "inputSchema": {"type": "object", "properties": self.properties, "required": self.required,
-                                "additionalProperties": False},
-                "annotations": {"title": self.title, "readOnlyHint": self.read_only,
-                                "destructiveHint": self.destructive, "idempotentHint": self.read_only,
-                                "openWorldHint": False}}
+        return {
+            "name": self.name,
+            "title": self.title,
+            "description": self.description,
+            "inputSchema": {
+                "type": "object",
+                "properties": self.properties,
+                "required": self.required,
+                "additionalProperties": False,
+            },
+            "annotations": {
+                "title": self.title,
+                "readOnlyHint": self.read_only,
+                "destructiveHint": self.destructive,
+                "idempotentHint": self.read_only,
+                "openWorldHint": False,
+            },
+        }
 
 
 def _str(desc: str, **extra) -> dict:
@@ -153,95 +184,205 @@ def _env(_s, a):
 
 
 TOOLS: list[Tool] = [
-    Tool("emulator_status", "Emulator status",
-         "Is the emulator running and healthy, on which port, in which mode, since when. Call this first.",
-         {}, lambda s, a: (["status", "--json"], True), needs_emulator=False, ok_codes=(0, 3)),
-    Tool("emulator_start", "Start the emulator",
-         "Start AWS Emulator on this machine (the installed binary, or Docker) and wait until it's healthy. "
-         "Every start begins empty, with new credentials. Optionally apply a seed file (starting data).",
-         {"seed": _str("A seed file (YAML) to apply once it's healthy, relative to the project folder.")},
-         lambda s, a: (["start", "--wait", "90", *(["--seed", a["seed"]] if a.get("seed") else [])], False),
-         read_only=False, needs_emulator=False, timeout=180),
-    Tool("emulator_stop", "Stop the emulator",
-         "Stop the emulator. Everything in it is lost (it keeps nothing between runs).",
-         {}, lambda s, a: (["stop"], False), read_only=False, destructive=True, needs_emulator=False),
-    Tool("emulator_env", "Environment for your code",
-         "The environment variables that point AWS SDKs, the AWS CLI and Terraform at the emulator, "
-         "as KEY=value lines. Easiest: run your command as `awsemu exec -- <command>`, which sets them.",
-         {"sdk": {"type": "array", "items": {"type": "string", "enum": ["node", "java", "rust", "dotnet"]},
-                  "description": "Also trust the emulator's certificate in these runtimes."},
-          "proxy": _bool("Point the code at the proxy instead (it must be running).")},
-         _env),
-    Tool("seed_apply", "Apply a seed",
-         "Create the resources a seed file describes (buckets, queues, tables with items, topics, secrets, "
-         "parameters, functions…). Existing ones are updated, not duplicated.",
-         {"file": _str("The seed file (YAML), relative to the project folder.")},
-         lambda s, a: (["seed", "apply", a["file"]], False), required=["file"], read_only=False),
-    Tool("list_resources", "List resources",
-         "What's in the emulator, per service: buckets, queues, tables, topics, functions, secrets, "
-         "parameters, streams, rules, state machines, log groups, roles.",
-         {"services": {"type": "array", "items": {"type": "string"},
-                       "description": "Only these services (s3, sqs, dynamodb, sns, lambda, secretsmanager, ssm, "
-                                      "kinesis, events, stepfunctions, logs, iam)."}},
-         lambda s, a: (["overview", "--json", *[x for svc in a.get("services") or [] for x in ("-s", svc)]], True)),
-    Tool("describe_resource", "Describe a resource",
-         "Everything about one resource, from its ARN (tables, queues, buckets, objects, topics, functions…).",
-         {"arn": _str("The resource's ARN, like arn:aws:dynamodb:us-east-1:000000000000:table/orders.")},
-         lambda s, a: (["describe", a["arn"]], True), required=["arn"]),
-    Tool("aws_call", "Call an AWS operation",
-         "Any operation of any service, against the emulator, through boto3. Parameters use the API's names. "
-         "Errors from the service come back with their code and message.",
-         {"service": _str("boto3 service name: s3, dynamodb, sqs, logs, stepfunctions…"),
-          "operation": _str("Operation: ListBuckets, list_buckets or list-buckets."),
-          "params": {"type": "object", "description": "The request parameters, as JSON."},
-          "paginate": _bool("Follow every page and merge them."),
-          "query": _str("A JMESPath expression to keep part of the response.")},
-         lambda s, a: (["call", a["service"], a["operation"], "--params", json.dumps(a.get("params") or {}),
-                        *(["--paginate"] if a.get("paginate") else []),
-                        *(["--query", a["query"]] if a.get("query") else [])], True),
-         required=["service", "operation"], read_only=False),
-    Tool("fidelity", "Fidelity of the emulator",
-         "How closely the emulator matches AWS, per service: the share of AWS's fidelity tests that pass "
-         "for this emulator release, and with failures=true which tests fail and how.",
-         {"services": {"type": "array", "items": {"type": "string"}, "description": "Services to show."},
-          "failures": _bool("List the failing tests of those services.")},
-         lambda s, a: (["fidelity", "--json", *(a.get("services") or []),
-                        *(["--failures"] if a.get("failures") else [])], True), needs_emulator=False),
-    Tool("check_project", "Check a project",
-         "Find the AWS operations a project's code and infrastructure use and the known emulator differences "
-         "for them. from_calls=true uses the operations the proxy saw instead of reading the code.",
-         {"path": _str("Folder or file to scan, relative to the project folder (default: all of it)."),
-          "from_calls": _bool("Check the operations in the proxy's calls log instead.")},
-         lambda s, a: (["check", "--json", *(["--from-calls"] if a.get("from_calls") else [a.get("path") or "."])],
-                       True), needs_emulator=False, timeout=180),
-    Tool("proxy_start", "Start the proxy",
-         "Start the awsemu proxy in front of the emulator: it logs every call your code makes (with headers "
-         "and bodies, secrets masked) and can inject faults. Then run code with `awsemu exec --proxy -- …`.",
-         {"faults": {"type": "array", "items": {"type": "string"},
-                     "description": "Fault rules to start with, like dynamodb=throttle@10%."}},
-         lambda s, a: (["proxy", "start", "-d", "--bodies", *[x for f in a.get("faults") or [] for x in ("--fault", f)]],
-                       False), read_only=False),
-    Tool("proxy_calls", "Calls through the proxy",
-         "The API calls that went through the proxy: service, operation, resource, status, error, latency, "
-         "and the id that explain_failure takes.",
-         {"last": _int("How many of the latest calls (default 50).", minimum=1, maximum=1000),
-          "errors_only": _bool("Only failed calls."),
-          "service": _str("Only this service.")},
-         lambda s, a: (["proxy", "calls", "--json", "-n", str(a.get("last") or 50),
-                        *(["--errors"] if a.get("errors_only") else []),
-                        *(["--service", a["service"]] if a.get("service") else [])], True)),
-    Tool("proxy_faults", "Fault rules",
-         "List, add, replace or clear the proxy's fault rules: throttling, AWS errors, latency, resets, "
-         "per service, operation and resource, for a number of calls or a time "
-         "(dynamodb:PutItem[orders]=throttle, s3=503 for 30s, sqs=latency:500ms@50%).",
-         {"action": _str("list, add, set or clear.", enum=["list", "add", "set", "clear"]),
-          "rules": {"type": "array", "items": {"type": "string"}, "description": "Rules, for add and set."}},
-         _proxy_faults, read_only=False),
-    Tool("explain_failure", "Explain a failed call",
-         "Given a call from the proxy's log (its id, or 'last' for the last failed one), say whether it matches a "
-         "known emulator difference or is probably a bug in the code under test, with the evidence.",
-         {"call": _str("The call's id from proxy_calls, or 'last'.")},
-         lambda s, a: (["explain", str(a.get("call") or "last"), "--json"], True), needs_emulator=False),
+    Tool(
+        "emulator_status",
+        "Emulator status",
+        "Is the emulator running and healthy, on which port, in which mode, since when. Call this first.",
+        {},
+        lambda s, a: (["status", "--json"], True),
+        needs_emulator=False,
+        ok_codes=(0, 3),
+    ),
+    Tool(
+        "emulator_start",
+        "Start the emulator",
+        "Start AWS Emulator on this machine (the installed binary, or Docker) and wait until it's healthy. "
+        "Every start begins empty, with new credentials. Optionally apply a seed file (starting data).",
+        {"seed": _str("A seed file (YAML) to apply once it's healthy, relative to the project folder.")},
+        lambda s, a: (["start", "--wait", "90", *(["--seed", a["seed"]] if a.get("seed") else [])], False),
+        read_only=False,
+        needs_emulator=False,
+        timeout=180,
+    ),
+    Tool(
+        "emulator_stop",
+        "Stop the emulator",
+        "Stop the emulator. Everything in it is lost (it keeps nothing between runs).",
+        {},
+        lambda s, a: (["stop"], False),
+        read_only=False,
+        destructive=True,
+        needs_emulator=False,
+    ),
+    Tool(
+        "emulator_env",
+        "Environment for your code",
+        "The environment variables that point AWS SDKs, the AWS CLI and Terraform at the emulator, "
+        "as KEY=value lines. Easiest: run your command as `awsemu exec -- <command>`, which sets them.",
+        {
+            "sdk": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["node", "java", "rust", "dotnet"]},
+                "description": "Also trust the emulator's certificate in these runtimes.",
+            },
+            "proxy": _bool("Point the code at the proxy instead (it must be running)."),
+        },
+        _env,
+    ),
+    Tool(
+        "seed_apply",
+        "Apply a seed",
+        "Create the resources a seed file describes (buckets, queues, tables with items, topics, secrets, "
+        "parameters, functions…). Existing ones are updated, not duplicated.",
+        {"file": _str("The seed file (YAML), relative to the project folder.")},
+        lambda s, a: (["seed", "apply", a["file"]], False),
+        required=["file"],
+        read_only=False,
+    ),
+    Tool(
+        "list_resources",
+        "List resources",
+        "What's in the emulator, per service: buckets, queues, tables, topics, functions, secrets, "
+        "parameters, streams, rules, state machines, log groups, roles.",
+        {
+            "services": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Only these services (s3, sqs, dynamodb, sns, lambda, secretsmanager, ssm, "
+                "kinesis, events, stepfunctions, logs, iam).",
+            }
+        },
+        lambda s, a: (["overview", "--json", *[x for svc in a.get("services") or [] for x in ("-s", svc)]], True),
+    ),
+    Tool(
+        "describe_resource",
+        "Describe a resource",
+        "Everything about one resource, from its ARN (tables, queues, buckets, objects, topics, functions…).",
+        {"arn": _str("The resource's ARN, like arn:aws:dynamodb:us-east-1:000000000000:table/orders.")},
+        lambda s, a: (["describe", a["arn"]], True),
+        required=["arn"],
+    ),
+    Tool(
+        "aws_call",
+        "Call an AWS operation",
+        "Any operation of any service, against the emulator, through boto3. Parameters use the API's names. "
+        "Errors from the service come back with their code and message.",
+        {
+            "service": _str("boto3 service name: s3, dynamodb, sqs, logs, stepfunctions…"),
+            "operation": _str("Operation: ListBuckets, list_buckets or list-buckets."),
+            "params": {"type": "object", "description": "The request parameters, as JSON."},
+            "paginate": _bool("Follow every page and merge them."),
+            "query": _str("A JMESPath expression to keep part of the response."),
+        },
+        lambda s, a: (
+            [
+                "call",
+                a["service"],
+                a["operation"],
+                "--params",
+                json.dumps(a.get("params") or {}),
+                *(["--paginate"] if a.get("paginate") else []),
+                *(["--query", a["query"]] if a.get("query") else []),
+            ],
+            True,
+        ),
+        required=["service", "operation"],
+        read_only=False,
+    ),
+    Tool(
+        "fidelity",
+        "Fidelity of the emulator",
+        "How closely the emulator matches AWS, per service: the share of AWS's fidelity tests that pass "
+        "for this emulator release, and with failures=true which tests fail and how.",
+        {
+            "services": {"type": "array", "items": {"type": "string"}, "description": "Services to show."},
+            "failures": _bool("List the failing tests of those services."),
+        },
+        lambda s, a: (
+            ["fidelity", "--json", *(a.get("services") or []), *(["--failures"] if a.get("failures") else [])],
+            True,
+        ),
+        needs_emulator=False,
+    ),
+    Tool(
+        "check_project",
+        "Check a project",
+        "Find the AWS operations a project's code and infrastructure use and the known emulator differences "
+        "for them. from_calls=true uses the operations the proxy saw instead of reading the code.",
+        {
+            "path": _str("Folder or file to scan, relative to the project folder (default: all of it)."),
+            "from_calls": _bool("Check the operations in the proxy's calls log instead."),
+        },
+        lambda s, a: (
+            ["check", "--json", *(["--from-calls"] if a.get("from_calls") else [a.get("path") or "."])],
+            True,
+        ),
+        needs_emulator=False,
+        timeout=180,
+    ),
+    Tool(
+        "proxy_start",
+        "Start the proxy",
+        "Start the awsemu proxy in front of the emulator: it logs every call your code makes (with headers "
+        "and bodies, secrets masked) and can inject faults. Then run code with `awsemu exec --proxy -- …`.",
+        {
+            "faults": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Fault rules to start with, like dynamodb=throttle@10%.",
+            }
+        },
+        lambda s, a: (
+            ["proxy", "start", "-d", "--bodies", *[x for f in a.get("faults") or [] for x in ("--fault", f)]],
+            False,
+        ),
+        read_only=False,
+    ),
+    Tool(
+        "proxy_calls",
+        "Calls through the proxy",
+        "The API calls that went through the proxy: service, operation, resource, status, error, latency, "
+        "and the id that explain_failure takes.",
+        {
+            "last": _int("How many of the latest calls (default 50).", minimum=1, maximum=1000),
+            "errors_only": _bool("Only failed calls."),
+            "service": _str("Only this service."),
+        },
+        lambda s, a: (
+            [
+                "proxy",
+                "calls",
+                "--json",
+                "-n",
+                str(a.get("last") or 50),
+                *(["--errors"] if a.get("errors_only") else []),
+                *(["--service", a["service"]] if a.get("service") else []),
+            ],
+            True,
+        ),
+    ),
+    Tool(
+        "proxy_faults",
+        "Fault rules",
+        "List, add, replace or clear the proxy's fault rules: throttling, AWS errors, latency, resets, "
+        "per service, operation and resource, for a number of calls or a time "
+        "(dynamodb:PutItem[orders]=throttle, s3=503 for 30s, sqs=latency:500ms@50%).",
+        {
+            "action": _str("list, add, set or clear.", enum=["list", "add", "set", "clear"]),
+            "rules": {"type": "array", "items": {"type": "string"}, "description": "Rules, for add and set."},
+        },
+        _proxy_faults,
+        read_only=False,
+    ),
+    Tool(
+        "explain_failure",
+        "Explain a failed call",
+        "Given a call from the proxy's log (its id, or 'last' for the last failed one), say whether it matches a "
+        "known emulator difference or is probably a bug in the code under test, with the evidence.",
+        {"call": _str("The call's id from proxy_calls, or 'last'.")},
+        lambda s, a: (["explain", str(a.get("call") or "last"), "--json"], True),
+        needs_emulator=False,
+    ),
 ]
 BY_NAME = {t.name: t for t in TOOLS}
 
@@ -261,8 +402,9 @@ class Server:
         package_root = str(Path(__file__).resolve().parent.parent)  # the same awsemu, even from a checkout
         env["PYTHONPATH"] = os.pathsep.join(filter(None, [package_root, env.get("PYTHONPATH")]))
         try:
-            done = subprocess.run(cmd, cwd=self.cwd, env=env, capture_output=True, text=True, timeout=timeout,
-                                  stdin=subprocess.DEVNULL)
+            done = subprocess.run(
+                cmd, cwd=self.cwd, env=env, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL
+            )
         except subprocess.TimeoutExpired:
             return 124, "", f"timed out after {timeout:.0f} s"
         return done.returncode, done.stdout, done.stderr
@@ -307,9 +449,12 @@ class Server:
             if method == "initialize":
                 asked = params.get("protocolVersion")
                 version = asked if asked in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0]
-                result = {"protocolVersion": version, "capabilities": {"tools": {"listChanged": False}},
-                          "serverInfo": {"name": "awsemu", "title": "awsemu (AWS Emulator)", "version": __version__},
-                          "instructions": INSTRUCTIONS}
+                result = {
+                    "protocolVersion": version,
+                    "capabilities": {"tools": {"listChanged": False}},
+                    "serverInfo": {"name": "awsemu", "title": "awsemu (AWS Emulator)", "version": __version__},
+                    "instructions": INSTRUCTIONS,
+                }
             elif method == "ping":
                 result = {}
             elif method == "tools/list":
@@ -323,7 +468,7 @@ class Server:
                 result = {method.split("/")[0]: []}
             else:
                 return _error(mid, -32601, f"method not found: {method}")
-        except Exception as exc:  # noqa: BLE001 - one bad request must not end the session
+        except Exception as exc:
             return _error(mid, -32603, f"internal error: {exc}")
         return {"jsonrpc": "2.0", "id": mid, "result": result}
 
@@ -334,6 +479,7 @@ class Server:
             line = line.strip()
             if not line:
                 continue
+            reply: dict | None
             try:
                 message = json.loads(line)
             except ValueError:

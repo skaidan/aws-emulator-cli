@@ -36,8 +36,14 @@ STYLES = {
     "muted": "dim",
 }
 
-LEVEL_STYLES = {"ERROR": "bold red", "WARN": "yellow", "WARNING": "yellow",
-                "INFO": "cyan", "DEBUG": "dim", "TRACE": "dim"}
+LEVEL_STYLES = {
+    "ERROR": "bold red",
+    "WARN": "yellow",
+    "WARNING": "yellow",
+    "INFO": "cyan",
+    "DEBUG": "dim",
+    "TRACE": "dim",
+}
 
 
 def set_plain(value: bool) -> None:
@@ -96,8 +102,9 @@ def styled(value: Any, style: str | None) -> Any:
     return value
 
 
-def table(columns: Sequence[str], rows: Iterable[Sequence[Any]], title: str | None = None,
-          empty: str = "(nothing here)") -> None:
+def table(
+    columns: Sequence[str], rows: Iterable[Sequence[Any]], title: str | None = None, empty: str = "(nothing here)"
+) -> None:
     rows = [["" if c is None else c for c in row] for row in rows]
     if not rows:
         echo(empty if not title else f"{title}: {empty}", "muted")
@@ -115,10 +122,10 @@ def table(columns: Sequence[str], rows: Iterable[Sequence[Any]], title: str | No
     widths = [max(len(columns[i]), *(len(r[i]) for r in str_rows)) for i in range(len(columns))]
     if title:
         print(title)
-    print("  ".join(c.ljust(w) for c, w in zip(columns, widths)).rstrip())
+    print("  ".join(c.ljust(w) for c, w in zip(columns, widths, strict=False)).rstrip())
     print("  ".join("-" * w for w in widths))
     for r in str_rows:
-        print("  ".join(c.ljust(w) for c, w in zip(r, widths)).rstrip())
+        print("  ".join(c.ljust(w) for c, w in zip(r, widths, strict=False)).rstrip())
 
 
 def kv(pairs: Sequence[tuple[str, Any]], title: str | None = None) -> None:

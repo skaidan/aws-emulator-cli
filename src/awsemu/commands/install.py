@@ -17,8 +17,11 @@ from ..context import handle_errors, json_option, yes_option
 @click.argument("version", required=False)
 @click.option("--docker", is_flag=True, help="Build a Docker image of that version instead (macOS, Windows).")
 @click.option("--native", is_flag=True, help="Install the Linux package (the default on Linux with apt or rpm).")
-@click.option("--pin", is_flag=True,
-              help="Also write emulator_version to the project file (awsemu.toml), so the team and CI use it.")
+@click.option(
+    "--pin",
+    is_flag=True,
+    help="Also write emulator_version to the project file (awsemu.toml), so the team and CI use it.",
+)
 @click.option("--list", "list_", is_flag=True, help="List the published versions, newest first.")
 @click.option("--no-verify", is_flag=True, help="Don't check the package signature with gpg (not recommended).")
 @click.option("--dry-run", is_flag=True, help="Show what would be downloaded and run, and stop.")
@@ -62,15 +65,15 @@ def install(version, docker, native, pin, list_, no_verify, dry_run, yes, as_jso
     wanted = inst.normalize(version or (proj.emulator_version if proj else None))
     if pin and wanted is None:
         wanted = _latest_version()
-    mode = "docker" if docker else "native" if native else (
-        "native" if inst.package_kind() else "docker")
+    mode = "docker" if docker else "native" if native else ("native" if inst.package_kind() else "docker")
 
     if mode == "docker":
         if not runtime.docker_available() and not dry_run:
             raise runtime.RuntimeErrorWithHint("Docker not found on PATH.")
         tag = inst.image_tag(wanted)
-        ui.kv([("version", wanted or "latest"), ("image", tag),
-               ("package", runtime.dockerfile(None, wanted).split()[3])])
+        ui.kv(
+            [("version", wanted or "latest"), ("image", tag), ("package", runtime.dockerfile(None, wanted).split()[3])]
+        )
         if dry_run:
             return
         code = runtime.build_image(tag, None, wanted)
@@ -93,10 +96,14 @@ def install(version, docker, native, pin, list_, no_verify, dry_run, yes, as_jso
 
     if pin and wanted:
         path = project.set_value("emulator_version", wanted, proj.path if proj else None)
-        ui.success(f"Pinned emulator_version = \"{wanted}\" in {path}")
+        ui.success(f'Pinned emulator_version = "{wanted}" in {path}')
     if mode == "docker" and wanted:
-        ui.echo(f"Start it with: awsemu start --docker --image {tag}" if not (pin or (proj and proj.emulator_version == wanted))
-                else "Start it with: awsemu start --docker", "muted")
+        ui.echo(
+            f"Start it with: awsemu start --docker --image {tag}"
+            if not (pin or (proj and proj.emulator_version == wanted))
+            else "Start it with: awsemu start --docker",
+            "muted",
+        )
 
 
 def _project():

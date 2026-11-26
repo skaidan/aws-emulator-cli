@@ -12,7 +12,7 @@ from awsemu.commands import events as events_mod
 from awsemu.commands import kinesis as kinesis_mod
 from awsemu.commands import secrets as secrets_mod
 from awsemu.commands import sfn as sfn_mod
-from tests.test_services import FakeClient, running  # noqa: F401  (fixture)
+from tests.test_services import FakeClient
 
 
 def err(code):
@@ -25,6 +25,7 @@ def err(code):
 def raises(code):
     def fn(**_):
         raise err(code)
+
     return fn
 
 
@@ -81,11 +82,12 @@ RULE_ARN = "arn:aws:events:us-east-1:000000000000:rule/orders-created"
 
 def test_events_rule_to_sqs(runner, monkeypatch, running):
     ev = FakeClient(put_rule={"RuleArn": RULE_ARN}, put_targets={"FailedEntryCount": 0})
-    sqs = FakeClient(get_queue_url={"QueueUrl": "https://q/events"},
-                     get_queue_attributes={"Attributes": {"QueueArn": "arn:aws:sqs:us-east-1:000000000000:events"}})
+    sqs = FakeClient(
+        get_queue_url={"QueueUrl": "https://q/events"},
+        get_queue_attributes={"Attributes": {"QueueArn": "arn:aws:sqs:us-east-1:000000000000:events"}},
+    )
     use(monkeypatch, events_mod, events=ev, sqs=sqs)
-    result = runner.invoke(cli, ["events", "rule", "orders-created", "--source", "app.orders",
-                                 "--to-sqs", "events"])
+    result = runner.invoke(cli, ["events", "rule", "orders-created", "--source", "app.orders", "--to-sqs", "events"])
     assert result.exit_code == 0, result.output
     put_rule = ev.calls[0][1]
     assert json.loads(put_rule["EventPattern"]) == {"source": ["app.orders"]}
@@ -115,14 +117,21 @@ def test_kinesis_decode():
 
 
 def test_kinesis_read_stops_when_caught_up(runner, monkeypatch, running):
-    pages = iter([
-        {"Records": [{"SequenceNumber": "1", "PartitionKey": "k1", "Data": b'{"n":1}'}],
-         "NextShardIterator": "it2", "MillisBehindLatest": 0},
-        {"Records": [], "NextShardIterator": "it3", "MillisBehindLatest": 0},
-    ])
-    k = FakeClient(list_shards=[{"Shards": [{"ShardId": "shard-0"}]}],
-                   get_shard_iterator={"ShardIterator": "it1"},
-                   get_records=lambda **_: next(pages))
+    pages = iter(
+        [
+            {
+                "Records": [{"SequenceNumber": "1", "PartitionKey": "k1", "Data": b'{"n":1}'}],
+                "NextShardIterator": "it2",
+                "MillisBehindLatest": 0,
+            },
+            {"Records": [], "NextShardIterator": "it3", "MillisBehindLatest": 0},
+        ]
+    )
+    k = FakeClient(
+        list_shards=[{"Shards": [{"ShardId": "shard-0"}]}],
+        get_shard_iterator={"ShardIterator": "it1"},
+        get_records=lambda **_: next(pages),
+    )
     use(monkeypatch, kinesis_mod, kinesis=k)
     result = runner.invoke(cli, ["kinesis", "read", "clicks"])
     assert result.exit_code == 0, result.output
@@ -142,11 +151,19 @@ def test_sfn_definition_validation(tmp_path):
 
 def test_sfn_start_waits_and_reports_failure(runner, monkeypatch, running):
     now = datetime(2026, 11, 15, 12, 0, 0)
-    states = iter([{"status": "RUNNING"},
-                   {"status": "FAILED", "error": "States.TaskFailed", "cause": "boom",
-                    "startDate": now, "stopDate": now + timedelta(seconds=1)}])
-    s = FakeClient(start_execution={"executionArn": "arn:exec"},
-                   describe_execution=lambda **_: next(states))
+    states = iter(
+        [
+            {"status": "RUNNING"},
+            {
+                "status": "FAILED",
+                "error": "States.TaskFailed",
+                "cause": "boom",
+                "startDate": now,
+                "stopDate": now + timedelta(seconds=1),
+            },
+        ]
+    )
+    s = FakeClient(start_execution={"executionArn": "arn:exec"}, describe_execution=lambda **_: next(states))
     use(monkeypatch, sfn_mod, stepfunctions=s)
     monkeypatch.setattr(sfn_mod.time, "sleep", lambda _: None)
     result = runner.invoke(cli, ["sfn", "start", "flow", '{"x": 1}'])
@@ -156,8 +173,10 @@ def test_sfn_start_waits_and_reports_failure(runner, monkeypatch, running):
 
 
 def test_sfn_start_success_raw(runner, monkeypatch, running):
-    s = FakeClient(start_execution={"executionArn": "arn:exec"},
-                   describe_execution={"status": "SUCCEEDED", "output": '{"ok": true}'})
+    s = FakeClient(
+        start_execution={"executionArn": "arn:exec"},
+        describe_execution={"status": "SUCCEEDED", "output": '{"ok": true}'},
+    )
     use(monkeypatch, sfn_mod, stepfunctions=s)
     result = runner.invoke(cli, ["sfn", "start", "flow", "--raw"])
     assert result.exit_code == 0 and json.loads(result.output) == {"ok": True}
@@ -166,13 +185,16 @@ def test_sfn_start_success_raw(runner, monkeypatch, running):
 # ---------------------------------------------------------------- describe
 
 
-@pytest.mark.parametrize("arn,service,kind,rest", [
-    ("arn:aws:dynamodb:us-east-1:000000000000:table/users", "dynamodb", "table", "users"),
-    ("arn:aws:lambda:us-east-1:000000000000:function:hello", "lambda", "function", "hello"),
-    ("arn:aws:s3:::bucket/a/b.txt", "s3", "bucket", "a/b.txt"),
-    ("arn:aws:states:us-east-1:000000000000:execution:flow:run-1", "states", "execution", "flow:run-1"),
-    ("arn:aws:sqs:us-east-1:000000000000:jobs", "sqs", "", "jobs"),
-])
+@pytest.mark.parametrize(
+    "arn,service,kind,rest",
+    [
+        ("arn:aws:dynamodb:us-east-1:000000000000:table/users", "dynamodb", "table", "users"),
+        ("arn:aws:lambda:us-east-1:000000000000:function:hello", "lambda", "function", "hello"),
+        ("arn:aws:s3:::bucket/a/b.txt", "s3", "bucket", "a/b.txt"),
+        ("arn:aws:states:us-east-1:000000000000:execution:flow:run-1", "states", "execution", "flow:run-1"),
+        ("arn:aws:sqs:us-east-1:000000000000:jobs", "sqs", "", "jobs"),
+    ],
+)
 def test_parse_arn(arn, service, kind, rest):
     a = describe_mod.parse_arn(arn)
     assert (a.service, a.kind, a.rest) == (service, kind, rest)

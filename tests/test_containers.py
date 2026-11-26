@@ -7,11 +7,13 @@ Skipped unless ``AWSEMU_TESTCONTAINERS=1``: needs Docker, the image from
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.skipif(os.environ.get("AWSEMU_TESTCONTAINERS") != "1",
-                                reason="set AWSEMU_TESTCONTAINERS=1 (needs Docker and the image)")
+pytestmark = pytest.mark.skipif(
+    os.environ.get("AWSEMU_TESTCONTAINERS") != "1", reason="set AWSEMU_TESTCONTAINERS=1 (needs Docker and the image)"
+)
 
 
 @pytest.fixture(scope="module")
@@ -27,7 +29,7 @@ def test_endpoint_and_files(emulator):
     from awsemu.containers import PORT
 
     assert emulator.endpoint_url == f"https://127.0.0.1:{emulator.get_exposed_port(PORT)}"
-    assert "BEGIN CERTIFICATE" in open(emulator.ca_path).read()
+    assert "BEGIN CERTIFICATE" in Path(emulator.ca_path).read_text()
     assert emulator.access_key_id and emulator.secret_access_key
 
 
@@ -47,8 +49,9 @@ def test_s3_and_sqs(emulator):
 def test_env_points_a_child_process_at_it(emulator):
     code = "import boto3; print(boto3.client('sts').get_caller_identity()['Account'])"
     env = {k: v for k, v in os.environ.items() if not k.startswith("AWS_")}
-    out = subprocess.run([sys.executable, "-c", code], env={**env, **emulator.aws_env()},
-                         capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(
+        [sys.executable, "-c", code], env={**env, **emulator.aws_env()}, capture_output=True, text=True, check=True
+    ).stdout
     assert out.strip() == "000000000000"
 
 

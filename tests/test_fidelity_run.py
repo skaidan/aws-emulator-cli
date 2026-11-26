@@ -14,8 +14,14 @@ ROWS = [
     {"check_id": "sqs.c", "service": "sqs", "path": "behavioral/sqs/check_c.py"},
     {"check_id": "lambda__sqs.d", "service": "lambda__sqs", "path": "behavioral/lambda__sqs/check_d.py"},
 ]
-SCORES = {"units": [{"unitId": "dynamodb.a", "outcome": "pass"}, {"unitId": "dynamodb.b", "outcome": "fail"},
-                    {"unitId": "sqs.c", "outcome": "pass"}, {"unitId": "x", "outcome": "skipped"}]}
+SCORES = {
+    "units": [
+        {"unitId": "dynamodb.a", "outcome": "pass"},
+        {"unitId": "dynamodb.b", "outcome": "fail"},
+        {"unitId": "sqs.c", "outcome": "pass"},
+        {"unitId": "x", "outcome": "skipped"},
+    ]
+}
 
 
 @pytest.fixture
@@ -63,8 +69,17 @@ def test_run_one_reads_the_report(suite, monkeypatch, tmp_path):
         seen.append(cmd)
         report = cmd[cmd.index("--report") + 1]
         with open(report, "w") as fh:
-            json.dump({"check": {"verdict": "failed", "kind": "assertion", "detail": "expected 400\nmore",
-                                 "duration_ms": 1200}}, fh)
+            json.dump(
+                {
+                    "check": {
+                        "verdict": "failed",
+                        "kind": "assertion",
+                        "detail": "expected 400\nmore",
+                        "duration_ms": 1200,
+                    }
+                },
+                fh,
+            )
         return type("Done", (), {"returncode": 11, "stdout": "", "stderr": ""})()
 
     monkeypatch.setattr(fr, "Emulator", FakeEmulator)
@@ -87,16 +102,23 @@ def test_command(runner, isolated_home, suite, monkeypatch):
     def fake_run_one(s, row, command, published):
         ran.append(row["check_id"])
         verdict = "passed" if row["check_id"] != "dynamodb.b" else "failed"
-        return fr.TestResult(row["check_id"], row["path"], verdict, detail="boom", published=published.get(row["check_id"]))
+        return fr.TestResult(
+            row["check_id"], row["path"], verdict, detail="boom", published=published.get(row["check_id"])
+        )
 
     monkeypatch.setattr(fr, "run_one", fake_run_one)
     result = runner.invoke(cli, ["fidelity", "run", "dynamodb", "--suite", str(suite.root)])
     assert result.exit_code == 1 and ran == ["dynamodb.a", "dynamodb.b"]
     assert "1 passed, 1 failed" in result.output
     ran.clear()
-    data = json.loads(runner.invoke(cli, ["fidelity", "run", "dynamodb", "--failing", "--json",
-                                          "--suite", str(suite.root)]).output)
+    data = json.loads(
+        runner.invoke(cli, ["fidelity", "run", "dynamodb", "--failing", "--json", "--suite", str(suite.root)]).output
+    )
     assert ran == ["dynamodb.b"] and data["summary"]["differ_from_published"] == []
     assert runner.invoke(cli, ["fidelity", "run"]).exit_code == 2
-    assert runner.invoke(cli, ["fidelity", "run", "sqs", "--test", "sqs.c", "--limit", "1", "--suite",
-                               str(suite.root)]).exit_code == 0
+    assert (
+        runner.invoke(
+            cli, ["fidelity", "run", "sqs", "--test", "sqs.c", "--limit", "1", "--suite", str(suite.root)]
+        ).exit_code
+        == 0
+    )

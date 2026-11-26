@@ -8,14 +8,17 @@ from awsemu import proxy as px
 from awsemu import shadow as sh
 from awsemu.cli import cli
 from tests.test_proxy import FakeAWS, client
-from tests.test_realaccount import profile  # noqa: F401  (fixture)
 
 pytest.importorskip("boto3")
 
 
 def test_shape_and_compare():
-    assert sh.shape(b'{"Table": {"Name": "t", "Keys": [{"A": 1}]}}') == {"Table", "Table.Name", "Table.Keys",
-                                                                        "Table.Keys[].A"}
+    assert sh.shape(b'{"Table": {"Name": "t", "Keys": [{"A": 1}]}}') == {
+        "Table",
+        "Table.Name",
+        "Table.Keys",
+        "Table.Keys[].A",
+    }
     assert sh.shape(b"<R><Name>x</Name><Item/></R>") == {"R", "Name", "Item"}
     same = sh.compare((200, {}, b'{"A": 1}'), (200, {}, b'{"A": 2}'))
     assert same["differs"] is False and same["missing_in_emulator"] == []  # values don't matter
@@ -34,15 +37,23 @@ def two(tmp_path):
     yield emulator, aws, aws_dir / "cert.pem"
     emulator.shutdown()
     aws.shutdown()
+    emulator.server_close()
+    aws.server_close()
 
 
-def test_only_reads_go_to_aws_signed_with_the_profile(two, profile, tmp_path):  # noqa: F811
+def test_only_reads_go_to_aws_signed_with_the_profile(two, profile, tmp_path):
     from awsemu import realaccount as ra
 
     emulator, aws, aws_cert = two
-    shadow = sh.Shadow(profile, None, tmp_path / "shadow.jsonl", max_calls=2,
-                       endpoint_for=lambda service: f"https://127.0.0.1:{aws.port}", verify=str(aws_cert),
-                       session=ra.session(profile))
+    shadow = sh.Shadow(
+        profile,
+        None,
+        tmp_path / "shadow.jsonl",
+        max_calls=2,
+        endpoint_for=lambda service: f"https://127.0.0.1:{aws.port}",
+        verify=str(aws_cert),
+        session=ra.session(profile),
+    )
     server = px.ProxyServer(emulator.port, 0, calls_file=None, shadow=shadow)
     server.start_thread()
     try:
@@ -51,7 +62,7 @@ def test_only_reads_go_to_aws_signed_with_the_profile(two, profile, tmp_path):  
         for _ in range(3):  # reads: the limit is 2
             try:
                 ddb.describe_table(TableName="orders")
-            except Exception:  # noqa: BLE001 - the fakes don't know DescribeTable: same 404 from both
+            except Exception:
                 pass
         shadow.close()
     finally:
@@ -69,13 +80,33 @@ def test_only_reads_go_to_aws_signed_with_the_profile(two, profile, tmp_path):  
 def test_shadow_command(runner, isolated_home):
     files = px.ProxyFiles(9297)
     files.dir.mkdir(parents=True)
-    rows = [{"id": 1, "service": "dynamodb", "operation": "DescribeTable", "resource": "t", "differs": True,
-             "emulator": {"status": 200, "error": None}, "aws": {"status": 400, "error": "ResourceNotFoundException"},
-             "same_status": False, "same_error": False},
-            {"id": 2, "service": "sqs", "operation": "ListQueues", "resource": "", "differs": False,
-             "emulator": {"status": 200, "error": None}, "aws": {"status": 200, "error": None},
-             "same_status": True, "same_error": True, "missing_in_emulator": [], "extra_in_emulator": []},
-            {"id": 3, "service": "s3", "operation": "ListBuckets", "resource": "", "differs": None, "failed": "boom"}]
+    rows = [
+        {
+            "id": 1,
+            "service": "dynamodb",
+            "operation": "DescribeTable",
+            "resource": "t",
+            "differs": True,
+            "emulator": {"status": 200, "error": None},
+            "aws": {"status": 400, "error": "ResourceNotFoundException"},
+            "same_status": False,
+            "same_error": False,
+        },
+        {
+            "id": 2,
+            "service": "sqs",
+            "operation": "ListQueues",
+            "resource": "",
+            "differs": False,
+            "emulator": {"status": 200, "error": None},
+            "aws": {"status": 200, "error": None},
+            "same_status": True,
+            "same_error": True,
+            "missing_in_emulator": [],
+            "extra_in_emulator": [],
+        },
+        {"id": 3, "service": "s3", "operation": "ListBuckets", "resource": "", "differs": None, "failed": "boom"},
+    ]
     files.shadow.write_text("".join(json.dumps(r) + "\n" for r in rows))
     out = runner.invoke(cli, ["proxy", "shadow"]).output
     assert "AWS 400 ResourceNotFoundException, emulator 200" in out and "2 call(s) compared, 1 differ" in out
@@ -83,7 +114,7 @@ def test_shadow_command(runner, isolated_home):
     assert data["differ"] == 1 and data["failed"] == 1 and [c["id"] for c in data["calls"]] == [1]
 
 
-def test_start_needs_confirmation_without_a_terminal(runner, profile, monkeypatch):  # noqa: F811
+def test_start_needs_confirmation_without_a_terminal(runner, profile, monkeypatch):
     import awsemu.realaccount as ra
 
     class Sts:

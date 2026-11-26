@@ -48,22 +48,32 @@ import os
 import socket
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from . import envvars, health, project, runtime
 from .paths import InstanceFiles, default_port
 
+if TYPE_CHECKING:
+    from .seed import Seed
+
 
 def pytest_addoption(parser):
     group = parser.getgroup("awsemu", "AWS Emulator (awsemu)")
     group.addoption("--awsemu-seed", metavar="FILE", help="Seed applied when the emulator starts.")
     group.addoption("--awsemu-port", type=int, metavar="N", help="Port for the emulator (default: a free one).")
-    group.addoption("--awsemu-reuse", action="store_true",
-                    help="Use an emulator already running on the port; don't start or stop one.")
+    group.addoption(
+        "--awsemu-reuse",
+        action="store_true",
+        help="Use an emulator already running on the port; don't start or stop one.",
+    )
     group.addoption("--awsemu-docker", action="store_true", help="Run the emulator in Docker.")
-    group.addoption("--awsemu-proxy", action="store_true",
-                    help="Send every test's AWS calls through the awsemu proxy (calls log, faults).")
+    group.addoption(
+        "--awsemu-proxy",
+        action="store_true",
+        help="Send every test's AWS calls through the awsemu proxy (calls log, faults).",
+    )
     parser.addini("awsemu_seed", "Seed file for the aws_emulator fixture (relative to rootdir).")
     parser.addini("awsemu_port", "Port for the aws_emulator fixture.")
     parser.addini("awsemu_reuse", "Reuse a running emulator (true/false).", default="false")
@@ -83,7 +93,7 @@ class Emulator:
     seed_path: Path | None = None
     started_here: bool = False
     mode: str = "auto"
-    _seed: object = field(default=None, repr=False)
+    _seed: Seed | None = field(default=None, repr=False)
 
     @property
     def endpoint_url(self) -> str:
@@ -115,8 +125,7 @@ class Emulator:
     def reset(self) -> None:
         """Restart the emulator (empty state) and re-apply the seed."""
         if not self.started_here:
-            pytest.fail("awsemu: reset() needs an emulator started by the fixture "
-                        "(not --awsemu-reuse)", pytrace=False)
+            pytest.fail("awsemu: reset() needs an emulator started by the fixture (not --awsemu-reuse)", pytrace=False)
         runtime.stop(self.port)
         _wait_port_closed(self.port)
         _start(self.port, self.mode)
@@ -232,8 +241,9 @@ def _start(port: int, mode: str) -> None:
     try:
         state, status = runtime.start(opts, wait=60)
     except runtime.RuntimeErrorWithHint as exc:
-        pytest.fail(f"awsemu: couldn't start the emulator: {exc}" + (f"\n{exc.hint}" if exc.hint else ""),
-                    pytrace=False)
+        pytest.fail(
+            f"awsemu: couldn't start the emulator: {exc}" + (f"\n{exc.hint}" if exc.hint else ""), pytrace=False
+        )
     if not status.healthy:
         tail = "".join(runtime.tail(Path(state.log), 15)) if state.log else ""
         pytest.fail(f"awsemu: the emulator didn't become healthy: {status.detail}\n{tail}", pytrace=False)
@@ -252,7 +262,11 @@ def aws_emulator(request):
     config = request.config
     proj = project.load()
 
-    reuse = bool(config.getoption("--awsemu-reuse")) or str(config.getini("awsemu_reuse")).lower() in ("1", "true", "yes")
+    reuse = bool(config.getoption("--awsemu-reuse")) or str(config.getini("awsemu_reuse")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     port_setting = _setting(config, "--awsemu-port", "awsemu_port")
     if config.getoption("--awsemu-docker"):
         mode = "docker"
@@ -261,8 +275,8 @@ def aws_emulator(request):
 
     seed_setting = _setting(config, "--awsemu-seed", "awsemu_seed")
     if seed_setting:
-        seed_path = Path(seed_setting)
-        if not seed_path.is_absolute():
+        seed_path: Path | None = Path(seed_setting)
+        if seed_path is not None and not seed_path.is_absolute():
             seed_path = Path(config.rootpath) / seed_path
     else:
         seed_path = proj.seed if proj and proj.seed else None
@@ -272,8 +286,11 @@ def aws_emulator(request):
         port = int(port_setting) if port_setting else default_port()
         h = health.check(port)
         if not h.healthy:
-            pytest.fail(f"awsemu: --awsemu-reuse but no healthy emulator on port {port} ({h.detail}). "
-                        "Start one with 'awsemu up'.", pytrace=False)
+            pytest.fail(
+                f"awsemu: --awsemu-reuse but no healthy emulator on port {port} ({h.detail}). "
+                "Start one with 'awsemu up'.",
+                pytrace=False,
+            )
         emu = Emulator(port=port, seed_path=seed_path, started_here=False, mode=mode, _seed=seed)
     else:
         port = int(port_setting) if port_setting else _free_port()

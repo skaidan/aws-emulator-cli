@@ -87,8 +87,7 @@ def emulator_env(port: int, extras: Iterable[str] = ()) -> dict[str, str]:
     return env
 
 
-def child_env(port: int, base: Mapping[str, str] | None = None,
-              extras: Iterable[str] = ()) -> dict[str, str]:
+def child_env(port: int, base: Mapping[str, str] | None = None, extras: Iterable[str] = ()) -> dict[str, str]:
     """A full process environment for running a command against the emulator."""
     env = dict(os.environ if base is None else base)
     for var in REAL_CREDENTIAL_VARS:

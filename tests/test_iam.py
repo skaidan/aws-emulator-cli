@@ -8,20 +8,28 @@ from awsemu.cli import cli
 
 
 def c(service, operation, resource="", **extra):
-    return {"service": service, "operation": operation, "resource": resource, "status": 200, "error": None,
-            **extra}
+    return {"service": service, "operation": operation, "resource": resource, "status": 200, "error": None, **extra}
 
 
 CALLS = [
-    c("dynamodb", "PutItem", "orders"), c("dynamodb", "GetItem", "orders"), c("dynamodb", "Query", "orders"),
-    c("dynamodb", "PutItem", "users"), c("dynamodb", "ListTables"),
-    c("s3", "PutObject", "photos/a.jpg"), c("s3", "HeadObject", "photos/b.jpg"), c("s3", "ListObjectsV2", "photos"),
+    c("dynamodb", "PutItem", "orders"),
+    c("dynamodb", "GetItem", "orders"),
+    c("dynamodb", "Query", "orders"),
+    c("dynamodb", "PutItem", "users"),
+    c("dynamodb", "ListTables"),
+    c("s3", "PutObject", "photos/a.jpg"),
+    c("s3", "HeadObject", "photos/b.jpg"),
+    c("s3", "ListObjectsV2", "photos"),
     c("s3", "ListBuckets"),
-    c("sqs", "SendMessageBatch", "jobs"), c("sqs", "ReceiveMessage", "jobs"),
-    c("lambda", "Invoke", "resize"), c("ssm", "GetParameter", "/app/db/host"),
-    c("secretsmanager", "GetSecretValue", "db/password"), c("stepfunctions", "StartExecution", "flow"),
+    c("sqs", "SendMessageBatch", "jobs"),
+    c("sqs", "ReceiveMessage", "jobs"),
+    c("lambda", "Invoke", "resize"),
+    c("ssm", "GetParameter", "/app/db/host"),
+    c("secretsmanager", "GetSecretValue", "db/password"),
+    c("stepfunctions", "StartExecution", "flow"),
     c("logs", "PutLogEvents", "/aws/lambda/x"),
-    c("sts", "GetCallerIdentity"), c("", ""),
+    c("sts", "GetCallerIdentity"),
+    c("", ""),
     c("sqs", "SendMessage", "jobs", error="ThrottlingException", fault="sqs=throttle"),  # still needs it
 ]
 
@@ -29,8 +37,10 @@ CALLS = [
 def test_actions_and_arns():
     policy = ip.build(CALLS, region="eu-west-1", account="123456789012")
     a = policy.actions
-    assert a["dynamodb:PutItem"] == {"arn:aws:dynamodb:eu-west-1:123456789012:table/orders",
-                                     "arn:aws:dynamodb:eu-west-1:123456789012:table/users"}
+    assert a["dynamodb:PutItem"] == {
+        "arn:aws:dynamodb:eu-west-1:123456789012:table/orders",
+        "arn:aws:dynamodb:eu-west-1:123456789012:table/users",
+    }
     assert a["dynamodb:ListTables"] == {"*"}
     assert a["s3:PutObject"] == {"arn:aws:s3:::photos/*"} and a["s3:GetObject"] == {"arn:aws:s3:::photos/*"}
     assert a["s3:ListBucket"] == {"arn:aws:s3:::photos"} and a["s3:ListAllMyBuckets"] == {"*"}
@@ -71,9 +81,12 @@ def test_command(runner, isolated_home, tmp_path):
     files.calls.write_text("".join(json.dumps(x) + "\n" for x in CALLS))
     result = runner.invoke(cli, ["iam", "policy", "--service", "dynamodb", "--account", "111122223333"])
     assert result.exit_code == 0, result.output
-    doc = json.loads(result.output[:result.output.rindex("}") + 1])
-    assert all(a.startswith("dynamodb:") for s in doc["Statement"]
-               for a in (s["Action"] if isinstance(s["Action"], list) else [s["Action"]]))
+    doc = json.loads(result.output[: result.output.rindex("}") + 1])
+    assert all(
+        a.startswith("dynamodb:")
+        for s in doc["Statement"]
+        for a in (s["Action"] if isinstance(s["Action"], list) else [s["Action"]])
+    )
     out = tmp_path / "policy.tf"
     assert runner.invoke(cli, ["iam", "policy", "--format", "terraform", "-o", str(out)]).exit_code == 0
     assert "aws_iam_policy_document" in out.read_text()
@@ -85,7 +98,7 @@ def test_command(runner, isolated_home, tmp_path):
 
 from awsemu import iamcheck as ic  # noqa: E402
 
-TF = '''
+TF = """
 data "aws_iam_policy_document" "app" {
   statement {
     actions   = ["dynamodb:GetItem", "dynamodb:Query", "s3:Get*"]
@@ -106,9 +119,9 @@ resource "aws_iam_role_policy" "inline" {
 resource "aws_iam_role_policy_attachment" "x" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
 }
-'''
+"""
 
-SAM = '''
+SAM = """
 Transform: AWS::Serverless-2016-10-31
 Resources:
   Fn:
@@ -131,40 +144,71 @@ Resources:
               - Effect: Deny
                 Action: ["s3:DeleteObject"]
                 Resource: "*"
-'''
+"""
 
 
 def test_granted_from_terraform_sam_and_cdk_out(tmp_path):
     (tmp_path / "main.tf").write_text(TF)
     (tmp_path / "template.yaml").write_text(SAM)
     (tmp_path / "cdk.out").mkdir()
-    (tmp_path / "cdk.out" / "App.template.json").write_text(json.dumps({"Resources": {"P": {
-        "Type": "AWS::IAM::Policy", "Properties": {"PolicyDocument": {"Statement": [
-            {"Effect": "Allow", "Action": ["kinesis:PutRecord"], "Resource": "*"}]}}}}}))
+    (tmp_path / "cdk.out" / "App.template.json").write_text(
+        json.dumps(
+            {
+                "Resources": {
+                    "P": {
+                        "Type": "AWS::IAM::Policy",
+                        "Properties": {
+                            "PolicyDocument": {
+                                "Statement": [{"Effect": "Allow", "Action": ["kinesis:PutRecord"], "Resource": "*"}]
+                            }
+                        },
+                    }
+                }
+            }
+        )
+    )
     grants = ic.granted([tmp_path])
     patterns = {g.pattern for g in grants.actions}
-    assert {"dynamodb:GetItem", "dynamodb:Query", "s3:Get*", "sqs:SendMessage", "sqs:ReceiveMessage",
-            "lambda:InvokeFunction", "kinesis:PutRecord"} <= patterns
+    assert {
+        "dynamodb:GetItem",
+        "dynamodb:Query",
+        "s3:Get*",
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "lambda:InvokeFunction",
+        "kinesis:PutRecord",
+    } <= patterns
     assert "dynamodb:PutItem" not in patterns and "s3:DeleteObject" not in patterns  # Deny statements
     policies = {p for p, _ in grants.unexpanded}
-    assert {"arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess", "DynamoDBCrudPolicy", "AWSLambdaBasicExecutionRole",
-            "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"} <= policies
+    assert {
+        "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+        "DynamoDBCrudPolicy",
+        "AWSLambdaBasicExecutionRole",
+        "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess",
+    } <= policies
     assert grants.files == 3
     assert [g.pattern for g in grants.allows("s3:GetObject")] == ["s3:Get*"]
 
 
 def test_compare_and_command(runner, isolated_home, tmp_path):
     (tmp_path / "main.tf").write_text(TF)
-    needed = ic.needed_from_calls([dict(c("dynamodb", "GetItem", "orders"), id=1),
-                                   dict(c("dynamodb", "PutItem", "orders"), id=2),
-                                   dict(c("s3", "HeadObject", "b/k"), id=3)], "calls.jsonl")
+    needed = ic.needed_from_calls(
+        [
+            dict(c("dynamodb", "GetItem", "orders"), id=1),
+            dict(c("dynamodb", "PutItem", "orders"), id=2),
+            dict(c("s3", "HeadObject", "b/k"), id=3),
+        ],
+        "calls.jsonl",
+    )
     result = ic.compare(needed, ic.granted([tmp_path]))
     assert result.missing == ["dynamodb:PutItem"]
     assert {g.pattern for g in result.unused} == {"dynamodb:Query", "sqs:SendMessage", "sqs:ReceiveMessage"}
     assert result.as_dict()["needed"][0]["used_in"] == ["calls.jsonl:1"]
 
-    (tmp_path / "app.py").write_text("import boto3\nddb = boto3.client('dynamodb')\nddb.put_item(TableName='t')\n"
-                                     "ddb.get_item(TableName='t', Key={})\n")
+    (tmp_path / "app.py").write_text(
+        "import boto3\nddb = boto3.client('dynamodb')\nddb.put_item(TableName='t')\n"
+        "ddb.get_item(TableName='t', Key={})\n"
+    )
     data = json.loads(runner.invoke(cli, ["check", "--iam", str(tmp_path), "--json"]).output)
     assert data["missing"] == ["dynamodb:PutItem"]
     assert {n["action"] for n in data["needed"]} == {"dynamodb:GetItem", "dynamodb:PutItem"}

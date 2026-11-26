@@ -42,8 +42,7 @@ def check(port: int, timeout: float = 2.0) -> Health:
     if not is_open:
         return Health(port, False, False, "nothing is listening on the port")
     if not files.ca.exists():
-        return Health(port, True, False,
-                      f"port is open but {files.ca} is missing (not AWS Emulator?)")
+        return Health(port, True, False, f"port is open but {files.ca} is missing (not AWS Emulator?)")
     try:
         ctx = ssl.create_default_context(cafile=str(files.ca))
         with urllib.request.urlopen(files.health_url, context=ctx, timeout=timeout) as resp:
@@ -59,8 +58,7 @@ def check(port: int, timeout: float = 2.0) -> Health:
         return Health(port, True, False, str(getattr(exc, "reason", exc)))
 
 
-def wait_healthy(port: int, timeout: float = 30.0, interval: float = 0.5,
-                 abort=None) -> Health:
+def wait_healthy(port: int, timeout: float = 30.0, interval: float = 0.5, abort=None) -> Health:
     """Poll until healthy or ``timeout`` seconds. ``abort()`` returning a string stops early."""
     deadline = time.monotonic() + timeout
     last = check(port)

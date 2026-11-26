@@ -46,8 +46,11 @@ def ls(c: Ctx, target: str | None, recursive: bool, as_json: bool):
         if as_json:
             ui.print_json(buckets)
             return
-        ui.table(["bucket", "created"], [[b["Name"], _fmt_time(b.get("CreationDate"))]
-                                         for b in buckets], empty="No buckets. Try 'awsemu s3 mb NAME'.")
+        ui.table(
+            ["bucket", "created"],
+            [[b["Name"], _fmt_time(b.get("CreationDate"))] for b in buckets],
+            empty="No buckets. Try 'awsemu s3 mb NAME'.",
+        )
         return
 
     bucket, prefix = split_uri(target)
@@ -62,10 +65,8 @@ def ls(c: Ctx, target: str | None, recursive: bool, as_json: bool):
         ui.print_json({"prefixes": dirs, "objects": objects})
         return
     rows = [[ui.styled(d, "info"), "", "PRE"] for d in dirs]
-    rows += [[o["Key"], _fmt_time(o.get("LastModified")), ui.human_size(o.get("Size"))]
-             for o in objects]
-    ui.table(["key", "modified", "size"], rows, title=f"s3://{bucket}/{prefix}",
-             empty="No objects.")
+    rows += [[o["Key"], _fmt_time(o.get("LastModified")), ui.human_size(o.get("Size"))] for o in objects]
+    ui.table(["key", "modified", "size"], rows, title=f"s3://{bucket}/{prefix}", empty="No objects.")
     if objects:
         total = sum(o.get("Size", 0) for o in objects)
         ui.echo(f"{len(objects)} object(s), {ui.human_size(total)}", "muted")
@@ -197,8 +198,9 @@ def rm(c: Ctx, target: str, recursive: bool, yes: bool):
 
 @s3.command(name="presign")
 @click.argument("target", shell_complete=complete("s3path"))
-@click.option("--expires", type=int, default=3600, show_default=True, metavar="SECONDS",
-              help="How long the URL stays valid.")
+@click.option(
+    "--expires", type=int, default=3600, show_default=True, metavar="SECONDS", help="How long the URL stays valid."
+)
 @click.option("--put", "for_put", is_flag=True, help="URL for uploading instead of downloading.")
 @pass_ctx
 @handle_errors
@@ -206,6 +208,5 @@ def presign(c: Ctx, target: str, expires: int, for_put: bool):
     """Print a presigned URL for BUCKET/KEY."""
     bucket, key = split_uri(target)
     op = "put_object" if for_put else "get_object"
-    url = client("s3", c.port).generate_presigned_url(
-        op, Params={"Bucket": bucket, "Key": key}, ExpiresIn=expires)
+    url = client("s3", c.port).generate_presigned_url(op, Params={"Bucket": bucket, "Key": key}, ExpiresIn=expires)
     click.echo(url)

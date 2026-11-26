@@ -24,6 +24,7 @@ import json
 import re
 import time
 from dataclasses import dataclass, field
+from typing import Protocol
 from pathlib import Path
 
 from . import fidelity as fid
@@ -146,8 +147,14 @@ class Index:
                 raw = fid.service_name(shape)
                 services.add(self.names.resolve(raw) or raw)
             detail = unit.get("detail") or {}
-            test = Test(id=unit.get("unitId", ""), outcome=unit["outcome"],
-                        kind=unit.get("kind", ""), services=services, ops=set(), detail=detail)
+            test = Test(
+                id=unit.get("unitId", ""),
+                outcome=unit["outcome"],
+                kind=unit.get("kind", ""),
+                services=services,
+                ops=set(),
+                detail=detail,
+            )
             row = rows.get(test.id)
             if row:
                 test.ops = set(row["operations"])
@@ -175,8 +182,7 @@ class Index:
 
     def resolve_call(self, candidate: str, services: set[str]) -> list[str]:
         k = sc.key(candidate)
-        return [self.ops_by_service[s][k] for s in sorted(services)
-                if k in self.ops_by_service.get(s, {})]
+        return [self.ops_by_service[s][k] for s in sorted(services) if k in self.ops_by_service.get(s, {})]
 
 
 # --------------------------------------------------------------------------- report
@@ -194,14 +200,20 @@ class Difference:
         d = self.test.detail
         desc = fid.describe_failure({"unitId": self.test.id, "detail": d})
         return {
-            "test": self.test.id, "kind": self.test.kind,
-            "operation": desc["operation"] or None, "mismatch": desc["mismatch"] or None,
-            "expected": desc["expected"] or None, "actual": desc["actual"] or None,
-            "step": desc["step"] or None, "at_operation": self.at_operation,
+            "test": self.test.id,
+            "kind": self.test.kind,
+            "operation": desc["operation"] or None,
+            "mismatch": desc["mismatch"] or None,
+            "expected": desc["expected"] or None,
+            "actual": desc["actual"] or None,
+            "step": desc["step"] or None,
+            "at_operation": self.at_operation,
             "matches_usage": self.matches_usage,
             "url": f"{SUITE_URL}/blob/{suite_ref}/{self.test.path}" if self.test.path else None,
-            "issues": [{"title": i.title, "severity": i.severity or None, "state": i.file.state,
-                        "url": i.file.url} for i in self.issues],
+            "issues": [
+                {"title": i.title, "severity": i.severity or None, "state": i.file.state, "url": i.file.url}
+                for i in self.issues
+            ],
             "fixed_in": self.fixed_in,
         }
 
@@ -260,41 +272,64 @@ class Report:
             return {"file": location.file, "line": location.line, "source": location.source}
 
         return {
-            "release": self.release, "suite": self.suite, "scanned_files": self.files,
+            "release": self.release,
+            "suite": self.suite,
+            "scanned_files": self.files,
             "sources": self.sources,
-            "operations": [{
-                "operation": o.operation, "service": o.service,
-                "locations": [loc(x) for x in o.locations], "tests": o.tests, "passed": o.passed,
-                "differences": [d.as_dict(self.suite) for d in o.differences[:limit]],
-                "other_failing": o.other_failing,
-            } for o in self.operations],
+            "operations": [
+                {
+                    "operation": o.operation,
+                    "service": o.service,
+                    "locations": [loc(x) for x in o.locations],
+                    "tests": o.tests,
+                    "passed": o.passed,
+                    "differences": [d.as_dict(self.suite) for d in o.differences[:limit]],
+                    "other_failing": o.other_failing,
+                }
+                for o in self.operations
+            ],
             "uncovered": self.uncovered,
-            "services": [{
-                "service": s.service, "sources": s.sources, "tests": s.tests, "passed": s.passed,
-                "resources": [{"type": t, **loc(x)} for t, x in s.resources],
-                "cloudformation": ({"tests": s.cfn_tests, "passed": s.cfn_passed,
-                                    "failing": [t.id for t in s.cfn_failing[:limit]]}
-                                   if s.cfn_tests else None),
-            } for s in self.services],
+            "services": [
+                {
+                    "service": s.service,
+                    "sources": s.sources,
+                    "tests": s.tests,
+                    "passed": s.passed,
+                    "resources": [{"type": t, **loc(x)} for t, x in s.resources],
+                    "cloudformation": (
+                        {"tests": s.cfn_tests, "passed": s.cfn_passed, "failing": [t.id for t in s.cfn_failing[:limit]]}
+                        if s.cfn_tests
+                        else None
+                    ),
+                }
+                for s in self.services
+            ],
             "summary": {
-                "operations": len(self.operations), "services": len(self.services),
+                "operations": len(self.operations),
+                "services": len(self.services),
                 "operations_with_differences": len(self.with_differences),
                 # distinct failing tests (one can be a difference for several operations)
                 "differences": len(self._unique_differences()),
-                "explained_by_issues": (sum(bool(d.issues) for d in self._unique_differences())
-                                        if self.issues_checked else None),
-                "fixed_in_latest": (sum(bool(d.fixed_in) for d in self._unique_differences())
-                                    if self.latest else None),
+                "explained_by_issues": (
+                    sum(bool(d.issues) for d in self._unique_differences()) if self.issues_checked else None
+                ),
+                "fixed_in_latest": (sum(bool(d.fixed_in) for d in self._unique_differences()) if self.latest else None),
                 "latest": self.latest,
             },
         }
 
 
-def find_operations(result: sc.ScanResult, index: Index) -> dict[str, list[sc.Location]]:
+class Resolver(Protocol):
+    """What :func:`find_operations` needs: an :class:`Index`, or botocore's models (``iamcheck``)."""
+
+    def resolve_call(self, candidate: str, services: set[str]) -> list[str]: ...
+
+
+def find_operations(result: sc.ScanResult, index: Resolver) -> dict[str, list[sc.Location]]:
     used: dict[str, list[sc.Location]] = {}
     by_source = {src: result.code_services(src) for src in ("python", "node", "java", "go")}
     for usage in result.by_file.values():
-        local = {s for s, locs in usage.services.items() if any(l.source not in sc.IAC for l in locs)}
+        local = {s for s, locs in usage.services.items() if any(loc.source not in sc.IAC for loc in locs)}
         for candidate, location in usage.calls:
             services = local or by_source.get(location.source, set())
             for op in index.resolve_call(candidate, services):
@@ -341,8 +376,7 @@ def analyze(result: sc.ScanResult, index: Index, release: str, suite: str) -> Re
         if not tests:
             uncovered.append(op)
             continue
-        report = OperationReport(op, used[op], tests=len(tests),
-                                 passed=sum(t.outcome == "pass" for t in tests))
+        report = OperationReport(op, used[op], tests=len(tests), passed=sum(t.outcome == "pass" for t in tests))
         for t in tests:
             if t.outcome != "fail":
                 continue
@@ -356,29 +390,43 @@ def analyze(result: sc.ScanResult, index: Index, release: str, suite: str) -> Re
         operations.append(report)
     operations.sort(key=lambda o: (-len(o.differences), o.operation))
 
-    services = []
+    services: list[ServiceReport] = []
     iac = result.iac()
-    code = {}
+    code: dict[str, set[str]] = {}
     for usage in result.by_file.values():
         for svc, locs in usage.services.items():
-            code.setdefault(svc, set()).update(l.source for l in locs)
+            code.setdefault(svc, set()).update(loc.source for loc in locs)
     for op in used:
         code.setdefault(op.split(":", 1)[0], set())
     for svc in sorted(set(code) | set(iac)):
         single = [t for t in index.tests if t.single_service and svc in t.services]
         sources = set(code.get(svc, set())) | {loc.source for _, loc in iac.get(svc, [])}
-        report = ServiceReport(svc, sorted(sources), tests=len(single),
-                               passed=sum(t.outcome == "pass" for t in single),
-                               resources=iac.get(svc, []))
+        service_report = ServiceReport(
+            svc,
+            sorted(sources),
+            tests=len(single),
+            passed=sum(t.outcome == "pass" for t in single),
+            resources=iac.get(svc, []),
+        )
         if any(loc.source in ("cloudformation", "cdk") for _, loc in iac.get(svc, [])):
-            cfn = [t for t in index.tests if t.group and "cloudformation" in t.group.split("__")
-                   and svc in t.group.split("__")]
-            report.cfn_tests = len(cfn)
-            report.cfn_passed = sum(t.outcome == "pass" for t in cfn)
-            report.cfn_failing = sorted((t for t in cfn if t.outcome == "fail"), key=lambda t: t.id)
-        services.append(report)
-    return Report(release=release, suite=suite, files=result.files, sources=sorted(result.sources),
-                  operations=operations, uncovered=uncovered, services=services)
+            cfn = [
+                t
+                for t in index.tests
+                if t.group and "cloudformation" in t.group.split("__") and svc in t.group.split("__")
+            ]
+            service_report.cfn_tests = len(cfn)
+            service_report.cfn_passed = sum(t.outcome == "pass" for t in cfn)
+            service_report.cfn_failing = sorted((t for t in cfn if t.outcome == "fail"), key=lambda t: t.id)
+        services.append(service_report)
+    return Report(
+        release=release,
+        suite=suite,
+        files=result.files,
+        sources=sorted(result.sources),
+        operations=operations,
+        uncovered=uncovered,
+        services=services,
+    )
 
 
 def attach_issues(report: Report, refresh: bool = False) -> None:

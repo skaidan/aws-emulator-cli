@@ -13,8 +13,13 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture
 def repo_copy(tmp_path):
     try:
-        files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard"], cwd=ROOT, capture_output=True, text=True,
-                               check=True).stdout.splitlines()
+        files = subprocess.run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
     except (OSError, subprocess.CalledProcessError):
         pytest.skip("needs a git checkout")
     dest = tmp_path / "repo"
@@ -34,8 +39,9 @@ def names(repo):
 
 
 def run(repo, *args):
-    return subprocess.run([sys.executable, str(repo / "scripts" / "rename.py"), *args],
-                          cwd=repo, capture_output=True, text=True)
+    return subprocess.run(
+        [sys.executable, str(repo / "scripts" / "rename.py"), *args], cwd=repo, capture_output=True, text=True
+    )
 
 
 def test_check_lists_occurrences(repo_copy):
@@ -57,8 +63,11 @@ def test_rename_everywhere(repo_copy):
     assert 'DIST_NAME = "emu-pal"' in meta and 'REPO = "someone/emu-pal"' in meta
     assert "uses: someone/emu-pal@" in (repo_copy / "README.md").read_text()
     assert (repo_copy / "CHANGELOG.md").read_text() == before_changelog
-    left = subprocess.run(["grep", "-rIl", "--exclude=CHANGELOG.md", "-e", old_dist,
-                           "-e", old_dist.replace("-", "_"), str(repo_copy)], capture_output=True, text=True)
+    left = subprocess.run(
+        ["grep", "-rIl", "--exclude=CHANGELOG.md", "-e", old_dist, "-e", old_dist.replace("-", "_"), str(repo_copy)],
+        capture_output=True,
+        text=True,
+    )
     assert left.stdout == "", left.stdout
 
 

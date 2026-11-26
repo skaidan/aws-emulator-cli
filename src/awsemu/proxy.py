@@ -46,8 +46,17 @@ ADMIN = "/__awsemu/proxy"
 TOKEN_HEADER = "X-Awsemu-Token"
 # Names containers use to reach the host (Docker Desktop, and Linux with host-gateway)
 CONTAINER_HOST = "host.docker.internal"
-HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te",
-              "trailer", "transfer-encoding", "upgrade", "expect"}
+HOP_BY_HOP = {
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "expect",
+}
 MAX_LOG_BYTES = 20_000_000
 RING = 5000
 MAX_BODY = 64 * 1024  # per body, with --bodies
@@ -70,16 +79,21 @@ def body_record(data: bytes, content_type: str) -> dict:
     return out
 
 
-def exchange(method: str, path: str, req_headers, req_body: bytes, status: int, resp_headers,
-             resp_body: bytes) -> dict:
+def exchange(method: str, path: str, req_headers, req_body: bytes, status: int, resp_headers, resp_body: bytes) -> dict:
     """``request`` and ``response`` of one call, masked, for the calls log."""
     req_h = redact.headers(list(req_headers))
     resp_h = redact.headers(list(resp_headers))
     req_ct = next((v for k, v in req_h if k.lower() == "content-type"), "")
     resp_ct = next((v for k, v in resp_h if k.lower() == "content-type"), "")
-    return {"request": {"method": method, "path": redact.url(path), "headers": req_h,
-                        "body": body_record(req_body, req_ct)},
-            "response": {"status": status, "headers": resp_h, "body": body_record(resp_body, resp_ct)}}
+    return {
+        "request": {
+            "method": method,
+            "path": redact.url(path),
+            "headers": req_h,
+            "body": body_record(req_body, req_ct),
+        },
+        "response": {"status": status, "headers": resp_h, "body": body_record(resp_body, resp_ct)},
+    }
 
 
 class ProxyError(Exception):
@@ -165,8 +179,11 @@ def ensure_certs(files: ProxyFiles, extra_names: tuple[str, ...] = ()) -> None:
     files.ca.parent.mkdir(parents=True, exist_ok=True)
 
     def write_key(path: Path, key) -> None:
-        path.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                           serialization.NoEncryption()))
+        path.write_bytes(
+            key.private_bytes(
+                serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+            )
+        )
         try:
             path.chmod(0o600)
         except OSError:  # pragma: no cover
@@ -174,22 +191,44 @@ def ensure_certs(files: ProxyFiles, extra_names: tuple[str, ...] = ()) -> None:
 
     if files.ca.exists() and files.ca_key.exists():
         ca_cert = x509.load_pem_x509_certificate(files.ca.read_bytes())
-        ca_key = serialization.load_pem_private_key(files.ca_key.read_bytes(), None)
+        loaded = serialization.load_pem_private_key(files.ca_key.read_bytes(), None)
+        if not isinstance(loaded, ec.EllipticCurvePrivateKey):  # awsemu only ever writes EC keys
+            raise ProxyError(f"{files.ca_key} isn't the proxy's EC key: delete it and the CA to make new ones")
+        ca_key = loaded
     else:
         ca_key = ec.generate_private_key(ec.SECP256R1())
-        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "awsemu proxy local CA"),
-                          x509.NameAttribute(NameOID.ORGANIZATION_NAME, "awsemu")])
-        ca_cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
-                   .public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
-                   .not_valid_before(now - dt.timedelta(minutes=5))
-                   .not_valid_after(now + dt.timedelta(days=3650))
-                   .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
-                   .add_extension(x509.KeyUsage(digital_signature=True, key_cert_sign=True, crl_sign=True,
-                                                content_commitment=False, key_encipherment=False,
-                                                data_encipherment=False, key_agreement=False,
-                                                encipher_only=False, decipher_only=False), critical=True)
-                   .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
-                   .sign(ca_key, hashes.SHA256()))
+        name = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COMMON_NAME, "awsemu proxy local CA"),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "awsemu"),
+            ]
+        )
+        ca_cert = (
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(name)
+            .public_key(ca_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - dt.timedelta(minutes=5))
+            .not_valid_after(now + dt.timedelta(days=3650))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=True,
+                    key_cert_sign=True,
+                    crl_sign=True,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
+            .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
+            .sign(ca_key, hashes.SHA256())
+        )
         write_key(files.ca_key, ca_key)
         files.ca.write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM))
         files.cert.unlink(missing_ok=True)
@@ -206,17 +245,20 @@ def ensure_certs(files: ProxyFiles, extra_names: tuple[str, ...] = ()) -> None:
         if expires - now > dt.timedelta(days=7) and set(wanted) <= have:
             return
     key = ec.generate_private_key(ec.SECP256R1())
-    cert = (x509.CertificateBuilder()
-            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")]))
-            .issuer_name(ca_cert.subject).public_key(key.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(now - dt.timedelta(minutes=5))
-            .not_valid_after(now + dt.timedelta(days=397))
-            .add_extension(x509.SubjectAlternativeName(wanted), critical=False)
-            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
-            .sign(ca_key, hashes.SHA256()))
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")]))
+        .issuer_name(ca_cert.subject)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - dt.timedelta(minutes=5))
+        .not_valid_after(now + dt.timedelta(days=397))
+        .add_extension(x509.SubjectAlternativeName(wanted), critical=False)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
+        .sign(ca_key, hashes.SHA256())
+    )
     write_key(files.key, key)
     files.cert.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
 
@@ -228,12 +270,12 @@ class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server: ProxyServer
 
-    def log_message(self, format, *args):  # noqa: A002 - quiet
+    def log_message(self, format, *args):
         pass
 
     def _body(self) -> bytes:
         if "chunked" in self.headers.get("Transfer-Encoding", "").lower():
-            chunks = []
+            chunks: list[bytes] = []
             while True:
                 size = int(self.rfile.readline().split(b";")[0].strip() or b"0", 16)
                 if size == 0:
@@ -272,45 +314,77 @@ class _Handler(BaseHTTPRequestHandler):
         headers = {k.lower(): v for k, v in self.headers.items()}
         try:
             ident = awscalls.identify(self.command, self.path, headers, body)
-        except Exception:  # noqa: BLE001 - never break a call because we can't name it
+        except Exception:
             ident = awscalls.Identified()
         decision = self.server.faults.decide(ident.service, ident.operation, ident.resource)
         if decision.latency_ms:
             time.sleep(decision.latency_ms / 1000)
         rule = decision.error
         if rule and rule.reset:
-            self.server.record(ident, self, 0, "ConnectionReset", started, None, decision.label, len(body), 0,
-                               (body, [], b""))
+            self.server.record(
+                ident, self, 0, "ConnectionReset", started, None, decision.label, len(body), 0, (body, [], b"")
+            )
             self._reset()
             return
         if rule:
             code, status = faults.code_and_status(rule, ident.service, ident.protocol)
             status, h, data = faults.error_response(
-                code, status, ident.protocol, f"Injected by awsemu proxy ({rule.spec})",
-                headers.get("content-type", ""))
+                code, status, ident.protocol, f"Injected by awsemu proxy ({rule.spec})", headers.get("content-type", "")
+            )
             # Recorded before answering: once the client has its answer, the call is in the log.
-            self.server.record(ident, self, status, code, started, h.get("x-amzn-RequestId"),
-                               decision.label, len(body), len(data), (body, list(h.items()), data))
+            self.server.record(
+                ident,
+                self,
+                status,
+                code,
+                started,
+                h.get("x-amzn-RequestId"),
+                decision.label,
+                len(body),
+                len(data),
+                (body, list(h.items()), data),
+            )
             self._send(status, list(h.items()), data, head=self.command == "HEAD")
             return
         try:
             status, resp_headers, data = self.server.forward(self.command, self.path, self.headers.items(), body)
         except (OSError, http.client.HTTPException) as exc:
             status, h, data = faults.error_response(
-                "EmulatorUnreachable", 502, ident.protocol,
+                "EmulatorUnreachable",
+                502,
+                ident.protocol,
                 f"awsemu proxy: the emulator on port {self.server.emulator_port} didn't answer ({exc})",
-                headers.get("content-type", ""))
-            self.server.record(ident, self, 502, "EmulatorUnreachable", started, None, decision.label,
-                               len(body), len(data), (body, list(h.items()), data))
+                headers.get("content-type", ""),
+            )
+            self.server.record(
+                ident,
+                self,
+                502,
+                "EmulatorUnreachable",
+                started,
+                None,
+                decision.label,
+                len(body),
+                len(data),
+                (body, list(h.items()), data),
+            )
             self._send(status, list(h.items()), data, head=self.command == "HEAD")
             return
         lower = {k.lower(): v for k, v in resp_headers}
-        logged = self.server.record(ident, self, status, awscalls.error_code(status, lower, data), started,
-                                    awscalls.request_id(lower), decision.label, len(body), len(data),
-                                    (body, resp_headers, data))
+        logged = self.server.record(
+            ident,
+            self,
+            status,
+            awscalls.error_code(status, lower, data),
+            started,
+            awscalls.request_id(lower),
+            decision.label,
+            len(body),
+            len(data),
+            (body, resp_headers, data),
+        )
         if self.server.shadow is not None:
-            self.server.shadow.offer(logged, self.command, self.path, self.headers.items(), body,
-                                     (status, lower, data))
+            self.server.shadow.offer(logged, self.command, self.path, self.headers.items(), body, (status, lower, data))
         self._send(status, resp_headers, data, head=self.command == "HEAD")
 
     def _reset(self) -> None:
@@ -323,13 +397,14 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _admin(self, body: bytes) -> None:
         url = urlsplit(self.path)
-        route = url.path[len(ADMIN):].strip("/")
+        route = url.path[len(ADMIN) :].strip("/")
         query = dict(parse_qsl(url.query))
-        status, data = 200, {}
+        status, data = 200, {}  # type: tuple[int, dict]
         token = self.server.admin_token
         if token and not hmac.compare_digest(self.headers.get(TOKEN_HEADER, ""), token):
-            payload = json.dumps({"message": f"the admin API needs the proxy's token ({TOKEN_HEADER}); "
-                                             "awsemu proxy commands send it"}).encode()
+            payload = json.dumps(
+                {"message": f"the admin API needs the proxy's token ({TOKEN_HEADER}); awsemu proxy commands send it"}
+            ).encode()
             self._send(401, [("Content-Type", "application/json")], payload)
             return
         try:
@@ -366,9 +441,20 @@ class ProxyServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, emulator_port: int, listen_port: int = 0, rules: list[faults.Fault] | None = None,
-                 tls: bool = True, calls_file: Path | None = None, on_call=None, timeout: float = 120.0,
-                 bodies: bool = False, host: str = DEFAULT_HOST, admin_token: str | None = "", shadow=None):
+    def __init__(
+        self,
+        emulator_port: int,
+        listen_port: int = 0,
+        rules: list[faults.Fault] | None = None,
+        tls: bool = True,
+        calls_file: Path | None = None,
+        on_call=None,
+        timeout: float = 120.0,
+        bodies: bool = False,
+        host: str = DEFAULT_HOST,
+        admin_token: str | None = "",
+        shadow=None,
+    ):
         """``admin_token``: "" makes a random one; None turns the check off (tests)."""
         self.emulator_port = emulator_port
         self.bodies = bodies
@@ -385,6 +471,8 @@ class ProxyServer(ThreadingHTTPServer):
         self._lock = threading.Lock()
         self._upstream_ctx: tuple[float, ssl.SSLContext] | None = None
         self._local = threading.local()
+        self._upstream_conns: set[http.client.HTTPSConnection] = set()  # closed with the server
+        self._open_sockets: set[ssl.SSLSocket] = set()
         self.tls = tls
         self._ctx = None
         if tls:
@@ -401,16 +489,43 @@ class ProxyServer(ThreadingHTTPServer):
         import socketserver
 
         socketserver.TCPServer.server_bind(self)
-        self.server_name, self.server_port = self.server_address[:2]
+        host, port = self.server_address[:2]
+        self.server_name, self.server_port = str(host), int(port)
 
     # TLS handshake in the worker thread, not in the accept loop
     def finish_request(self, request, client_address):
-        if self._ctx:
+        if not self._ctx:
+            super().finish_request(request, client_address)
+            return
+        try:
+            wrapped = self._ctx.wrap_socket(request, server_side=True)
+        except (ssl.SSLError, OSError):
+            return
+        with self._lock:
+            self._open_sockets.add(wrapped)
+        try:
+            super().finish_request(wrapped, client_address)
+        finally:
+            with self._lock:
+                self._open_sockets.discard(wrapped)
+            # socketserver closes the raw socket it accepted; the TLS one owns the descriptor now
             try:
-                request = self._ctx.wrap_socket(request, server_side=True)
-            except (ssl.SSLError, OSError):
-                return
-        super().finish_request(request, client_address)
+                wrapped.close()
+            except OSError:  # pragma: no cover
+                pass
+
+    def server_close(self):
+        super().server_close()
+        with self._lock:
+            conns, self._upstream_conns = self._upstream_conns, set()
+            open_sockets, self._open_sockets = self._open_sockets, set()
+        for conn in conns:
+            conn.close()
+        for sock in open_sockets:  # clients' keep-alive connections, still waiting for a request
+            try:
+                sock.close()
+            except OSError:  # pragma: no cover
+                pass
 
     @property
     def port(self) -> int:
@@ -447,9 +562,12 @@ class ProxyServer(ThreadingHTTPServer):
         for attempt in (1, 2):
             conn = getattr(self._local, "conn", None)
             if conn is None or getattr(self._local, "ctx", None) is not ctx:
-                conn = http.client.HTTPSConnection(DEFAULT_HOST, self.emulator_port, context=ctx,
-                                                   timeout=self.timeout_s)
+                conn = http.client.HTTPSConnection(
+                    DEFAULT_HOST, self.emulator_port, context=ctx, timeout=self.timeout_s
+                )
                 self._local.conn, self._local.ctx = conn, ctx
+                with self._lock:
+                    self._upstream_conns.add(conn)
             try:
                 conn.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
                 for k, v in headers:
@@ -464,8 +582,12 @@ class ProxyServer(ThreadingHTTPServer):
                     conn.close()
                     self._local.conn = None
                 return resp.status, resp.getheaders(), data
-            except (http.client.RemoteDisconnected, BrokenPipeError, ConnectionResetError,
-                    http.client.CannotSendRequest):
+            except (
+                http.client.RemoteDisconnected,
+                BrokenPipeError,
+                ConnectionResetError,
+                http.client.CannotSendRequest,
+            ):
                 conn.close()
                 self._local.conn = None
                 if attempt == 2:
@@ -474,21 +596,34 @@ class ProxyServer(ThreadingHTTPServer):
 
     # -- calls
 
-    def record(self, ident, handler, status, error, started, request_id, fault, bytes_in, bytes_out,
-               bodies=None) -> dict:
+    def record(
+        self, ident, handler, status, error, started, request_id, fault, bytes_in, bytes_out, bodies=None
+    ) -> dict:
         """Log one call. ``bodies`` is ``(request body, response headers, response body)``,
         kept (masked) only when the proxy runs with --bodies."""
         call = awscalls.Call(
             time=dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds"),
-            service=ident.service, operation=ident.operation, resource=ident.resource,
-            method=handler.command, path=redact.url(handler.path)[:300], status=status, error=error,
-            latency_ms=round((time.perf_counter() - started) * 1000, 1), request_id=request_id,
-            fault=fault, bytes_in=bytes_in, bytes_out=bytes_out)
+            service=ident.service,
+            operation=ident.operation,
+            resource=ident.resource,
+            method=handler.command,
+            path=redact.url(handler.path)[:300],
+            status=status,
+            error=error,
+            latency_ms=round((time.perf_counter() - started) * 1000, 1),
+            request_id=request_id,
+            fault=fault,
+            bytes_in=bytes_in,
+            bytes_out=bytes_out,
+        )
         data = call.as_dict()
         if self.bodies and bodies is not None:
             req_body, resp_headers, resp_body = bodies
-            data.update(exchange(handler.command, handler.path, handler.headers.items(), req_body,
-                                 status, resp_headers, resp_body))
+            data.update(
+                exchange(
+                    handler.command, handler.path, handler.headers.items(), req_body, status, resp_headers, resp_body
+                )
+            )
         with self._lock:
             self.count += 1
             data["id"] = self.count
@@ -498,11 +633,13 @@ class ProxyServer(ThreadingHTTPServer):
         if self.on_call:
             try:
                 self.on_call(data)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         return data
 
     def _append(self, data: dict) -> None:
+        if self.calls_file is None:
+            return
         try:
             if self.calls_file.exists() and self.calls_file.stat().st_size > MAX_LOG_BYTES:
                 self.calls_file.replace(self.calls_file.with_suffix(".1.jsonl"))
@@ -548,11 +685,12 @@ def running(emulator_port: int) -> dict | None:
 def admin(state: dict, method: str, route: str, payload: dict | None = None, timeout: float = 10) -> dict:
     """Call the admin API of a running proxy."""
     url = urlsplit(state["endpoint_url"])
+    conn: http.client.HTTPConnection
     if url.scheme == "https":
         ctx = ssl.create_default_context(cafile=state["ca"])
-        conn = http.client.HTTPSConnection(url.hostname, url.port, context=ctx, timeout=timeout)
+        conn = http.client.HTTPSConnection(url.hostname or "127.0.0.1", url.port, context=ctx, timeout=timeout)
     else:
-        conn = http.client.HTTPConnection(url.hostname, url.port, timeout=timeout)
+        conn = http.client.HTTPConnection(url.hostname or "127.0.0.1", url.port, timeout=timeout)
     body = json.dumps(payload).encode() if payload is not None else None
     headers = {"Content-Type": "application/json"} if body else {}
     if state.get("token"):
@@ -582,9 +720,17 @@ def _write_private(path: Path, text: str) -> None:
         pass
 
 
-def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: bool = True,
-          on_call=None, on_ready=None, bodies: bool = False, host: str = DEFAULT_HOST,
-          shadow: dict | None = None) -> int:
+def serve(
+    emulator_port: int,
+    listen_port: int,
+    rules: list[faults.Fault],
+    tls: bool = True,
+    on_call=None,
+    on_ready=None,
+    bodies: bool = False,
+    host: str = DEFAULT_HOST,
+    shadow: dict | None = None,
+) -> int:
     """Run the proxy in this process until SIGTERM/Ctrl-C, keeping the state file."""
     files = ProxyFiles(emulator_port)
     files.dir.mkdir(parents=True, exist_ok=True)
@@ -593,15 +739,36 @@ def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: 
         from .shadow import Shadow
 
         shadow_obj = Shadow(shadow["profile"], shadow.get("region"), files.shadow, shadow.get("max", 500))
-    server = ProxyServer(emulator_port, listen_port, rules, tls=tls, calls_file=files.calls, on_call=on_call,
-                         bodies=bodies, host=host, shadow=shadow_obj)
-    state = {"pid": os.getpid(), "emulator_port": emulator_port, "port": server.port,
-             "endpoint_url": server.endpoint_url, "host": host,
-             "container_endpoint_url": server.container_endpoint_url,
-             "tls": tls, "ca": str(files.ca) if tls else None, "bodies": bodies, "token": server.admin_token,
-             "shadow": ({"profile": shadow["profile"], "region": shadow_obj.region, "max": shadow_obj.max_calls}
-                        if shadow_obj else None),
-             "calls": str(files.calls), "started_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+    server = ProxyServer(
+        emulator_port,
+        listen_port,
+        rules,
+        tls=tls,
+        calls_file=files.calls,
+        on_call=on_call,
+        bodies=bodies,
+        host=host,
+        shadow=shadow_obj,
+    )
+    state = {
+        "pid": os.getpid(),
+        "emulator_port": emulator_port,
+        "port": server.port,
+        "endpoint_url": server.endpoint_url,
+        "host": host,
+        "container_endpoint_url": server.container_endpoint_url,
+        "tls": tls,
+        "ca": str(files.ca) if tls else None,
+        "bodies": bodies,
+        "token": server.admin_token,
+        "shadow": (
+            {"profile": shadow["profile"], "region": shadow_obj.region, "max": shadow_obj.max_calls}
+            if shadow_obj and shadow
+            else None
+        ),
+        "calls": str(files.calls),
+        "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+    }
     _write_private(files.state, json.dumps(state))
 
     def stop(*_):
@@ -629,17 +796,35 @@ def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: 
     return 0
 
 
-def start_detached(emulator_port: int, listen_port: int, specs: list[str], tls: bool = True,
-                   wait: float = 20.0, bodies: bool = False, host: str = DEFAULT_HOST,
-                   shadow: dict | None = None) -> dict:
+def start_detached(
+    emulator_port: int,
+    listen_port: int,
+    specs: list[str],
+    tls: bool = True,
+    wait: float = 20.0,
+    bodies: bool = False,
+    host: str = DEFAULT_HOST,
+    shadow: dict | None = None,
+) -> dict:
     """Start ``awsemu proxy start`` in the background and wait until it answers."""
     from .runtime import _popen_detached
 
     files = ProxyFiles(emulator_port)
     files.dir.mkdir(parents=True, exist_ok=True)
     files.state.unlink(missing_ok=True)
-    cmd = [sys.executable, "-m", "awsemu", "--port", str(emulator_port), "proxy", "start",
-           "--listen", str(listen_port), "--quiet", "--foreground"]
+    cmd = [
+        sys.executable,
+        "-m",
+        "awsemu",
+        "--port",
+        str(emulator_port),
+        "proxy",
+        "start",
+        "--listen",
+        str(listen_port),
+        "--quiet",
+        "--foreground",
+    ]
     if not tls:
         cmd.append("--no-tls")
     if bodies:

@@ -28,7 +28,7 @@ import ssl
 import sys
 import tempfile
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: F401
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from cryptography import x509
@@ -39,9 +39,17 @@ from cryptography.x509.oid import NameOID
 
 def log(message, **fields):
     # Same shape as the real emulator (Rust ``tracing`` JSON): message inside "fields".
-    print(json.dumps({"timestamp": "2026-11-15T12:00:00.123456Z", "level": "INFO",
-                      "fields": {"message": message, **fields},
-                      "target": "aws_emulator"}), flush=True)
+    print(
+        json.dumps(
+            {
+                "timestamp": "2026-11-15T12:00:00.123456Z",
+                "level": "INFO",
+                "fields": {"message": message, **fields},
+                "target": "aws_emulator",
+            }
+        ),
+        flush=True,
+    )
 
 
 class Server(ThreadingHTTPServer):
@@ -64,19 +72,18 @@ def make_cert(cert_path: Path, key_path: Path) -> None:
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - datetime.timedelta(minutes=5))
         .not_valid_after(now + datetime.timedelta(days=1))
-        .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]),
-                       critical=False)
+        .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]), critical=False)
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
         .sign(key, hashes.SHA256())
     )
     cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-    key_path.write_bytes(key.private_bytes(serialization.Encoding.PEM,
-                                           serialization.PrivateFormat.PKCS8,
-                                           serialization.NoEncryption()))
+    key_path.write_bytes(
+        key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    )
 
 
 class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):  # noqa: N802
+    def do_GET(self):
         if self.path == "/__admin/health":
             body = b"ok"
             self.send_response(200)
@@ -116,12 +123,12 @@ def main():
     key = tmp / "key.pem"
     make_cert(root / "ca.pem", key)
     (root / "config").write_text(
-        f"[default]\nregion = us-east-1\nendpoint_url = https://127.0.0.1:{port}\n"
-        f"ca_bundle = {root / 'ca.pem'}\n")
+        f"[default]\nregion = us-east-1\nendpoint_url = https://127.0.0.1:{port}\nca_bundle = {root / 'ca.pem'}\n"
+    )
     if args.auth == "on":
         (root / "emulator_credentials").write_text(
-            "[default]\naws_access_key_id = EMULATOR0123456789AB\n"
-            "aws_secret_access_key = " + "A" * 40 + "\n")
+            "[default]\naws_access_key_id = EMULATOR0123456789AB\naws_secret_access_key = " + "A" * 40 + "\n"
+        )
 
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(str(root / "ca.pem"), str(key))
@@ -139,9 +146,13 @@ def main():
         signal.signal(sig, handler)
 
     print(f"telemetry is {args.telemetry}", file=sys.stderr, flush=True)
-    log("emulator server information", endpoint_url=f"https://127.0.0.1:{port}",
+    log(
+        "emulator server information",
+        endpoint_url=f"https://127.0.0.1:{port}",
         health_check_url=f"https://127.0.0.1:{port}/__admin/health",
-        config_file=str(root / "config"), ca_file=str(root / "ca.pem"))
+        config_file=str(root / "config"),
+        ca_file=str(root / "ca.pem"),
+    )
     server.serve_forever(poll_interval=0.2)
     shutil.rmtree(root, ignore_errors=True)
     shutil.rmtree(tmp, ignore_errors=True)

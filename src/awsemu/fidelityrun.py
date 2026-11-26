@@ -28,8 +28,17 @@ from pathlib import Path
 from .paths import cli_root
 
 SUITE_REPO = "https://github.com/aws/aws-emulator-evaluation-suite"
-SCRUB = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE",
-         "AWS_ENDPOINT_URL", "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_CA_BUNDLE")
+SCRUB = (
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AWS_PROFILE",
+    "AWS_DEFAULT_PROFILE",
+    "AWS_ENDPOINT_URL",
+    "AWS_CONFIG_FILE",
+    "AWS_SHARED_CREDENTIALS_FILE",
+    "AWS_CA_BUNDLE",
+)
 
 
 class RunError(Exception):
@@ -55,9 +64,16 @@ class TestResult:
         return (self.verdict == "passed") == (self.published == "pass")
 
     def as_dict(self) -> dict:
-        return {"test": self.check_id, "path": self.path, "verdict": self.verdict, "kind": self.kind,
-                "detail": self.detail, "duration_ms": self.duration_ms, "published": self.published,
-                "same_as_published": self.agrees}
+        return {
+            "test": self.check_id,
+            "path": self.path,
+            "verdict": self.verdict,
+            "kind": self.kind,
+            "detail": self.detail,
+            "duration_ms": self.duration_ms,
+            "published": self.published,
+            "same_as_published": self.agrees,
+        }
 
 
 @dataclass
@@ -80,13 +96,19 @@ def suite(ref: str, refresh: bool = False) -> Suite:
     if not (root / "manifest.jsonl").exists():
         git = shutil.which("git")
         if not git:
-            raise RunError("running the fidelity tests needs git, to fetch AWS's evaluation suite",
-                           "Install git, or clone the suite yourself and pass --suite PATH.")
+            raise RunError(
+                "running the fidelity tests needs git, to fetch AWS's evaluation suite",
+                "Install git, or clone the suite yourself and pass --suite PATH.",
+            )
         root.parent.mkdir(parents=True, exist_ok=True)
         tmp = root.with_name(ref + ".partial")
         shutil.rmtree(tmp, ignore_errors=True)
-        done = subprocess.run([git, "clone", "-q", "--depth", "1", "--branch", ref, SUITE_REPO, str(tmp)],
-                              capture_output=True, text=True, env={**_env(), "GIT_LFS_SKIP_SMUDGE": "1"})
+        done = subprocess.run(
+            [git, "clone", "-q", "--depth", "1", "--branch", ref, SUITE_REPO, str(tmp)],
+            capture_output=True,
+            text=True,
+            env={**_env(), "GIT_LFS_SKIP_SMUDGE": "1"},
+        )
         if done.returncode != 0:
             shutil.rmtree(tmp, ignore_errors=True)
             raise RunError(f"couldn't fetch the evaluation suite {ref}: {done.stderr.strip()[-300:]}")
@@ -113,16 +135,20 @@ def select(s: Suite, services: list[str], tests: list[str]) -> list[dict]:
             rows.append(row)
     unknown = [t for t in tests if t not in {r["check_id"] for r in s.manifest}]
     if unknown:
-        raise RunError(f"no such test in the suite {s.ref}: {', '.join(unknown)}",
-                       "Test ids look like dynamodb.update-item-...; see 'awsemu fidelity SERVICE --failures'.")
+        raise RunError(
+            f"no such test in the suite {s.ref}: {', '.join(unknown)}",
+            "Test ids look like dynamodb.update-item-...; see 'awsemu fidelity SERVICE --failures'.",
+        )
     return rows
 
 
 def uv() -> str:
     found = shutil.which("uv")
     if not found:
-        raise RunError("the fidelity tests run with uv, which isn't installed",
-                       "Install it: https://docs.astral.sh/uv/getting-started/installation/ (or: pipx install uv)")
+        raise RunError(
+            "the fidelity tests run with uv, which isn't installed",
+            "Install it: https://docs.astral.sh/uv/getting-started/installation/ (or: pipx install uv)",
+        )
     return found
 
 
@@ -137,8 +163,13 @@ def prepare(s: Suite, paths: list[str], log) -> None:
         marker.touch()
     if extras_marker.exists():
         return
-    done = subprocess.run([tool, "run", "--locked", "fidelity-tests-runner", "requirements", "--json", *paths],
-                          cwd=s.root, capture_output=True, text=True, env=_env())
+    done = subprocess.run(
+        [tool, "run", "--locked", "fidelity-tests-runner", "requirements", "--json", *paths],
+        cwd=s.root,
+        capture_output=True,
+        text=True,
+        env=_env(),
+    )
     try:
         reports = json.loads(done.stdout or "[]")
     except ValueError:
@@ -175,14 +206,20 @@ class Emulator:
         if self.telemetry_off:
             args += ["-t", "off"]
         self.log = (self.home / "emulator.log").open("w")
-        self.proc = subprocess.Popen(args, env=_env({"HOME": str(self.home), "USERPROFILE": str(self.home)}),
-                                     stdout=self.log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        self.proc = subprocess.Popen(
+            args,
+            env=_env({"HOME": str(self.home), "USERPROFILE": str(self.home)}),
+            stdout=self.log,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+        )
         creds = self.home / ".aws" / "emulator" / str(self.port) / "ca.pem"
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             if self.proc.poll() is not None:
-                raise RunError(f"the emulator exited with code {self.proc.returncode} "
-                               f"(log: {self.home / 'emulator.log'})")
+                raise RunError(
+                    f"the emulator exited with code {self.proc.returncode} (log: {self.home / 'emulator.log'})"
+                )
             if creds.exists():
                 try:
                     with socket.create_connection(("127.0.0.1", self.port), timeout=0.5):
@@ -213,20 +250,49 @@ def run_one(s: Suite, row: dict, emulator_command: list[str], published: dict[st
     tool = uv()
     with Emulator(emulator_command) as emu:
         report = emu.home / "report.json"
-        done = subprocess.run([tool, "run", "--locked", "fidelity-tests-runner", "run", row["path"],
-                               "--endpoint", emu.endpoint, "--emulator-home", str(emu.home),
-                               "--report", str(report)],
-                              cwd=s.root, capture_output=True, text=True, env=_env(), timeout=900)
+        done = subprocess.run(
+            [
+                tool,
+                "run",
+                "--locked",
+                "fidelity-tests-runner",
+                "run",
+                row["path"],
+                "--endpoint",
+                emu.endpoint,
+                "--emulator-home",
+                str(emu.home),
+                "--report",
+                str(report),
+            ],
+            cwd=s.root,
+            capture_output=True,
+            text=True,
+            env=_env(),
+            timeout=900,
+        )
         try:
             check = json.loads(report.read_text(encoding="utf-8"))["check"]
         except (OSError, ValueError, KeyError):
-            check = {"verdict": "error", "kind": "runner",
-                     "detail": (done.stderr or done.stdout).strip()[-500:] or f"exit code {done.returncode}"}
-    return TestResult(row["check_id"], row["path"], check.get("verdict", "error"), check.get("kind", ""),
-                      (check.get("detail") or "").strip(), int(check.get("duration_ms") or 0),
-                      published.get(row["check_id"]))
+            check = {
+                "verdict": "error",
+                "kind": "runner",
+                "detail": (done.stderr or done.stdout).strip()[-500:] or f"exit code {done.returncode}",
+            }
+    return TestResult(
+        row["check_id"],
+        row["path"],
+        check.get("verdict", "error"),
+        check.get("kind", ""),
+        (check.get("detail") or "").strip(),
+        int(check.get("duration_ms") or 0),
+        published.get(row["check_id"]),
+    )
 
 
 def published_outcomes(scores: dict) -> dict[str, str]:
-    return {u["unitId"]: u["outcome"] for u in scores.get("units", [])
-            if u.get("outcome") in ("pass", "fail") and u.get("unitId")}
+    return {
+        u["unitId"]: u["outcome"]
+        for u in scores.get("units", [])
+        if u.get("outcome") in ("pass", "fail") and u.get("unitId")
+    }

@@ -94,10 +94,18 @@ class Issue:
         return (SEVERITY_ORDER.get(self.severity, 9), self.file.name)
 
     def as_dict(self) -> dict:
-        return {"title": self.title, "severity": self.severity or None, "state": self.file.state,
-                "services": self.file.services, "operations": self.operations, "tests": sorted(self.tests),
-                "kind": self.kind or None, "created": self.file.created or None, "url": self.file.url,
-                "name": self.file.name}
+        return {
+            "title": self.title,
+            "severity": self.severity or None,
+            "state": self.file.state,
+            "services": self.file.services,
+            "operations": self.operations,
+            "tests": sorted(self.tests),
+            "kind": self.kind or None,
+            "created": self.file.created or None,
+            "url": self.file.url,
+            "name": self.file.name,
+        }
 
 
 # --------------------------------------------------------------------------- names
@@ -112,7 +120,7 @@ def services_in_name(name: str, known: set[str]) -> list[str]:
     found, i = [], 0
     while i < len(tokens):
         for n in range(min(4, len(tokens) - i), 0, -1):
-            candidate = "-".join(tokens[i:i + n])
+            candidate = "-".join(tokens[i : i + n])
             if candidate in known:
                 found.append(candidate)
                 i += n
@@ -157,8 +165,11 @@ def listing(folder: str = OPEN, refresh: bool = False) -> list[IssueFile]:
             return [IssueFile(**e) for e in json.loads(cached.read_text(encoding="utf-8"))]
         raise IssuesError(f"couldn't list the emulator's issues: {exc}") from exc
     known = known_services()
-    files = [IssueFile(folder, e["path"], e["sha"], services_in_name(e["path"], known))
-             for e in tree.get("tree", []) if e.get("type") == "blob" and e["path"].endswith(".md")]
+    files = [
+        IssueFile(folder, e["path"], e["sha"], services_in_name(e["path"], known))
+        for e in tree.get("tree", [])
+        if e.get("type") == "blob" and e["path"].endswith(".md")
+    ]
     cached.parent.mkdir(parents=True, exist_ok=True)
     cached.write_text(json.dumps([f.__dict__ for f in files]), encoding="utf-8")
     return files
@@ -189,8 +200,15 @@ def parse(text: str, file: IssueFile) -> Issue:
     def one(key: str) -> str:
         return (headers.get(key) or [""])[0]
 
-    return Issue(file=file, title=title, severity=one("Issue-Severity").upper(), kind=one("Issue-Corpus-Kind"),
-                 operations=ops, tests=tests, commit=one("Issue-Commit"))
+    return Issue(
+        file=file,
+        title=title,
+        severity=one("Issue-Severity").upper(),
+        kind=one("Issue-Corpus-Kind"),
+        operations=ops,
+        tests=tests,
+        commit=one("Issue-Commit"),
+    )
 
 
 def _blob_path(file: IssueFile, full: bool) -> Path:
@@ -199,7 +217,7 @@ def _blob_path(file: IssueFile, full: bool) -> Path:
 
 def fetch(file: IssueFile, full: bool = False) -> str:
     """The issue's text (only its start unless ``full``), cached by blob id."""
-    for candidate in ([_blob_path(file, True)] if full else [_blob_path(file, True), _blob_path(file, False)]):
+    for candidate in [_blob_path(file, True)] if full else [_blob_path(file, True), _blob_path(file, False)]:
         try:
             return candidate.read_text(encoding="utf-8")
         except OSError:

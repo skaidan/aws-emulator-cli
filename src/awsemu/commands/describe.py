@@ -53,8 +53,7 @@ def _s3(a: Arn, port: int):
         return {"Bucket": bucket, "Key": key, **_clean(s3.head_object(Bucket=bucket, Key=key))}
     s3.head_bucket(Bucket=bucket)
     count = s3.list_objects_v2(Bucket=bucket, MaxKeys=1000).get("KeyCount", 0)
-    return {"Bucket": bucket, "Objects (first 1000)": count,
-            **_clean(s3.get_bucket_location(Bucket=bucket))}
+    return {"Bucket": bucket, "Objects (first 1000)": count, **_clean(s3.get_bucket_location(Bucket=bucket))}
 
 
 def _sqs(a: Arn, port: int):
@@ -164,5 +163,6 @@ def describe(c: Ctx, arn: str):
     handler = HANDLERS.get(parsed.service)
     if handler is None:
         raise click.ClickException(
-            f"describe doesn't know '{parsed.service}' yet; try 'awsemu aws {parsed.service} ...'")
+            f"describe doesn't know '{parsed.service}' yet; try 'awsemu aws {parsed.service} ...'"
+        )
     ui.print_json(handler(parsed, c.port, arn))

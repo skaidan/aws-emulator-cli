@@ -88,8 +88,7 @@ def test_exec_passes_environment(runner, fake_binary, free_port, tmp_path):
     assert runner.invoke(cli, ["--port", port, "start", "--native"]).exit_code == 0
     try:
         out = tmp_path / "env.txt"
-        result = runner.invoke(cli, ["--port", port, "exec", "--", "sh", "-c",
-                                     f"env > {out}"])
+        result = runner.invoke(cli, ["--port", port, "exec", "--", "sh", "-c", f"env > {out}"])
         assert result.exit_code == 0, result.output
         text = out.read_text()
         assert f"AWS_ENDPOINT_URL=https://127.0.0.1:{port}" in text
@@ -102,8 +101,7 @@ def test_config_telemetry(runner, isolated_home):
     assert "on (default)" in runner.invoke(cli, ["config", "telemetry"]).output
     result = runner.invoke(cli, ["config", "telemetry", "off"])
     assert result.exit_code == 0
-    assert (isolated_home / ".aws" / "emulator" / "config.toml").read_text() == \
-        "[telemetry]\nenabled = false\n"
+    assert (isolated_home / ".aws" / "emulator" / "config.toml").read_text() == "[telemetry]\nenabled = false\n"
     assert "telemetry: off" in runner.invoke(cli, ["config", "telemetry"]).output
 
 

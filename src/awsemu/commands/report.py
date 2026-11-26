@@ -24,10 +24,18 @@ def _emulator_log(port: int) -> list[str]:
 
 @click.command()
 @click.argument("call_id", metavar="CALL", default="last")
-@click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path),
-              help="Write the draft (Markdown) to this file instead of printing it.")
-@click.option("--url", "show_url", is_flag=True,
-              help="Print a link to the emulator's issue form with the draft filled in, instead.")
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the draft (Markdown) to this file instead of printing it.",
+)
+@click.option(
+    "--url",
+    "show_url",
+    is_flag=True,
+    help="Print a link to the emulator's issue form with the draft filled in, instead.",
+)
 @click.option("--open", "open_browser", is_flag=True, help="Open that link in your browser.")
 @pass_ctx
 @handle_errors
@@ -51,31 +59,39 @@ def report(c: Ctx, call_id: str, output, show_url, open_browser):
 
     calls = read_calls(px.ProxyFiles(c.port).calls)
     if not calls:
-        raise RuntimeErrorWithHint(f"no calls logged by the proxy in front of port {c.port}",
-                                   "Start it with 'awsemu proxy start -d --bodies' and run the call through it.")
+        raise RuntimeErrorWithHint(
+            f"no calls logged by the proxy in front of port {c.port}",
+            "Start it with 'awsemu proxy start -d --bodies' and run the call through it.",
+        )
     if call_id == "last":
         failed = [x for x in calls if x.get("error") and not x.get("fault")]
         if not failed:
-            raise RuntimeErrorWithHint("none of the logged calls failed (injected faults don't count)",
-                                       "Pass the id of the call to report: awsemu proxy calls --json")
+            raise RuntimeErrorWithHint(
+                "none of the logged calls failed (injected faults don't count)",
+                "Pass the id of the call to report: awsemu proxy calls --json",
+            )
         call = failed[-1]
     else:
         if not call_id.isdigit():
             raise click.BadParameter("a call id (a number) or 'last'", param_hint="CALL")
         matches = [x for x in calls if x.get("id") == int(call_id)]
         if not matches:
-            raise RuntimeErrorWithHint(f"no call {call_id} in the log (it has {calls[0]['id']}–{calls[-1]['id']}; "
-                                       "the ids start again when the proxy restarts)")
+            raise RuntimeErrorWithHint(
+                f"no call {call_id} in the log (it has {calls[0]['id']}–{calls[-1]['id']}; "
+                "the ids start again when the proxy restarts)"
+            )
         call = matches[-1]
-    earlier = calls[:calls.index(call)]
+    earlier = calls[: calls.index(call)]
     version = installed_version()
     try:
         draft = rp.build(call, earlier, f"aws-emulator {version}" if version else None, _emulator_log(c.port))
     except rp.ReportError as exc:
         raise RuntimeErrorWithHint(str(exc)) from exc
     if "request" not in call:
-        ui.warn("this call was logged without its request and response: "
-                "start the proxy with --bodies and run it again for a complete report")
+        ui.warn(
+            "this call was logged without its request and response: "
+            "start the proxy with --bodies and run it again for a complete report"
+        )
     if show_url or open_browser:
         url = draft.url()
         if open_browser:
@@ -88,6 +104,8 @@ def report(c: Ctx, call_id: str, output, show_url, open_browser):
         return
     if output:
         output.write_text(draft.markdown(), encoding="utf-8")
-        ui.success(f"Draft in {output}: fill in what AWS answers, then file it at {rp.ISSUE_FORM}?template={rp.TEMPLATE}")
+        ui.success(
+            f"Draft in {output}: fill in what AWS answers, then file it at {rp.ISSUE_FORM}?template={rp.TEMPLATE}"
+        )
         return
     click.echo(draft.markdown())

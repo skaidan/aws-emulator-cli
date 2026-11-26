@@ -57,18 +57,33 @@ def endpoint(env, answers) -> list[Finding]:
     scheme, host, port = found
     out = []
     if host == "localhost":
-        out.append(Finding("endpoint", "AWS_ENDPOINT_URL uses 'localhost'",
-                           "use 127.0.0.1: with 'localhost' the JavaScript, Java and Go SDKs put the S3 bucket "
-                           "in the host name, which the emulator doesn't serve"))
+        out.append(
+            Finding(
+                "endpoint",
+                "AWS_ENDPOINT_URL uses 'localhost'",
+                "use 127.0.0.1: with 'localhost' the JavaScript, Java and Go SDKs put the S3 bucket "
+                "in the host name, which the emulator doesn't serve",
+            )
+        )
     if port is None:
         return out
     what = answers(port)
     if what is None:
-        out.append(Finding("endpoint", f"AWS_ENDPOINT_URL={env['AWS_ENDPOINT_URL']}, but nothing answers there",
-                           "probably left from an earlier start: eval \"$(awsemu env)\" again, or use awsemu exec"))
+        out.append(
+            Finding(
+                "endpoint",
+                f"AWS_ENDPOINT_URL={env['AWS_ENDPOINT_URL']}, but nothing answers there",
+                'probably left from an earlier start: eval "$(awsemu env)" again, or use awsemu exec',
+            )
+        )
     elif scheme == "http" and what == "emulator":
-        out.append(Finding("endpoint", "AWS_ENDPOINT_URL uses http://, the emulator only speaks HTTPS",
-                           "use https:// (awsemu env sets it)"))
+        out.append(
+            Finding(
+                "endpoint",
+                "AWS_ENDPOINT_URL uses http://, the emulator only speaks HTTPS",
+                "use https:// (awsemu env sets it)",
+            )
+        )
     return out
 
 
@@ -80,8 +95,13 @@ def ca_bundle(env, answers) -> list[Finding]:
         return []
     path = Path(value)
     if not path.exists():
-        return [Finding("ca bundle", f"AWS_CA_BUNDLE={value} doesn't exist",
-                        "eval \"$(awsemu env)\" again (the emulator makes a new certificate on every start)")]
+        return [
+            Finding(
+                "ca bundle",
+                f"AWS_CA_BUNDLE={value} doesn't exist",
+                'eval "$(awsemu env)" again (the emulator makes a new certificate on every start)',
+            )
+        ]
     proxy_ca = cli_root() / "proxy" / "ca.pem"
     try:
         resolved = path.resolve()
@@ -92,16 +112,24 @@ def ca_bundle(env, answers) -> list[Finding]:
     if instance:
         cert_port = resolved.parent.name
         if port is not None and str(port) != cert_port and answers(port) == "emulator":
-            return [Finding("ca bundle", f"AWS_CA_BUNDLE is the certificate of port {cert_port}, "
-                                         f"but AWS_ENDPOINT_URL is port {port}",
-                            "eval \"$(awsemu --port N env)\" with the port you use")]
+            return [
+                Finding(
+                    "ca bundle",
+                    f"AWS_CA_BUNDLE is the certificate of port {cert_port}, but AWS_ENDPOINT_URL is port {port}",
+                    'eval "$(awsemu --port N env)" with the port you use',
+                )
+            ]
         return []
     if path.resolve() == proxy_ca.resolve():
         return []
     if port is not None and answers(port) == "emulator":
-        return [Finding("ca bundle", f"AWS_CA_BUNDLE={value} isn't the emulator's certificate",
-                        "requests to the emulator will fail certificate checks; eval \"$(awsemu env)\" "
-                        "or use awsemu exec")]
+        return [
+            Finding(
+                "ca bundle",
+                f"AWS_CA_BUNDLE={value} isn't the emulator's certificate",
+                'requests to the emulator will fail certificate checks; eval "$(awsemu env)" or use awsemu exec',
+            )
+        ]
     return []
 
 
@@ -114,9 +142,14 @@ def proxies(env) -> list[Finding]:
     entries = {e for e in bypass.split(",") if e}
     if "*" in entries or "127.0.0.1" in entries:
         return []
-    return [Finding("http proxy", f"{set_vars[0]} is set and NO_PROXY doesn't include 127.0.0.1",
-                    "your own scripts send emulator calls to that proxy: export NO_PROXY=127.0.0.1,localhost"
-                    "${NO_PROXY:+,$NO_PROXY} (awsemu env/exec add it for you)")]
+    return [
+        Finding(
+            "http proxy",
+            f"{set_vars[0]} is set and NO_PROXY doesn't include 127.0.0.1",
+            "your own scripts send emulator calls to that proxy: export NO_PROXY=127.0.0.1,localhost"
+            "${NO_PROXY:+,$NO_PROXY} (awsemu env/exec add it for you)",
+        )
+    ]
 
 
 def no_proxy_value(env) -> str | None:

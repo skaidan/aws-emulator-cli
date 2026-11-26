@@ -13,7 +13,7 @@ import pytest
 from awsemu.cli import cli
 from awsemu.commands import lambda_ as lam_mod
 from awsemu.commands import sns as sns_mod
-from tests.test_services import FakeClient, running  # noqa: F401  (fixture)
+from tests.test_services import FakeClient
 
 QUEUE_URL = "https://127.0.0.1:9297/000000000000/events"
 QUEUE_ARN = "arn:aws:sqs:us-east-1:000000000000:events"
@@ -29,8 +29,7 @@ def test_topic_arn():
 
 
 def test_queue_policy_merges_and_is_idempotent():
-    existing = json.dumps({"Version": "2012-10-17",
-                           "Statement": [{"Sid": "mine", "Effect": "Allow"}]})
+    existing = json.dumps({"Version": "2012-10-17", "Statement": [{"Sid": "mine", "Effect": "Allow"}]})
     once = sns_mod.queue_policy_for_topic(QUEUE_ARN, TOPIC_ARN, existing)
     twice = sns_mod.queue_policy_for_topic(QUEUE_ARN, TOPIC_ARN, once)
     statements = json.loads(twice)["Statement"]
@@ -39,8 +38,9 @@ def test_queue_policy_merges_and_is_idempotent():
 
 
 def test_subscribe_to_sqs_sets_policy(runner, monkeypatch, running):
-    sqs = FakeClient(get_queue_url={"QueueUrl": QUEUE_URL},
-                     get_queue_attributes={"Attributes": {"QueueArn": QUEUE_ARN}})
+    sqs = FakeClient(
+        get_queue_url={"QueueUrl": QUEUE_URL}, get_queue_attributes={"Attributes": {"QueueArn": QUEUE_ARN}}
+    )
     sns = FakeClient(subscribe={"SubscriptionArn": TOPIC_ARN + ":sub-1"})
     monkeypatch.setattr(sns_mod, "client", lambda service, port: {"sqs": sqs, "sns": sns}[service])
     result = runner.invoke(cli, ["sns", "subscribe", "orders", "--to-sqs", "events", "--raw"])
@@ -90,13 +90,19 @@ def test_build_zip_single_file_and_passthrough(tmp_path):
     assert lam_mod.build_zip(z) == b"PK-already-a-zip"
 
 
-@pytest.mark.parametrize("filename,code,expected", [
-    ("hello.py", "def handler(event, context):\n", ("hello.handler", "python3.12")),
-    ("lambda_function.py", "def lambda_handler(event, context):\n",
-     ("lambda_function.lambda_handler", "python3.12")),
-    ("index.mjs", "export const handler = async (event) => event;\n", ("index.handler", "nodejs20.x")),
-    ("index.js", "exports.handler = async (event) => event;\n", ("index.handler", "nodejs20.x")),
-])
+@pytest.mark.parametrize(
+    "filename,code,expected",
+    [
+        ("hello.py", "def handler(event, context):\n", ("hello.handler", "python3.12")),
+        (
+            "lambda_function.py",
+            "def lambda_handler(event, context):\n",
+            ("lambda_function.lambda_handler", "python3.12"),
+        ),
+        ("index.mjs", "export const handler = async (event) => event;\n", ("index.handler", "nodejs20.x")),
+        ("index.js", "exports.handler = async (event) => event;\n", ("index.handler", "nodejs20.x")),
+    ],
+)
 def test_guess_handler(tmp_path, filename, code, expected):
     (tmp_path / filename).write_text(code)
     assert lam_mod.guess_handler_and_runtime(tmp_path) == expected
@@ -119,8 +125,9 @@ def _lambda_client(exists: bool):
             raise NotFound("missing")
         return {"Configuration": {"FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:hi"}}
 
-    fake = FakeClient(get_function=get_function, create_function={}, update_function_code={},
-                      update_function_configuration={})
+    fake = FakeClient(
+        get_function=get_function, create_function={}, update_function_code={}, update_function_configuration={}
+    )
     fake.get_waiter = lambda name: type("W", (), {"wait": lambda self, **kw: None})()
     return fake
 
@@ -131,13 +138,15 @@ def test_deploy_creates_function_and_role(runner, monkeypatch, running, tmp_path
 
     class NoSuchEntity(Exception):
         pass
+
     NoSuchEntity.__name__ = "NoSuchEntityException"
 
     def get_role(**_):
         raise NoSuchEntity("no role")
 
-    iam = FakeClient(get_role=get_role,
-                     create_role={"Role": {"Arn": "arn:aws:iam::000000000000:role/awsemu-lambda-role"}})
+    iam = FakeClient(
+        get_role=get_role, create_role={"Role": {"Arn": "arn:aws:iam::000000000000:role/awsemu-lambda-role"}}
+    )
     monkeypatch.setattr(lam_mod, "client", lambda service, port: {"lambda": lam, "iam": iam}[service])
     result = runner.invoke(cli, ["lambda", "deploy", "hi", str(tmp_path / "hi.py"), "-e", "A=1"])
     assert result.exit_code == 0, result.output
@@ -160,8 +169,11 @@ def test_deploy_updates_existing(runner, monkeypatch, running, tmp_path):
 
 
 def test_invoke_shows_payload_and_logs(runner, monkeypatch, running):
-    resp = {"StatusCode": 200, "Payload": io.BytesIO(b'{"greeting": "hello Ana"}'),
-            "LogResult": base64.b64encode(b"START RequestId: 1\nhello log\nEND").decode()}
+    resp = {
+        "StatusCode": 200,
+        "Payload": io.BytesIO(b'{"greeting": "hello Ana"}'),
+        "LogResult": base64.b64encode(b"START RequestId: 1\nhello log\nEND").decode(),
+    }
     lam = FakeClient(invoke=resp)
     monkeypatch.setattr(lam_mod, "client", lambda service, port: lam)
     result = runner.invoke(cli, ["lambda", "invoke", "hi", '{"name": "Ana"}'])
@@ -171,8 +183,7 @@ def test_invoke_shows_payload_and_logs(runner, monkeypatch, running):
 
 
 def test_invoke_function_error_exit_code(runner, monkeypatch, running):
-    resp = {"StatusCode": 200, "FunctionError": "Unhandled",
-            "Payload": io.BytesIO(b'{"errorMessage": "boom"}')}
+    resp = {"StatusCode": 200, "FunctionError": "Unhandled", "Payload": io.BytesIO(b'{"errorMessage": "boom"}')}
     monkeypatch.setattr(lam_mod, "client", lambda service, port: FakeClient(invoke=resp))
     result = runner.invoke(cli, ["lambda", "invoke", "hi"])
     assert result.exit_code == 1 and "boom" in result.output and "function error" in result.output
@@ -201,8 +212,11 @@ def test_deploy_with_only_a_path_names_the_function_after_it(runner, monkeypatch
 def test_deploy_then_invoke(runner, monkeypatch, running, tmp_path):
     (tmp_path / "hi.py").write_text("def handler(event, context):\n    return 1\n")
     lam = _lambda_client(exists=True)
-    lam.responses["invoke"] = {"StatusCode": 200, "Payload": io.BytesIO(b'{"ok": true}'),
-                               "LogResult": base64.b64encode(b"START x\nfrom the code\nEND x").decode()}
+    lam.responses["invoke"] = {
+        "StatusCode": 200,
+        "Payload": io.BytesIO(b'{"ok": true}'),
+        "LogResult": base64.b64encode(b"START x\nfrom the code\nEND x").decode(),
+    }
     monkeypatch.setattr(lam_mod, "client", lambda service, port: lam)
     result = runner.invoke(cli, ["lambda", "deploy", "hi", str(tmp_path / "hi.py"), "--invoke", '{"a": 1}'])
     assert result.exit_code == 0, result.output
@@ -250,13 +264,18 @@ def test_requirements_are_installed_once_per_contents(monkeypatch, tmp_path, iso
     assert "tinylib/__init__.py" in names and "requirements.txt" in names
     lam_mod.package(src, "python3.12")
     assert len(installs) == 1  # cached
-    assert "tinylib/__init__.py" not in zipfile.ZipFile(io.BytesIO(
-        lam_mod.package(src, "python3.12", deps=False))).namelist()
+    assert (
+        "tinylib/__init__.py"
+        not in zipfile.ZipFile(io.BytesIO(lam_mod.package(src, "python3.12", deps=False))).namelist()
+    )
     assert lam_mod.python_dependencies(src, "nodejs20.x") is None
 
     (src / "requirements.txt").write_text("missing-lib==9\n")
-    monkeypatch.setattr(lam_mod.subprocess, "run",
-                        lambda cmd, **kw: Done() if "--version" in cmd else Done(1, "No matching distribution"))
+    monkeypatch.setattr(
+        lam_mod.subprocess,
+        "run",
+        lambda cmd, **kw: Done() if "--version" in cmd else Done(1, "No matching distribution"),
+    )
     with pytest.raises(click.ClickException, match="No matching distribution"):
         lam_mod.package(src, "python3.12")
 
@@ -268,11 +287,13 @@ def test_watch_redeploys_on_save_and_survives_errors(monkeypatch, tmp_path, caps
     app.write_text("def handler(e, c):\n    return 1\n")
     lam = _lambda_client(exists=True)
     lam.responses["invoke"] = lambda **_: {"StatusCode": 200, "Payload": io.BytesIO(b"2")}
-    edits = iter([
-        lambda: app.write_text("def handler(e, c):\n    return 2\n"),       # a real change
-        lambda: (src / "__pycache__").mkdir() or (src / "__pycache__" / "x.pyc").write_text(""),
-        lambda: app.write_text("def handler(e, c):\n    return 3\n"),       # the update fails
-    ])
+    edits = iter(
+        [
+            lambda: app.write_text("def handler(e, c):\n    return 2\n"),  # a real change
+            lambda: (src / "__pycache__").mkdir() or (src / "__pycache__" / "x.pyc").write_text(""),
+            lambda: app.write_text("def handler(e, c):\n    return 3\n"),  # the update fails
+        ]
+    )
     sleeps = []
 
     def fake_sleep(seconds):
@@ -280,6 +301,7 @@ def test_watch_redeploys_on_save_and_survives_errors(monkeypatch, tmp_path, caps
         if seconds == lam_mod.POLL_SECONDS:
             next(edits, lambda: None)()
             import os
+
             os.utime(app, ns=(len(sleeps) * 10**9, len(sleeps) * 10**9))
 
     monkeypatch.setattr(lam_mod.time, "sleep", fake_sleep)

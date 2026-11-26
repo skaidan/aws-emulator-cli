@@ -28,7 +28,8 @@ def run(pytester, *args):
 
 
 def test_fixture_starts_points_env_and_stops(pytester, fake_binary, monkeypatch):
-    pytester.makepyfile(test_inner="""
+    pytester.makepyfile(
+        test_inner="""
         import os, json, pathlib
         from awsemu import health
 
@@ -42,7 +43,8 @@ def test_fixture_starts_points_env_and_stops(pytester, fake_binary, monkeypatch)
 
         def test_same_instance(aws_emulator):
             assert pathlib.Path("port.txt").read_text() == str(aws_emulator.port)
-    """)
+    """
+    )
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAREALKEY")
     result = run(pytester, "-v")
     result.assert_outcomes(passed=2)
@@ -55,7 +57,8 @@ def test_fixture_starts_points_env_and_stops(pytester, fake_binary, monkeypatch)
 
 
 def test_fresh_restarts(pytester, fake_binary):
-    pytester.makepyfile(test_inner="""
+    pytester.makepyfile(
+        test_inner="""
         from awsemu import runtime
         pids = []
 
@@ -65,7 +68,8 @@ def test_fresh_restarts(pytester, fake_binary):
         def test_two(aws_emulator_fresh):
             pids.append(runtime.State.load(aws_emulator_fresh.port).pid)
             assert pids[0] != pids[1]
-    """)
+    """
+    )
     run(pytester).assert_outcomes(passed=2)
 
 

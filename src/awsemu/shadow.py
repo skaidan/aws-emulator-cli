@@ -25,9 +25,22 @@ from pathlib import Path
 
 from . import awscalls, realaccount
 
-DROP = {"authorization", "x-amz-date", "x-amz-security-token", "x-amz-content-sha256", "host", "content-length",
-        "amz-sdk-invocation-id", "amz-sdk-request", "expect", "connection", "accept-encoding", "transfer-encoding",
-        "x-amz-user-agent", "user-agent"}
+DROP = {
+    "authorization",
+    "x-amz-date",
+    "x-amz-security-token",
+    "x-amz-content-sha256",
+    "host",
+    "content-length",
+    "amz-sdk-invocation-id",
+    "amz-sdk-request",
+    "expect",
+    "connection",
+    "accept-encoding",
+    "transfer-encoding",
+    "x-amz-user-agent",
+    "user-agent",
+}
 XML_TAG_RE = re.compile(rb"<([A-Za-z_][\w.-]*)[\s>/]")
 DEFAULT_MAX = 500
 
@@ -53,6 +66,7 @@ def shape(data: bytes, content_type: str = "") -> set[str]:
             elif isinstance(v, list):
                 for x in v:
                     walk(x, path + "[]")
+
         walk(value, "")
         return out
     if text[:1] == b"<":
@@ -63,14 +77,22 @@ def shape(data: bytes, content_type: str = "") -> set[str]:
 def compare(emu: tuple[int, dict, bytes], aws: tuple[int, dict, bytes]) -> dict:
     (es, eh, eb), (as_, ah, ab) = emu, aws
     e_err, a_err = awscalls.error_code(es, eh, eb), awscalls.error_code(as_, ah, ab)
-    out = {"emulator": {"status": es, "error": e_err}, "aws": {"status": as_, "error": a_err},
-           "same_status": es == as_, "same_error": e_err == a_err}
+    out = {
+        "emulator": {"status": es, "error": e_err},
+        "aws": {"status": as_, "error": a_err},
+        "same_status": es == as_,
+        "same_error": e_err == a_err,
+    }
     if es < 300 and as_ < 300:
         e_shape, a_shape = shape(eb), shape(ab)
         out["missing_in_emulator"] = sorted(a_shape - e_shape)[:50]
         out["extra_in_emulator"] = sorted(e_shape - a_shape)[:50]
-    out["differs"] = (not out["same_status"] or not out["same_error"] or bool(out.get("missing_in_emulator"))
-                      or bool(out.get("extra_in_emulator")))
+    out["differs"] = (
+        not out["same_status"]
+        or not out["same_error"]
+        or bool(out.get("missing_in_emulator"))
+        or bool(out.get("extra_in_emulator"))
+    )
     return out
 
 
@@ -87,8 +109,16 @@ class Job:
 class Shadow:
     """Sends eligible calls to AWS in a background thread and logs the comparisons."""
 
-    def __init__(self, profile: str, region: str | None, log: Path, max_calls: int = DEFAULT_MAX,
-                 endpoint_for=None, verify=True, session=None):
+    def __init__(
+        self,
+        profile: str,
+        region: str | None,
+        log: Path,
+        max_calls: int = DEFAULT_MAX,
+        endpoint_for=None,
+        verify=True,
+        session=None,
+    ):
         self.session = session or realaccount.session(profile, region)
         self.region = self.session.region_name
         self.log = log
@@ -145,11 +175,15 @@ class Shadow:
         from botocore.httpsession import URLLib3Session
 
         service = job.call["service"]
-        model = self.session._session.get_service_model(service)  # noqa: SLF001 - botocore's own model
+        model = self.session._session.get_service_model(service)
         signing = model.signing_name or model.endpoint_prefix
         headers = {k: v for k, v in job.headers if k.lower() not in DROP}
-        request = AWSRequest(method=job.method, url=self._endpoint(service).rstrip("/") + job.path,
-                             data=job.body or None, headers=headers)
+        request = AWSRequest(
+            method=job.method,
+            url=self._endpoint(service).rstrip("/") + job.path,
+            data=job.body or None,
+            headers=headers,
+        )
         creds = self.session.get_credentials().get_frozen_credentials()
         (S3SigV4Auth if service == "s3" else SigV4Auth)(creds, signing, self.region).add_auth(request)
         resp = URLLib3Session(verify=self._verify, timeout=30).send(request.prepare())
@@ -160,12 +194,16 @@ class Shadow:
             job = self._queue.get()
             if job is None:
                 return
-            entry = {"id": job.call.get("id"), "time": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-                     "service": job.call.get("service"), "operation": job.call.get("operation"),
-                     "resource": job.call.get("resource")}
+            entry = {
+                "id": job.call.get("id"),
+                "time": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+                "service": job.call.get("service"),
+                "operation": job.call.get("operation"),
+                "resource": job.call.get("resource"),
+            }
             try:
                 entry.update(compare(job.emulator, self.send(job)))
-            except Exception as exc:  # noqa: BLE001 - a failed shadow call never affects the proxy
+            except Exception as exc:
                 entry.update({"differs": None, "failed": f"{type(exc).__name__}: {str(exc)[:200]}"})
             try:
                 with self.log.open("a", encoding="utf-8") as fh:

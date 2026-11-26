@@ -33,7 +33,7 @@ def _pages(c, op: str, key: str, field: str | None = None, **kw) -> list[str]:
 
 def _s3_paths(c, incomplete: str) -> list[str]:
     scheme = "s3://" if incomplete.startswith("s3://") else ""
-    text = incomplete[len(scheme):]
+    text = incomplete[len(scheme) :]
     if "/" not in text:
         return [f"{scheme}{b['Name']}/" for b in c.list_buckets().get("Buckets", [])]
     bucket, prefix = text.split("/", 1)
@@ -72,8 +72,10 @@ def names(kind: str, port: int, incomplete: str = "") -> list[str]:
 
 def complete(kind: str):
     """A Click ``shell_complete`` callback for resource names of ``kind``."""
+
     def callback(ctx, param, incomplete):
         return [CompletionItem(v) for v in names(kind, _port(ctx), incomplete)]
+
     return callback
 
 

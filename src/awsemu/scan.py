@@ -24,14 +24,46 @@ from pathlib import Path
 from ._service_names import BOTO_TO_SCORE
 
 SKIP_DIRS = {
-    ".git", ".hg", ".svn", "node_modules", ".venv", "venv", "env", ".env", "__pycache__",
-    ".tox", ".nox", ".terraform", "dist", "build", "target", ".mypy_cache", ".pytest_cache",
-    ".ruff_cache", ".idea", ".vscode", "site-packages", "cdk.out", ".aws-sam", ".serverless",
-    "vendor", ".gradle", ".next", "coverage",
+    ".git",
+    ".hg",
+    ".svn",
+    "node_modules",
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+    "__pycache__",
+    ".tox",
+    ".nox",
+    ".terraform",
+    "dist",
+    "build",
+    "target",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".idea",
+    ".vscode",
+    "site-packages",
+    "cdk.out",
+    ".aws-sam",
+    ".serverless",
+    "vendor",
+    ".gradle",
+    ".next",
+    "coverage",
 }
 CODE_EXT = {
-    ".py": "python", ".js": "node", ".mjs": "node", ".cjs": "node", ".ts": "node",
-    ".tsx": "node", ".jsx": "node", ".java": "java", ".kt": "java", ".go": "go",
+    ".py": "python",
+    ".js": "node",
+    ".mjs": "node",
+    ".cjs": "node",
+    ".ts": "node",
+    ".tsx": "node",
+    ".jsx": "node",
+    ".java": "java",
+    ".kt": "java",
+    ".go": "go",
 }
 TEMPLATE_EXT = {".json", ".yaml", ".yml", ".template"}
 MAX_BYTES = 2_000_000
@@ -43,11 +75,19 @@ MAX_BYTES = 2_000_000
 SCORE_TO_BOTO = {v: k for k, v in BOTO_TO_SCORE.items()}
 EXTRA_ALIASES = {
     # SDK class/package names that match neither the boto3 nor the score-file name
-    "cognitoidentityserviceprovider": "cognito-idp", "cloudwatchevents": "events",
-    "states": "stepfunctions", "eventbridge": "events", "certificatemanager": "acm",
-    "opensearchservice": "opensearch", "kinesisfirehose": "firehose", "elbv2": "elbv2",
-    "applicationautoscaling": "application-autoscaling", "kafka": "kafka", "msk": "kafka",
-    "resourcegroupstaggingapi": "resourcegroupstaggingapi", "lexmodelbuildingservice": "lex-models",
+    "cognitoidentityserviceprovider": "cognito-idp",
+    "cloudwatchevents": "events",
+    "states": "stepfunctions",
+    "eventbridge": "events",
+    "certificatemanager": "acm",
+    "opensearchservice": "opensearch",
+    "kinesisfirehose": "firehose",
+    "elbv2": "elbv2",
+    "applicationautoscaling": "application-autoscaling",
+    "kafka": "kafka",
+    "msk": "kafka",
+    "resourcegroupstaggingapi": "resourcegroupstaggingapi",
+    "lexmodelbuildingservice": "lex-models",
 }
 
 
@@ -106,9 +146,12 @@ class ScanResult:
     sources: set[str] = field(default_factory=set)
 
     def code_services(self, source: str | None = None) -> set[str]:
-        return {s for u in self.by_file.values() for s, locs in u.services.items()
-                if any(loc.source not in IAC and (source is None or loc.source == source)
-                       for loc in locs)}
+        return {
+            s
+            for u in self.by_file.values()
+            for s, locs in u.services.items()
+            if any(loc.source not in IAC and (source is None or loc.source == source) for loc in locs)
+        }
 
     def iac(self) -> dict[str, list[tuple[str, Location]]]:
         """service -> [(resource type, where)] from Terraform, CloudFormation and CDK."""
@@ -128,8 +171,7 @@ def _line(text: str, pos: int) -> int:
 
 # --------------------------------------------------------------------------- SDK code
 
-PY_CLIENT = re.compile(
-    r"""\.(?:client|resource)\(\s*(?:service_name\s*=\s*)?['"]([a-z0-9-]+)['"]""")
+PY_CLIENT = re.compile(r"""\.(?:client|resource)\(\s*(?:service_name\s*=\s*)?['"]([a-z0-9-]+)['"]""")
 PY_CALL = re.compile(r"\.([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\s*\(")
 PY_PAGINATOR = re.compile(r"""get_(?:paginator|waiter)\(\s*['"]([a-z0-9_]+)['"]""")
 
@@ -141,9 +183,16 @@ JS_V2_IMPORT = re.compile(r"""['"]aws-sdk(?:/clients/([a-z0-9]+))?['"]""")
 CAMEL_CALL = re.compile(r"\.([a-z][A-Za-z0-9]*)\s*\(")
 DOC_CLIENT_OPS = {
     # DynamoDB DocumentClient (v2 methods and lib-dynamodb commands) -> real operations
-    "put": "PutItem", "get": "GetItem", "update": "UpdateItem", "delete": "DeleteItem",
-    "query": "Query", "scan": "Scan", "batchget": "BatchGetItem", "batchwrite": "BatchWriteItem",
-    "transactget": "TransactGetItems", "transactwrite": "TransactWriteItems",
+    "put": "PutItem",
+    "get": "GetItem",
+    "update": "UpdateItem",
+    "delete": "DeleteItem",
+    "query": "Query",
+    "scan": "Scan",
+    "batchget": "BatchGetItem",
+    "batchwrite": "BatchWriteItem",
+    "transactget": "TransactGetItems",
+    "transactwrite": "TransactWriteItems",
 }
 
 JAVA_PKG = re.compile(r"(?:software\.amazon\.awssdk\.services|com\.amazonaws\.services)\.([a-z0-9]+)")
@@ -222,21 +271,53 @@ def scan_go(text: str, rel: str, names: Names, usage: Usage) -> None:
 TF_RESOURCE = re.compile(r"""^\s*(?:resource|data)\s+"aws_([a-z0-9_]+)"\s""", re.M)
 TF_PREFIXES = [
     # longest prefix first wins; values are boto3 names
-    ("cloudwatch_event_", "events"), ("cloudwatch_log_", "logs"), ("cloudwatch_", "cloudwatch"),
-    ("sfn_", "stepfunctions"), ("api_gateway_", "apigateway"), ("apigatewayv2_", "apigatewayv2"),
-    ("db_", "rds"), ("rds_", "rds"), ("lb", "elbv2"), ("alb", "elbv2"), ("elb", "elb"),
-    ("instance", "ec2"), ("vpc", "ec2"), ("subnet", "ec2"), ("security_group", "ec2"),
-    ("internet_gateway", "ec2"), ("nat_gateway", "ec2"), ("route_table", "ec2"),
-    ("main_route_table", "ec2"), ("route", "ec2"), ("eip", "ec2"), ("ami", "ec2"),
-    ("key_pair", "ec2"), ("launch_template", "ec2"), ("network_", "ec2"), ("ebs_", "ec2"),
-    ("default_", "ec2"), ("availability_zone", "ec2"), ("placement_group", "ec2"),
-    ("appautoscaling_", "application-autoscaling"), ("autoscaling_", "autoscaling"),
-    ("cognito_identity_pool", "cognito-identity"), ("cognito_", "cognito-idp"),
-    ("kinesis_firehose_", "firehose"), ("msk_", "kafka"), ("elasticsearch_", "es"),
-    ("opensearch_", "opensearch"), ("caller_identity", "sts"), ("region", None),
-    ("partition", None), ("availability_zones", "ec2"), ("iam_", "iam"),
-    ("secretsmanager_", "secretsmanager"), ("ses_", "ses"), ("sesv2_", "sesv2"),
-    ("s3control_", "s3control"), ("s3_", "s3"),
+    ("cloudwatch_event_", "events"),
+    ("cloudwatch_log_", "logs"),
+    ("cloudwatch_", "cloudwatch"),
+    ("sfn_", "stepfunctions"),
+    ("api_gateway_", "apigateway"),
+    ("apigatewayv2_", "apigatewayv2"),
+    ("db_", "rds"),
+    ("rds_", "rds"),
+    ("lb", "elbv2"),
+    ("alb", "elbv2"),
+    ("elb", "elb"),
+    ("instance", "ec2"),
+    ("vpc", "ec2"),
+    ("subnet", "ec2"),
+    ("security_group", "ec2"),
+    ("internet_gateway", "ec2"),
+    ("nat_gateway", "ec2"),
+    ("route_table", "ec2"),
+    ("main_route_table", "ec2"),
+    ("route", "ec2"),
+    ("eip", "ec2"),
+    ("ami", "ec2"),
+    ("key_pair", "ec2"),
+    ("launch_template", "ec2"),
+    ("network_", "ec2"),
+    ("ebs_", "ec2"),
+    ("default_", "ec2"),
+    ("availability_zone", "ec2"),
+    ("placement_group", "ec2"),
+    ("appautoscaling_", "application-autoscaling"),
+    ("autoscaling_", "autoscaling"),
+    ("cognito_identity_pool", "cognito-identity"),
+    ("cognito_", "cognito-idp"),
+    ("kinesis_firehose_", "firehose"),
+    ("msk_", "kafka"),
+    ("elasticsearch_", "es"),
+    ("opensearch_", "opensearch"),
+    ("caller_identity", "sts"),
+    ("region", None),
+    ("partition", None),
+    ("availability_zones", "ec2"),
+    ("iam_", "iam"),
+    ("secretsmanager_", "secretsmanager"),
+    ("ses_", "ses"),
+    ("sesv2_", "sesv2"),
+    ("s3control_", "s3control"),
+    ("s3_", "s3"),
 ]
 
 
@@ -254,15 +335,27 @@ def _tf_service(name: str, names: Names) -> str | None:
 
 CFN_TYPE = re.compile(r"""(?:Type['"]?\s*:\s*['"]?)(AWS::([A-Za-z0-9]+)::([A-Za-z0-9]+))""")
 CFN_NAMESPACES = {
-    "serverless": {"function": "lambda", "layerversion": "lambda", "api": "apigateway",
-                   "httpapi": "apigatewayv2", "simpletable": "dynamodb",
-                   "statemachine": "stepfunctions", "graphqlapi": "appsync",
-                   "application": "serverlessrepo"},
+    "serverless": {
+        "function": "lambda",
+        "layerversion": "lambda",
+        "api": "apigateway",
+        "httpapi": "apigatewayv2",
+        "simpletable": "dynamodb",
+        "statemachine": "stepfunctions",
+        "graphqlapi": "appsync",
+        "application": "serverlessrepo",
+    },
     "cognito": {"identitypool": "cognito-identity", "identitypoolroleattachment": "cognito-identity"},
 }
-CFN_ALIASES = {"elasticloadbalancingv2": "elbv2", "elasticloadbalancing": "elb",
-               "elasticsearch": "es", "stepfunctions": "stepfunctions", "cognito": "cognito-idp",
-               "applicationautoscaling": "application-autoscaling", "msk": "kafka"}
+CFN_ALIASES = {
+    "elasticloadbalancingv2": "elbv2",
+    "elasticloadbalancing": "elb",
+    "elasticsearch": "es",
+    "stepfunctions": "stepfunctions",
+    "cognito": "cognito-idp",
+    "applicationautoscaling": "application-autoscaling",
+    "msk": "kafka",
+}
 
 
 def _cfn_service(namespace: str, rtype: str, names: Names) -> str | None:
@@ -276,9 +369,24 @@ def _cfn_service(namespace: str, rtype: str, names: Names) -> str | None:
 
 
 CDK_MODULE = re.compile(r"""(?:aws-cdk-lib/aws-|@aws-cdk/aws-|aws_cdk\.aws_|\baws_)([a-z0-9_-]+)""")
-CDK_SUFFIXES = ("_tasks", "_targets", "_actions", "_patterns", "_nodejs", "_python", "_go",
-                "_subscriptions", "_notifications", "_deployment", "_event_sources", "_origins",
-                "_alpha", "_integrations", "_authorizers", "_destinations")
+CDK_SUFFIXES = (
+    "_tasks",
+    "_targets",
+    "_actions",
+    "_patterns",
+    "_nodejs",
+    "_python",
+    "_go",
+    "_subscriptions",
+    "_notifications",
+    "_deployment",
+    "_event_sources",
+    "_origins",
+    "_alpha",
+    "_integrations",
+    "_authorizers",
+    "_destinations",
+)
 
 
 def _cdk_service(module: str, names: Names) -> str | None:
@@ -293,8 +401,7 @@ def scan_terraform(text: str, rel: str, names: Names, usage: Usage) -> None:
     for m in TF_RESOURCE.finditer(text):
         svc = _tf_service(m.group(1), names)
         if svc:
-            usage.resources.append((svc, f"aws_{m.group(1)}",
-                                    Location(rel, _line(text, m.start()), "terraform")))
+            usage.resources.append((svc, f"aws_{m.group(1)}", Location(rel, _line(text, m.start()), "terraform")))
 
 
 def scan_template(text: str, rel: str, names: Names, usage: Usage) -> None:
@@ -303,8 +410,7 @@ def scan_template(text: str, rel: str, names: Names, usage: Usage) -> None:
     for m in CFN_TYPE.finditer(text):
         svc = _cfn_service(m.group(2), m.group(3), names)
         if svc:
-            usage.resources.append((svc, m.group(1),
-                                    Location(rel, _line(text, m.start()), "cloudformation")))
+            usage.resources.append((svc, m.group(1), Location(rel, _line(text, m.start()), "cloudformation")))
 
 
 def scan_cdk(text: str, rel: str, names: Names, usage: Usage) -> bool:
@@ -360,8 +466,9 @@ def scan(paths: list[Path], known_services: set[str]) -> ScanResult:
             source = CODE_EXT[ext]
             is_cdk = scan_cdk(text, rel, names, usage) if source in ("python", "node", "java", "go") else False
             if not is_cdk:
-                {"python": scan_python, "node": scan_node, "java": scan_java,
-                 "go": scan_go}[source](text, rel, names, usage)
+                {"python": scan_python, "node": scan_node, "java": scan_java, "go": scan_go}[source](
+                    text, rel, names, usage
+                )
         if usage.services or usage.resources:
             result.by_file[rel] = usage
             result.sources |= {loc.source for locs in usage.services.values() for loc in locs}

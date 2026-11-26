@@ -30,6 +30,7 @@ def _to_json(data: Any) -> str:
         if isinstance(o, bytes):
             return o.decode("utf-8", "replace")
         return str(o)
+
     return json.dumps(data, default=default, ensure_ascii=False)
 
 
@@ -65,9 +66,15 @@ class CallsScreen(Screen):
     def _row(self, call: dict) -> tuple:
         result = call["error"] or str(call["status"])
         style = "yellow" if call.get("fault") else "red" if call["error"] else ""
-        return (call["time"][11:23], call["service"], call["operation"] or call["method"],
-                call["resource"][:40], f"[{style}]{result}[/{style}]" if style else result,
-                f"{call['latency_ms']:.0f}", call.get("fault") or "")
+        return (
+            call["time"][11:23],
+            call["service"],
+            call["operation"] or call["method"],
+            call["resource"][:40],
+            f"[{style}]{result}[/{style}]" if style else result,
+            f"{call['latency_ms']:.0f}",
+            call.get("fault") or "",
+        )
 
     def poll(self) -> None:
         new, self.position, running = browse.proxy_calls(self.port, self.position)
@@ -78,9 +85,11 @@ class CallsScreen(Screen):
                 if not self.errors_only or call["error"]:
                     table.add_row(*self._row(call))
             table.move_cursor(row=table.row_count - 1)
-        status = (f"{len(self.calls)} call(s) via the proxy in front of port {self.port}"
-                  + ("" if running else " · no proxy running: start it with 'awsemu proxy start -d'")
-                  + (" · only errors" if self.errors_only else ""))
+        status = (
+            f"{len(self.calls)} call(s) via the proxy in front of port {self.port}"
+            + ("" if running else " · no proxy running: start it with 'awsemu proxy start -d'")
+            + (" · only errors" if self.errors_only else "")
+        )
         self.query_one("#calls-status", Static).update(status)
 
     def action_toggle_errors(self) -> None:

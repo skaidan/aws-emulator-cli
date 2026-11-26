@@ -70,8 +70,10 @@ class FakeHandler(BaseHTTPRequestHandler):
         js = [("Content-Type", "application/x-amz-json-1.0")]
         if target.endswith(".PutItem"):
             if json.loads(body)["TableName"] == "missing":
-                err = {"__type": "com.amazonaws.dynamodb.v20120810#ResourceNotFoundException",
-                       "message": "Requested resource not found"}
+                err = {
+                    "__type": "com.amazonaws.dynamodb.v20120810#ResourceNotFoundException",
+                    "message": "Requested resource not found",
+                }
                 return self.reply(400, json.dumps(err).encode(), js)
             return self.reply(200, b"{}", js)
         if target.endswith(".CreateQueue"):
@@ -93,6 +95,7 @@ def aws(tmp_path):
     server = FakeAWS(tmp_path)
     yield server
     server.shutdown()
+    server.server_close()
 
 
 @pytest.fixture
@@ -107,10 +110,29 @@ def proxy(aws):
     server.server_close()
 
 
+_CLIENTS: list = []
+
+
+@pytest.fixture(autouse=True)
+def _close_clients():
+    """Close the boto3 clients a test made (their pooled connections), after it."""
+    yield
+    while _CLIENTS:
+        _CLIENTS.pop().close()
+
+
 def client(server, service, attempts=3):
-    return boto3.client(service, region_name="us-east-1", endpoint_url=server.endpoint_url,
-                        verify=str(server.files.ca), aws_access_key_id="test", aws_secret_access_key="test",
-                        config=Config(retries={"mode": "standard", "max_attempts": attempts}))
+    made = boto3.client(
+        service,
+        region_name="us-east-1",
+        endpoint_url=server.endpoint_url,
+        verify=str(server.files.ca),
+        aws_access_key_id="test",
+        aws_secret_access_key="test",
+        config=Config(retries={"mode": "standard", "max_attempts": attempts}),
+    )
+    _CLIENTS.append(made)
+    return made
 
 
 def ops(server):
@@ -273,6 +295,7 @@ def test_chunked_request_body(aws, proxy):
         conn.send(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
     conn.send(b"0\r\n\r\n")
     assert conn.getresponse().status == 200
+    conn.close()
     method, path, headers, body = aws.seen[-1]
     assert body == b"abcdefg" and headers["Content-Length"] == "7"
     assert "Transfer-Encoding" not in headers
@@ -309,8 +332,9 @@ def test_certificate_names_for_containers_and_hosts(isolated_home):
     def names():
         cert = x509.load_pem_x509_certificate(files.cert.read_bytes())
         san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-        return {str(v) for v in san.get_values_for_type(x509.DNSName)} | \
-            {str(v) for v in san.get_values_for_type(x509.IPAddress)}
+        return {str(v) for v in san.get_values_for_type(x509.DNSName)} | {
+            str(v) for v in san.get_values_for_type(x509.IPAddress)
+        }
 
     px.ensure_certs(files)
     assert {"127.0.0.1", "::1", "localhost", "host.docker.internal"} <= names()
@@ -354,8 +378,20 @@ from awsemu.cli import cli  # noqa: E402
 
 def test_commands(runner, aws, monkeypatch):
     port = str(aws.port)
-    result = runner.invoke(cli, ["--port", port, "proxy", "start", "-d", "--listen", "0",
-                                 "--fault", "dynamodb:PutItem=ConditionalCheckFailedException x1"])
+    result = runner.invoke(
+        cli,
+        [
+            "--port",
+            port,
+            "proxy",
+            "start",
+            "-d",
+            "--listen",
+            "0",
+            "--fault",
+            "dynamodb:PutItem=ConditionalCheckFailedException x1",
+        ],
+    )
     assert result.exit_code == 0, result.output
     try:
         assert "Proxy listening on https://127.0.0.1:" in result.output
@@ -372,8 +408,14 @@ def test_commands(runner, aws, monkeypatch):
         assert state["token"]  # the admin API needs it
         if os.name != "nt":
             assert px.ProxyFiles(aws.port).state.stat().st_mode & 0o077 == 0  # only you can read it
-        ddb = boto3.client("dynamodb", region_name="us-east-1", endpoint_url=state["endpoint_url"],
-                           verify=state["ca"], aws_access_key_id="t", aws_secret_access_key="t")
+        ddb = boto3.client(
+            "dynamodb",
+            region_name="us-east-1",
+            endpoint_url=state["endpoint_url"],
+            verify=state["ca"],
+            aws_access_key_id="t",
+            aws_secret_access_key="t",
+        )
         with pytest.raises(ClientError):
             ddb.put_item(TableName="orders", Item={"id": {"S": "1"}})
         ddb.put_item(TableName="orders", Item={"id": {"S": "1"}})
@@ -381,25 +423,37 @@ def test_commands(runner, aws, monkeypatch):
         faults_out = runner.invoke(cli, ["--port", port, "proxy", "faults", "add", "s3=latency:5ms"]).output
         assert "s3=latency:5ms" in faults_out
         listed = json.loads(runner.invoke(cli, ["--port", port, "proxy", "faults", "--json"]).output)
-        assert listed == [{"rule": "dynamodb:PutItem=ConditionalCheckFailedException x1", "hits": 1,
-                           "active": False, "remaining_s": None},
-                          {"rule": "s3=latency:5ms", "hits": 0, "active": True, "remaining_s": None}]
+        assert listed == [
+            {
+                "rule": "dynamodb:PutItem=ConditionalCheckFailedException x1",
+                "hits": 1,
+                "active": False,
+                "remaining_s": None,
+            },
+            {"rule": "s3=latency:5ms", "hits": 0, "active": True, "remaining_s": None},
+        ]
         bad = runner.invoke(cli, ["--port", port, "proxy", "faults", "add", "nonsense"])
         assert bad.exit_code == 2
         runner.invoke(cli, ["--port", port, "proxy", "faults", "set", "sqs=503"])
-        assert json.loads(runner.invoke(cli, ["--port", port, "proxy", "faults", "--json"]).output)[0]["rule"] == "sqs=503"
+        assert (
+            json.loads(runner.invoke(cli, ["--port", port, "proxy", "faults", "--json"]).output)[0]["rule"] == "sqs=503"
+        )
         assert "No fault rules" in runner.invoke(cli, ["--port", port, "proxy", "faults", "clear"]).output
 
         calls = json.loads(runner.invoke(cli, ["--port", port, "proxy", "calls", "--json"]).output)
         assert [(c["operation"], c["error"]) for c in calls] == [
-            ("PutItem", "ConditionalCheckFailedException"), ("PutItem", None)]
+            ("PutItem", "ConditionalCheckFailedException"),
+            ("PutItem", None),
+        ]
         assert calls[0]["fault"] == "dynamodb:PutItem=ConditionalCheckFailedException x1"
         errors = json.loads(runner.invoke(cli, ["--port", port, "proxy", "calls", "--errors", "--json"]).output)
         assert len(errors) == 1
         text = runner.invoke(cli, ["--port", port, "watch", "--calls", "--once"]).output
         assert "dynamodb PutItem" in text and "ConditionalCheckFailedException" in text and "⚡" in text
-        assert "None of the 2 logged call(s) match" in runner.invoke(
-            cli, ["--port", port, "proxy", "calls", "--service", "s3"]).output
+        assert (
+            "None of the 2 logged call(s) match"
+            in runner.invoke(cli, ["--port", port, "proxy", "calls", "--service", "s3"]).output
+        )
     finally:
         stopped = runner.invoke(cli, ["--port", port, "proxy", "stop"])
     assert "stopped" in stopped.output
@@ -416,7 +470,8 @@ def test_bad_fault_option(runner, aws):
 def test_project_proxy_with_up_env_and_stop(runner, fake_binary, free_port, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "awsemu.toml").write_text(
-        f'port = {free_port}\nproxy = true\nproxy_port = 0\nfaults = ["s3=throttle@1%"]\n')
+        f'port = {free_port}\nproxy = true\nproxy_port = 0\nfaults = ["s3=throttle@1%"]\n'
+    )
     from awsemu import project
 
     project.clear_cache()
@@ -455,7 +510,8 @@ def test_pytest_fixtures(pytester, aws, monkeypatch):
 
     monkeypatch.setenv("PYTHONPATH", os.pathsep.join(filter(None, [SRC, os.environ.get("PYTHONPATH")])))
     InstanceFiles(aws.port).credentials.write_text("[default]\naws_access_key_id = t\naws_secret_access_key = t\n")
-    pytester.makepyfile(test_inner="""
+    pytester.makepyfile(
+        test_inner="""
         import boto3, pytest
         from botocore.config import Config
         from botocore.exceptions import ClientError
@@ -493,16 +549,19 @@ def test_pytest_fixtures(pytester, aws, monkeypatch):
         def test_without_proxy_goes_direct(aws_emulator):
             import os
             assert os.environ["AWS_ENDPOINT_URL"] == aws_emulator.endpoint_url
-    """)
+    """
+    )
     result = run(pytester, "--awsemu-reuse", "--awsemu-port", str(aws.port), "-v")
     result.assert_outcomes(passed=5, failed=1)
     result.stdout.fnmatch_lines(["*test_bad_rule FAILED*", "*awsemu: 'nonsense' isn't a fault rule*"])
 
-    pytester.makepyfile(test_inner="""
+    pytester.makepyfile(
+        test_inner="""
         import os
         def test_session_proxy(aws_emulator, aws_proxy):
             assert os.environ["AWS_ENDPOINT_URL"] == aws_proxy.endpoint_url != aws_emulator.endpoint_url
             assert aws_proxy.rules == ["s3=latency:1ms"]
-    """)
+    """
+    )
     pytester.makefile(".toml", awsemu='faults = ["s3=latency:1ms"]\n')
     run(pytester, "--awsemu-reuse", "--awsemu-port", str(aws.port), "--awsemu-proxy").assert_outcomes(passed=1)

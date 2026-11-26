@@ -18,14 +18,23 @@ def emulator(monkeypatch):
     """A 'running' emulator whose clients are fakes; records the port used."""
     used = []
     fakes = {
-        "sqs": FakeClient(list_queues={"QueueUrls": ["https://x/000000000000/jobs",
-                                                     "https://x/000000000000/jobs-dlq",
-                                                     "https://x/000000000000/mail"]}),
+        "sqs": FakeClient(
+            list_queues={
+                "QueueUrls": [
+                    "https://x/000000000000/jobs",
+                    "https://x/000000000000/jobs-dlq",
+                    "https://x/000000000000/mail",
+                ]
+            }
+        ),
         "dynamodb": FakeClient(list_tables=[{"TableNames": ["users", "orders"]}]),
-        "s3": FakeClient(list_buckets={"Buckets": [{"Name": "photos"}, {"Name": "logs"}]},
-                         list_objects_v2=lambda **kw: {
-                             "CommonPrefixes": [{"Prefix": kw["Prefix"] + "2026/"}],
-                             "Contents": [{"Key": kw["Prefix"] + "cat.jpg"}]}),
+        "s3": FakeClient(
+            list_buckets={"Buckets": [{"Name": "photos"}, {"Name": "logs"}]},
+            list_objects_v2=lambda **kw: {
+                "CommonPrefixes": [{"Prefix": kw["Prefix"] + "2026/"}],
+                "Contents": [{"Key": kw["Prefix"] + "cat.jpg"}],
+            },
+        ),
         "ssm": FakeClient(describe_parameters=[{"Parameters": [{"Name": "/app/host"}, {"Name": "/app/key"}]}]),
     }
     monkeypatch.setattr(completion.health, "port_open", lambda port, timeout=0.5: True)
@@ -33,6 +42,7 @@ def emulator(monkeypatch):
     def fake_client(service, port):
         used.append(port)
         return fakes[service]
+
     monkeypatch.setattr(clients, "client", fake_client)
     return used
 
@@ -76,13 +86,19 @@ def test_errors_are_silent(monkeypatch):
 
     def boom(service, port):
         raise RuntimeError("no")
+
     monkeypatch.setattr(clients, "client", boom)
     assert complete(["dynamodb", "scan"], "") == []
 
 
-@pytest.mark.parametrize("shell,needle", [("bash", "_AWSEMU_COMPLETE=bash_complete"),
-                                          ("zsh", "#compdef awsemu"),
-                                          ("fish", "complete --no-files --command awsemu")])
+@pytest.mark.parametrize(
+    "shell,needle",
+    [
+        ("bash", "_AWSEMU_COMPLETE=bash_complete"),
+        ("zsh", "#compdef awsemu"),
+        ("fish", "complete --no-files --command awsemu"),
+    ],
+)
 def test_completion_scripts(runner, shell, needle):
     result = runner.invoke(cli, ["completion", shell])
     assert result.exit_code == 0 and needle in result.output

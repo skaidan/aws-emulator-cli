@@ -32,54 +32,105 @@ def wire(uid, outcome, service, *ops, failed=None, **detail):
 
 
 def behavioral(uid, outcome, *services):
-    return {"unitId": uid, "kind": "behavioral", "outcome": outcome, "services": list(services),
-            "detail": {"checkId": uid}}
+    return {
+        "unitId": uid,
+        "kind": "behavioral",
+        "outcome": outcome,
+        "services": list(services),
+        "detail": {"checkId": uid},
+    }
 
 
-SCORES = {"commit": "abc", "schemaVersion": 1, "scoredAt": "2026-11-16T10:00:00+00:00", "units": [
-    wire("ddb-tx-1", "fail", DDB, "CreateTable", "TransactWriteItems", failed="TransactWriteItems",
-         mismatch="status", expected={"status": 400, "errorCode": "ValidationException"},
-         actual={"status": 200}),
-    wire("ddb-tx-2", "pass", DDB, "CreateTable", "TransactWriteItems"),
-    wire("ddb-get-1", "fail", DDB, "CreateTable", "GetItem", failed="CreateTable", mismatch="body",
-         expected={"status": 400, "errorCode": "ValidationException"},
-         actual={"status": 400, "errorCode": "ValidationException"}),
-    wire("sqs-send-1", "pass", SQS, "CreateQueue", "SendMessage"),
-    behavioral("dynamodb.orders-flow", "fail", DDB),
-    behavioral("dynamodb.big-flow", "fail", DDB),
-    behavioral("sqs.queue-flow", "pass", SQS),
-    behavioral("stepfunctions.start", "pass", SFN),
-    behavioral("logs.put", "pass", LOGS),
-    behavioral("cloudformation__dynamodb.cfn-table", "fail", CFN, DDB),
-    behavioral("cloudformation__dynamodb.cfn-table-ok", "pass", CFN, DDB),
-    behavioral("sns.publish", "pass", SNS),
-    behavioral("kinesis.put", "pass", KINESIS),
-    behavioral("s3.put", "pass", S3),
-    {"unitId": "skipped-one", "kind": "wire", "outcome": "skipped", "services": [DDB]},
-]}
+SCORES = {
+    "commit": "abc",
+    "schemaVersion": 1,
+    "scoredAt": "2026-11-16T10:00:00+00:00",
+    "units": [
+        wire(
+            "ddb-tx-1",
+            "fail",
+            DDB,
+            "CreateTable",
+            "TransactWriteItems",
+            failed="TransactWriteItems",
+            mismatch="status",
+            expected={"status": 400, "errorCode": "ValidationException"},
+            actual={"status": 200},
+        ),
+        wire("ddb-tx-2", "pass", DDB, "CreateTable", "TransactWriteItems"),
+        wire(
+            "ddb-get-1",
+            "fail",
+            DDB,
+            "CreateTable",
+            "GetItem",
+            failed="CreateTable",
+            mismatch="body",
+            expected={"status": 400, "errorCode": "ValidationException"},
+            actual={"status": 400, "errorCode": "ValidationException"},
+        ),
+        wire("sqs-send-1", "pass", SQS, "CreateQueue", "SendMessage"),
+        behavioral("dynamodb.orders-flow", "fail", DDB),
+        behavioral("dynamodb.big-flow", "fail", DDB),
+        behavioral("sqs.queue-flow", "pass", SQS),
+        behavioral("stepfunctions.start", "pass", SFN),
+        behavioral("logs.put", "pass", LOGS),
+        behavioral("cloudformation__dynamodb.cfn-table", "fail", CFN, DDB),
+        behavioral("cloudformation__dynamodb.cfn-table-ok", "pass", CFN, DDB),
+        behavioral("sns.publish", "pass", SNS),
+        behavioral("kinesis.put", "pass", KINESIS),
+        behavioral("s3.put", "pass", S3),
+        {"unitId": "skipped-one", "kind": "wire", "outcome": "skipped", "services": [DDB]},
+    ],
+}
 
 MANIFEST = [
-    {"check_id": "dynamodb.orders-flow", "service": "dynamodb", "labels": ["plane:data"],
-     "path": "behavioral/dynamodb/check_orders_flow.py",
-     "operations": ["dynamodb:GetItem", "dynamodb:TransactWriteItems", "sts:GetCallerIdentity"]},
-    {"check_id": "dynamodb.big-flow", "service": "dynamodb", "labels": ["plane:data"],
-     "path": "behavioral/dynamodb/check_big_flow.py",
-     "operations": ["dynamodb:GetItem", "dynamodb:CreateBackup", "dynamodb:Scan"]},
-    {"check_id": "sqs.queue-flow", "service": "sqs", "labels": [], "path": "behavioral/sqs/x.py",
-     "operations": ["sqs:CreateQueue", "sqs:SendMessage", "sqs:ReceiveMessage"]},
-    {"check_id": "stepfunctions.start", "service": "stepfunctions", "labels": [], "path": "p",
-     "operations": ["stepfunctions:StartExecution"]},
-    {"check_id": "logs.put", "service": "logs", "labels": [], "path": "p",
-     "operations": ["logs:PutLogEvents"]},
-    {"check_id": "cloudformation__dynamodb.cfn-table", "service": "cloudformation__dynamodb",
-     "labels": [], "path": "p", "operations": ["cloudformation:CreateStack"]},
-    {"check_id": "cloudformation__dynamodb.cfn-table-ok", "service": "cloudformation__dynamodb",
-     "labels": [], "path": "p", "operations": ["cloudformation:CreateStack"]},
+    {
+        "check_id": "dynamodb.orders-flow",
+        "service": "dynamodb",
+        "labels": ["plane:data"],
+        "path": "behavioral/dynamodb/check_orders_flow.py",
+        "operations": ["dynamodb:GetItem", "dynamodb:TransactWriteItems", "sts:GetCallerIdentity"],
+    },
+    {
+        "check_id": "dynamodb.big-flow",
+        "service": "dynamodb",
+        "labels": ["plane:data"],
+        "path": "behavioral/dynamodb/check_big_flow.py",
+        "operations": ["dynamodb:GetItem", "dynamodb:CreateBackup", "dynamodb:Scan"],
+    },
+    {
+        "check_id": "sqs.queue-flow",
+        "service": "sqs",
+        "labels": [],
+        "path": "behavioral/sqs/x.py",
+        "operations": ["sqs:CreateQueue", "sqs:SendMessage", "sqs:ReceiveMessage"],
+    },
+    {
+        "check_id": "stepfunctions.start",
+        "service": "stepfunctions",
+        "labels": [],
+        "path": "p",
+        "operations": ["stepfunctions:StartExecution"],
+    },
+    {"check_id": "logs.put", "service": "logs", "labels": [], "path": "p", "operations": ["logs:PutLogEvents"]},
+    {
+        "check_id": "cloudformation__dynamodb.cfn-table",
+        "service": "cloudformation__dynamodb",
+        "labels": [],
+        "path": "p",
+        "operations": ["cloudformation:CreateStack"],
+    },
+    {
+        "check_id": "cloudformation__dynamodb.cfn-table-ok",
+        "service": "cloudformation__dynamodb",
+        "labels": [],
+        "path": "p",
+        "operations": ["cloudformation:CreateStack"],
+    },
     {"check_id": "sns.publish", "service": "sns", "labels": [], "path": "p", "operations": ["sns:Publish"]},
-    {"check_id": "kinesis.put", "service": "kinesis", "labels": [], "path": "p",
-     "operations": ["kinesis:PutRecord"]},
-    {"check_id": "s3.put", "service": "s3", "labels": [], "path": "p",
-     "operations": ["s3:PutObject", "s3:GetObject"]},
+    {"check_id": "kinesis.put", "service": "kinesis", "labels": [], "path": "p", "operations": ["kinesis:PutRecord"]},
+    {"check_id": "s3.put", "service": "s3", "labels": [], "path": "p", "operations": ["s3:PutObject", "s3:GetObject"]},
 ]
 
 FILES = {
@@ -194,11 +245,17 @@ def test_analyze_lists_known_differences(project, index):
     result = sc.scan([project], index.known_services)
     report = chk.analyze(result, index, "v1.0.385", "v1.0.0")
     ops = {o.operation: o for o in report.operations}
-    assert set(ops) == {"dynamodb:TransactWriteItems", "dynamodb:GetItem", "sqs:SendMessage",
-                        "stepfunctions:StartExecution", "sns:Publish", "kinesis:PutRecord",
-                        "s3:PutObject"}
+    assert set(ops) == {
+        "dynamodb:TransactWriteItems",
+        "dynamodb:GetItem",
+        "sqs:SendMessage",
+        "stepfunctions:StartExecution",
+        "sns:Publish",
+        "kinesis:PutRecord",
+        "s3:PutObject",
+    }
     assert "logs:PutLogEvents" not in ops  # imported, never sent
-    assert [l.file for l in ops["dynamodb:GetItem"].locations] == ["app/repo.py"]  # client made elsewhere
+    assert [loc.file for loc in ops["dynamodb:GetItem"].locations] == ["app/repo.py"]  # client made elsewhere
 
     tx = ops["dynamodb:TransactWriteItems"]
     assert (tx.tests, tx.passed) == (3, 1)
@@ -221,16 +278,23 @@ def test_analyze_lists_known_differences(project, index):
     first = data["operations"][0]
     assert len(first["differences"]) == 1 and first["differences"][0]["test"] == "ddb-tx-1"
     assert first["differences"][0]["expected"] == "400 ValidationException"
-    assert data["summary"] == {"operations": 7, "services": len(report.services),
-                               "operations_with_differences": 2, "differences": 2,  # orders-flow is in both
-                               "explained_by_issues": None, "fixed_in_latest": None, "latest": None}
+    assert data["summary"] == {
+        "operations": 7,
+        "services": len(report.services),
+        "operations_with_differences": 2,
+        "differences": 2,  # orders-flow is in both
+        "explained_by_issues": None,
+        "fixed_in_latest": None,
+        "latest": None,
+    }
 
 
 def test_differences_link_to_the_tests_version(project, index):
     report = chk.analyze(sc.scan([project], index.known_services), index, "v1.0.385", "v1.0.0")
     links = [d["url"] for o in report.as_dict()["operations"] for d in o["differences"] if d["url"]]
-    assert links[0] == ("https://github.com/aws/aws-emulator-evaluation-suite/blob/v1.0.0/"
-                        "behavioral/dynamodb/check_orders_flow.py")
+    assert links[0] == (
+        "https://github.com/aws/aws-emulator-evaluation-suite/blob/v1.0.0/behavioral/dynamodb/check_orders_flow.py"
+    )
 
 
 def test_manifest_download_and_cache(isolated_home, monkeypatch):
@@ -275,22 +339,6 @@ def test_latest_suite_version(isolated_home, monkeypatch):
 def test_bad_manifest_is_reported():
     with pytest.raises(fid.FidelityError, match="line 2"):
         chk.parse_manifest(b'{"check_id": "a", "operations": []}\nnot json\n')
-
-
-@pytest.fixture
-def cached(isolated_home, monkeypatch):
-    d = fid.cache_dir()
-    d.mkdir(parents=True)
-    (d / "v1.0.385.json.gz").write_bytes(gzip.compress(json.dumps(SCORES).encode()))
-    (d / "v1.0.385.release.json").write_text(json.dumps({"suite": "v1.0.0"}))
-    (d / "manifest-v1.0.0.jsonl.gz").write_bytes(
-        gzip.compress("\n".join(json.dumps(r) for r in MANIFEST).encode()))
-    monkeypatch.setattr(fid, "installed_version", lambda binary=None: "1.0.385")
-
-    def no_network(*a, **k):
-        raise AssertionError("should use the cache")
-
-    monkeypatch.setattr(fid, "_get", no_network)
 
 
 def test_command_text(runner, cached, project):
@@ -390,16 +438,30 @@ def test_fidelity_compare(runner, cached, project, monkeypatch):
 
 
 def _calls_log(path, *calls):
-    path.write_text("".join(json.dumps({"id": i + 1, "service": s, "operation": op, "resource": "",
-                                        "status": 200, "error": None}) + "\n"
-                            for i, (s, op) in enumerate(calls)))
+    path.write_text(
+        "".join(
+            json.dumps({"id": i + 1, "service": s, "operation": op, "resource": "", "status": 200, "error": None})
+            + "\n"
+            for i, (s, op) in enumerate(calls)
+        )
+    )
     return path
 
 
 def test_scan_from_calls(index, tmp_path):
-    calls = [json.loads(line) for line in _calls_log(
-        tmp_path / "calls.jsonl", ("dynamodb", "TransactWriteItems"), ("dynamodb", "TransactWriteItems"),
-        ("logs", "PutLogEvents"), ("dynamodb", "DescribeLimits"), ("", "")).read_text().splitlines()]
+    calls = [
+        json.loads(line)
+        for line in _calls_log(
+            tmp_path / "calls.jsonl",
+            ("dynamodb", "TransactWriteItems"),
+            ("dynamodb", "TransactWriteItems"),
+            ("logs", "PutLogEvents"),
+            ("dynamodb", "DescribeLimits"),
+            ("", ""),
+        )
+        .read_text()
+        .splitlines()
+    ]
     result, unknown = chk.scan_from_calls(calls, index)
     report = chk.analyze(result, index, "v1.0.385", "v1.0.0")
     ops = {o.operation: o for o in report.operations}

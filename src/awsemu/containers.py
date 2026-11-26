@@ -42,8 +42,15 @@ class AwsEmulatorContainer(DockerContainer):
     passes ``-t on/off``; unset, the emulator's default applies (and
     ``EMULATOR_TELEMETRY`` from your environment is passed on)."""
 
-    def __init__(self, image: str | None = None, *, auth: bool = True,
-                 telemetry: bool | None = None, startup_timeout: float = 90, **kwargs):
+    def __init__(
+        self,
+        image: str | None = None,
+        *,
+        auth: bool = True,
+        telemetry: bool | None = None,
+        startup_timeout: float = 90,
+        **kwargs,
+    ):
         super().__init__(image or os.environ.get("AWSEMU_IMAGE") or DEFAULT_IMAGE, **kwargs)
         self.auth = auth
         self.startup_timeout = startup_timeout
@@ -147,10 +154,20 @@ class AwsEmulatorContainer(DockerContainer):
         import boto3
         from botocore.config import Config
 
-        kwargs.setdefault("config", Config(inject_host_prefix=False,
-                                           s3={"addressing_style": "path"},
-                                           retries={"max_attempts": 2, "mode": "standard"}))
-        return boto3.client(service, endpoint_url=self.endpoint_url, verify=self.ca_path,
-                            aws_access_key_id=self.access_key_id,
-                            aws_secret_access_key=self.secret_access_key,
-                            region_name=self.region, **kwargs)
+        kwargs.setdefault(
+            "config",
+            Config(
+                inject_host_prefix=False,
+                s3={"addressing_style": "path"},
+                retries={"max_attempts": 2, "mode": "standard"},
+            ),
+        )
+        return boto3.client(
+            service,
+            endpoint_url=self.endpoint_url,
+            verify=self.ca_path,
+            aws_access_key_id=self.access_key_id,
+            aws_secret_access_key=self.secret_access_key,
+            region_name=self.region,
+            **kwargs,
+        )

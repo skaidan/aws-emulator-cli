@@ -25,7 +25,7 @@ DEFAULT_PASSWORD = "changeit"  # the JDK's cacerts
 
 def _option(options: list[str], name: str) -> str | None:
     prefix = f"-D{name}="
-    return next((o[len(prefix):] for o in reversed(options) if o.startswith(prefix)), None)
+    return next((o[len(prefix) :] for o in reversed(options) if o.startswith(prefix)), None)
 
 
 def keytool() -> str | None:
@@ -89,16 +89,67 @@ def combined(port: int, current_options: str = "", also: Path | None = None) -> 
     tmp = out.with_suffix(".tmp.p12")
     tmp.unlink(missing_ok=True)
     try:
-        subprocess.run([tool, "-importkeystore", "-noprompt", "-srckeystore", str(src), "-srcstorepass", src_password,
-                        "-destkeystore", str(tmp), "-deststoretype", "PKCS12", "-deststorepass", PASSWORD],
-                       check=True, capture_output=True, timeout=60)
-        subprocess.run([tool, "-importcert", "-noprompt", "-alias", f"awsemu-emulator-{port}", "-file", str(files.ca),
-                        "-keystore", str(tmp), "-storetype", "PKCS12", "-storepass", PASSWORD],
-                       check=True, capture_output=True, timeout=60)
+        subprocess.run(
+            [
+                tool,
+                "-importkeystore",
+                "-noprompt",
+                "-srckeystore",
+                str(src),
+                "-srcstorepass",
+                src_password,
+                "-destkeystore",
+                str(tmp),
+                "-deststoretype",
+                "PKCS12",
+                "-deststorepass",
+                PASSWORD,
+            ],
+            check=True,
+            capture_output=True,
+            timeout=60,
+        )
+        subprocess.run(
+            [
+                tool,
+                "-importcert",
+                "-noprompt",
+                "-alias",
+                f"awsemu-emulator-{port}",
+                "-file",
+                str(files.ca),
+                "-keystore",
+                str(tmp),
+                "-storetype",
+                "PKCS12",
+                "-storepass",
+                PASSWORD,
+            ],
+            check=True,
+            capture_output=True,
+            timeout=60,
+        )
         if also:
-            subprocess.run([tool, "-importcert", "-noprompt", "-alias", "awsemu-proxy", "-file", str(also),
-                            "-keystore", str(tmp), "-storetype", "PKCS12", "-storepass", PASSWORD],
-                           check=True, capture_output=True, timeout=60)
+            subprocess.run(
+                [
+                    tool,
+                    "-importcert",
+                    "-noprompt",
+                    "-alias",
+                    "awsemu-proxy",
+                    "-file",
+                    str(also),
+                    "-keystore",
+                    str(tmp),
+                    "-storetype",
+                    "PKCS12",
+                    "-storepass",
+                    PASSWORD,
+                ],
+                check=True,
+                capture_output=True,
+                timeout=60,
+            )
         tmp.replace(out)
     except (OSError, subprocess.SubprocessError):
         tmp.unlink(missing_ok=True)

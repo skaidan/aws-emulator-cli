@@ -27,10 +27,11 @@ def _clean(d: dict) -> dict:
 def _s3(port, name):
     s3 = client("s3", port)
     resp = s3.list_objects_v2(Bucket=name, MaxKeys=MAX_OBJECTS)
-    objects = [{"Key": o["Key"], "Size": o.get("Size"), "LastModified": o.get("LastModified")}
-               for o in resp.get("Contents", [])]
-    return {"Bucket": name, "Objects (first %d)" % MAX_OBJECTS: objects,
-            "More": bool(resp.get("IsTruncated"))}
+    objects = [
+        {"Key": o["Key"], "Size": o.get("Size"), "LastModified": o.get("LastModified")}
+        for o in resp.get("Contents", [])
+    ]
+    return {"Bucket": name, f"Objects (first {MAX_OBJECTS})": objects, "More": bool(resp.get("IsTruncated"))}
 
 
 def _sqs(port, name):
@@ -45,7 +46,7 @@ def _dynamodb(port, name):
     d = client("dynamodb", port)
     table = d.describe_table(TableName=name)["Table"]
     items = [from_item(i) for i in d.scan(TableName=name, Limit=MAX_ITEMS).get("Items", [])]
-    return {"Table": table, "Items (first %d)" % MAX_ITEMS: items}
+    return {"Table": table, f"Items (first {MAX_ITEMS})": items}
 
 
 def _sns(port, name):
@@ -103,9 +104,18 @@ def _iam(port, name):
 
 
 DETAILS: dict[str, Callable[[int, str], Any]] = {
-    "s3": _s3, "sqs": _sqs, "dynamodb": _dynamodb, "sns": _sns, "lambda": _lambda,
-    "secretsmanager": _secrets, "ssm": _ssm, "kinesis": _kinesis, "events": _events,
-    "stepfunctions": _sfn, "logs": _logs, "iam": _iam,
+    "s3": _s3,
+    "sqs": _sqs,
+    "dynamodb": _dynamodb,
+    "sns": _sns,
+    "lambda": _lambda,
+    "secretsmanager": _secrets,
+    "ssm": _ssm,
+    "kinesis": _kinesis,
+    "events": _events,
+    "stepfunctions": _sfn,
+    "logs": _logs,
+    "iam": _iam,
 }
 
 assert set(DETAILS) == {s[1] for s in SERVICES}, "every overview service needs a details function"

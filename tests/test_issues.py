@@ -72,16 +72,21 @@ class FakeGitHub:
             return json.dumps([{"name": f, "sha": f"tree-{f}"} for f in folders]).encode()
         if "/git/trees/tree-" in url:
             folder = url.rsplit("tree-", 1)[1]
-            return json.dumps({"tree": [{"path": n, "type": "blob", "sha": f"blob{abs(hash(n))}"}
-                                        for n in folders[folder]]}).encode()
+            return json.dumps(
+                {"tree": [{"path": n, "type": "blob", "sha": f"blob{abs(hash(n))}"} for n in folders[folder]]}
+            ).encode()
         if "raw.githubusercontent.com/aws/aws-emulator/main/issues/" in url:
             folder, name = url.split("/main/issues/", 1)[1].split("/", 1)
             data = folders[folder][name].encode()
             return data[:first_bytes] if first_bytes else data
         if url.endswith("/releases/latest") or "/releases/tags/" in url:
             tag = url.rsplit("/", 1)[1] if "/tags/" in url else "v1.0.390"
-            return json.dumps({"tag_name": tag, "assets": [
-                {"name": "scores.json.gz", "browser_download_url": f"https://dl/{tag}/scores.json.gz"}]}).encode()
+            return json.dumps(
+                {
+                    "tag_name": tag,
+                    "assets": [{"name": "scores.json.gz", "browser_download_url": f"https://dl/{tag}/scores.json.gz"}],
+                }
+            ).encode()
         if url.startswith("https://dl/"):
             return gzip.compress(json.dumps(self.scores[url.split("/")[3]]).encode())
         raise fid.FidelityError(f"not found: {url}")
@@ -92,10 +97,12 @@ class FakeGitHub:
 
 def test_services_in_name():
     known = {"dynamodb", "lambda", "scheduler", "sqs", "chime-sdk-meetings", "s3"}
-    assert iss.services_in_name("20261112T102720Z-lambda-scheduler-sqs-2-net-new.md", known) == \
-        ["lambda", "scheduler", "sqs"]
-    assert iss.services_in_name("20261121T152303Z-chime-sdk-meetings-createmeeting.md", known) == \
-        ["chime-sdk-meetings"]
+    assert iss.services_in_name("20261112T102720Z-lambda-scheduler-sqs-2-net-new.md", known) == [
+        "lambda",
+        "scheduler",
+        "sqs",
+    ]
+    assert iss.services_in_name("20261121T152303Z-chime-sdk-meetings-createmeeting.md", known) == ["chime-sdk-meetings"]
     assert iss.services_in_name("20261102T000000Z-scaffold-codegen.md", known) == []
     assert iss.services_in_name("release-gate-25befc957876.md", known) == []
 
@@ -226,8 +233,18 @@ def test_issues_command(runner, monkeypatch, scores_cached):
     assert "envelope" in runner.invoke(cli, ["issues", "dynamodb", "--search", "ENVELOPE"]).output
 
     data = json.loads(runner.invoke(cli, ["issues", "dynamodb", "--json", "-n", "1"]).output)
-    assert len(data) == 1 and set(data[0]) == {"title", "severity", "state", "services", "operations", "tests",
-                                                "kind", "created", "url", "name"}
+    assert len(data) == 1 and set(data[0]) == {
+        "title",
+        "severity",
+        "state",
+        "services",
+        "operations",
+        "tests",
+        "kind",
+        "created",
+        "url",
+        "name",
+    }
 
     shown = runner.invoke(cli, ["issues", "--show", "1"])
     assert shown.exit_code == 0 and "A critical DynamoDB thing" in shown.output and "state     open" in shown.output

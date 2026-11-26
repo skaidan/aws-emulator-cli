@@ -20,12 +20,31 @@ from urllib.parse import urlencode
 ISSUE_FORM = "https://github.com/aws/aws-emulator/issues/new"
 TEMPLATE = "behavior-differs.yml"
 MAX_URL = 7500  # GitHub refuses longer new-issue URLs
-DROP_HEADERS = {"authorization", "x-amz-date", "x-amz-security-token", "x-amz-content-sha256", "host",
-                "content-length", "accept-encoding", "amz-sdk-invocation-id", "amz-sdk-request",
-                "connection", "expect", "x-amzn-requestid", "x-amz-request-id", "x-amz-id-2", "date",
-                "server", "transfer-encoding", "cookie", "set-cookie"}
-EXPECTED_PLACEHOLDER = ("<!-- What AWS returns for the same request, and how you know: you ran it against AWS, "
-                        "or the reference says so. -->")
+DROP_HEADERS = {
+    "authorization",
+    "x-amz-date",
+    "x-amz-security-token",
+    "x-amz-content-sha256",
+    "host",
+    "content-length",
+    "accept-encoding",
+    "amz-sdk-invocation-id",
+    "amz-sdk-request",
+    "connection",
+    "expect",
+    "x-amzn-requestid",
+    "x-amz-request-id",
+    "x-amz-id-2",
+    "date",
+    "server",
+    "transfer-encoding",
+    "cookie",
+    "set-cookie",
+}
+EXPECTED_PLACEHOLDER = (
+    "<!-- What AWS returns for the same request, and how you know: you ran it against AWS, "
+    "or the reference says so. -->"
+)
 
 
 class ReportError(Exception):
@@ -38,8 +57,14 @@ class Draft:
     fields: dict[str, str]  # issue form field id -> markdown
 
     def markdown(self) -> str:
-        names = {"actual": "What happened", "expected": "What you expected", "reproduction": "Steps to reproduce",
-                 "version": "Emulator version", "impact": "Impact and workaround", "context": "Additional context"}
+        names = {
+            "actual": "What happened",
+            "expected": "What you expected",
+            "reproduction": "Steps to reproduce",
+            "version": "Emulator version",
+            "impact": "Impact and workaround",
+            "context": "Additional context",
+        }
         parts = [f"# {self.title}", ""]
         for key, label in names.items():
             value = self.fields.get(key, "")
@@ -63,7 +88,7 @@ def _model(service: str):
         import botocore.session
 
         return botocore.session.get_session().get_service_model(service)
-    except Exception:  # noqa: BLE001 - an unknown service still gets a report
+    except Exception:
         return None
 
 
@@ -112,8 +137,10 @@ def _call_command(call: dict) -> str | None:
         return None  # a masked value can't be replayed
     from botocore import xform_name
 
-    return (f"awsemu call {call['service']} {xform_name(call['operation']).replace('_', '-')} "
-            f"--params '{json.dumps(params)}'")
+    return (
+        f"awsemu call {call['service']} {xform_name(call['operation']).replace('_', '-')} "
+        f"--params '{json.dumps(params)}'"
+    )
 
 
 def _when(text: str | None):
@@ -145,16 +172,23 @@ def log_around(call: dict, lines: list[str], seconds: float = 2.0, limit: int = 
 def build(call: dict, earlier: list[dict], version: str | None, log_lines: list[str]) -> Draft:
     """The draft issue for ``call``. ``earlier``: the calls logged before it."""
     if call.get("fault"):
-        raise ReportError(f"call {call['id']} got an error the proxy injected ({call['fault']}), "
-                          "not the emulator's answer: nothing to report")
+        raise ReportError(
+            f"call {call['id']} got an error the proxy injected ({call['fault']}), "
+            "not the emulator's answer: nothing to report"
+        )
     service, operation = call.get("service") or "?", call.get("operation") or call["method"]
     outcome = call.get("error") or f"HTTP {call['status']}"
     title = f"{service} {operation}: {outcome} where AWS …"
     req, resp = call.get("request"), call.get("response")
     status = call["status"]
 
-    actual = [f"`{service}` `{operation}`" + (f" on `{call['resource']}`" if call.get("resource") else "")
-              + f" answered **{status}**" + (f" with `{call['error']}`" if call.get("error") else "") + "."]
+    actual = [
+        f"`{service}` `{operation}`"
+        + (f" on `{call['resource']}`" if call.get("resource") else "")
+        + f" answered **{status}**"
+        + (f" with `{call['error']}`" if call.get("error") else "")
+        + "."
+    ]
     if resp:
         actual += ["", "```http", _http(f"HTTP/1.1 {status}", resp.get("headers"), resp.get("body")), "```"]
     else:
@@ -168,33 +202,61 @@ def build(call: dict, earlier: list[dict], version: str | None, log_lines: list[
     if ref:
         expected += ["", f"Reference: {ref}"]
 
-    repro = ["From a freshly started emulator (`aws-emulator`, default settings, Region us-east-1), "
-             "through `AWS_ENDPOINT_URL`:", ""]
+    repro = [
+        "From a freshly started emulator (`aws-emulator`, default settings, Region us-east-1), "
+        "through `AWS_ENDPOINT_URL`:",
+        "",
+    ]
     resource = call.get("resource")
-    before = [c for c in earlier if resource and c.get("resource") and
-              (c["resource"] == resource or c["resource"].split("/", 1)[0] == resource.split("/", 1)[0])]
+    before = [
+        c
+        for c in earlier
+        if resource
+        and c.get("resource")
+        and (c["resource"] == resource or c["resource"].split("/", 1)[0] == resource.split("/", 1)[0])
+    ]
     if before:
         repro += ["Calls on the same resource before it:", ""]
-        repro += [f"{i}. `{c['service']}` `{c['operation']}` → {c.get('error') or c['status']}"
-                  for i, c in enumerate(before[-10:], 1)]
+        repro += [
+            f"{i}. `{c['service']}` `{c['operation']}` → {c.get('error') or c['status']}"
+            for i, c in enumerate(before[-10:], 1)
+        ]
         repro += [""]
     command = _call_command(call) if req else None
     if command:
         repro += ["Then:", "", "```bash", command, "```", ""]
     if req:
         path = req.get("path") or call["path"]
-        repro += ["The request:", "", "```http", _http(f"{call['method']} {path} HTTP/1.1", req.get("headers"),
-                                                       req.get("body")), "```"]
+        repro += [
+            "The request:",
+            "",
+            "```http",
+            _http(f"{call['method']} {path} HTTP/1.1", req.get("headers"), req.get("body")),
+            "```",
+        ]
     else:
-        repro += [f"`{call['method']} {call['path']}`", "",
-                  "<!-- Start the proxy with --bodies to include the request. -->"]
+        repro += [
+            f"`{call['method']} {call['path']}`",
+            "",
+            "<!-- Start the proxy with --bodies to include the request. -->",
+        ]
     agent = next((v for k, v in (req or {}).get("headers", []) if k.lower() == "user-agent"), None)
     if agent:
         repro += ["", f"Client: `{agent}`"]
 
-    context = [f"Drafted by awsemu from call {call['id']} of the proxy's log, at {call['time']}"
-               + (f", request ID `{call['request_id']}`" if call.get("request_id") else "")
-               + ". Credentials and secret values were removed."]
-    return Draft(title=title, fields={
-        "actual": "\n".join(actual), "expected": "\n".join(expected), "reproduction": "\n".join(repro),
-        "version": version or "<!-- aws-emulator -v -->", "impact": "", "context": "\n".join(context)})
+    context = [
+        f"Drafted by awsemu from call {call['id']} of the proxy's log, at {call['time']}"
+        + (f", request ID `{call['request_id']}`" if call.get("request_id") else "")
+        + ". Credentials and secret values were removed."
+    ]
+    return Draft(
+        title=title,
+        fields={
+            "actual": "\n".join(actual),
+            "expected": "\n".join(expected),
+            "reproduction": "\n".join(repro),
+            "version": version or "<!-- aws-emulator -v -->",
+            "impact": "",
+            "context": "\n".join(context),
+        },
+    )
