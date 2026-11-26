@@ -63,6 +63,20 @@ jobs:
         run: AWSEMU_REAL_TESTS=1 pytest -m real -v -s
         env:
           GITHUB_TOKEN: ${{ github.token }}  # the fidelity and issues tests read GitHub's API
+      - name: AWS's fidelity tests, run here (fidelity run)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          pip install uv
+          awsemu fidelity run --json \
+            --test dynamodb.update-item-set-list-preserves-element-order \
+            --test sqs.add-remove-permission > run.json || true
+          cat run.json
+          python3 -c "
+          import json; d = json.load(open('run.json'))
+          assert len(d['tests']) == 2, d
+          assert all(t['verdict'] in ('passed', 'failed') and t['kind'] != 'runner' for t in d['tests']), d
+          print('verdicts:', [(t['test'], t['verdict'], t['published']) for t in d['tests']])"
 
   languages:
     name: ${{ matrix.tool }} against the real AWS Emulator

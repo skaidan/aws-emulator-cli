@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 
+from .. import exitcodes
 from .. import fidelity as fid
 from .. import project
 from .. import ui
@@ -34,7 +37,30 @@ def pick_release(release: str | None, refresh: bool = False) -> tuple[str, dict,
     return tag, scores, installed
 
 
-@click.command()
+class DefaultGroup(click.Group):
+    """A group whose first word may be a subcommand or not: ``awsemu fidelity s3`` runs
+    the default command (``show``), ``awsemu fidelity run s3`` the ``run`` subcommand."""
+
+    default_command = "show"
+
+    def parse_args(self, ctx, args):
+        if not args or (args[0] not in self.commands and args[0] not in ("--help", "-h")):
+            args = [self.default_command, *args]
+        return super().parse_args(ctx, args)
+
+
+@click.group(cls=DefaultGroup)
+def fidelity():
+    """How closely the emulator matches AWS: published scores, or the tests run here.
+
+    \b
+      awsemu fidelity [SERVICES]...       # the published scores ('fidelity show')
+      awsemu fidelity s3 --failures       # which tests fail, and how
+      awsemu fidelity run dynamodb        # run AWS's fidelity tests against your emulator
+    """
+
+
+@fidelity.command(name="show")
 @click.argument("services", nargs=-1)
 @click.option("--release", metavar="VERSION",
               help="Emulator release: 1.0.385, v1.0.385 or latest (default: your installed version).")
@@ -48,7 +74,7 @@ def pick_release(release: str | None, refresh: bool = False) -> tuple[str, dict,
 @click.option("--refresh", is_flag=True, help="Download again instead of using the cache.")
 @json_option
 @handle_errors
-def fidelity(services, release, failures, sort, compare_to, mine, refresh, as_json):
+def show(services, release, failures, sort, compare_to, mine, refresh, as_json):
     """Fidelity scores published with each emulator release: tests passed per service.
 
     \b
@@ -199,3 +225,95 @@ def _compare(tag: str, scores: dict, other: str, names: list[str] | None, refres
                 ui.echo(f"  {service}  {uid}")
             if len(items) > 15:
                 ui.echo(f"  … {len(items) - 15} more (--json lists them all)", "muted")
+
+
+@fidelity.command(name="run")
+@click.argument("services", nargs=-1)
+@click.option("--test", "tests", multiple=True, metavar="ID", help="A test id (like dynamodb.update-item-...). Repeatable.")
+@click.option("--failing", is_flag=True, help="Only the tests that fail in the published scores (to reproduce them).")
+@click.option("--limit", type=click.IntRange(1), metavar="N", help="Run at most N tests.")
+@click.option("--release", metavar="VERSION", help="Compare with this release's scores (default: your installed one).")
+@click.option("--suite", "suite_path", type=click.Path(exists=True, file_okay=False, path_type=Path),
+              help="A local clone of the evaluation suite to use instead of fetching it.")
+@click.option("--refresh", is_flag=True, help="Download the scores again (and the suite, if it's 'main').")
+@json_option
+@handle_errors
+def run_cmd(services, tests, failing, limit, release, suite_path, refresh, as_json):
+    """Run AWS's fidelity tests against the emulator installed here.
+
+    \\b
+      awsemu fidelity run --test dynamodb.update-item-set-list-preserves-element-order
+      awsemu fidelity run sqs --failing          # reproduce the known differences
+      awsemu fidelity run s3 --limit 20
+      awsemu fidelity run lambda --json
+
+    Each test runs against its own fresh emulator, with the runner of the public
+    suite (https://github.com/aws/aws-emulator-evaluation-suite), fetched at the
+    version your release was scored with. Needs git, uv and the emulator binary
+    ('awsemu install'). Exit code 1 if a test fails. Guide: docs/compatibility.md.
+    """
+    from .. import fidelityrun as fr
+    from .. import runtime
+
+    if not services and not tests:
+        raise click.UsageError("name SERVICES or --test IDs (a whole suite run takes hours)")
+    command = runtime.binary_command(runtime.default_binary())
+    if command is None:
+        raise RuntimeErrorWithHint("the fidelity tests run against the installed emulator binary, and there's none",
+                                   "Install it: awsemu install (Docker isn't supported for this).")
+    tag, scores, installed = pick_release(release, refresh)
+    published = fr.published_outcomes(scores)
+    try:
+        if suite_path:
+            suite = fr.local_suite(suite_path)
+        else:
+            ref = fid.suite_version(tag) or chk_latest_suite() or "main"
+            if not as_json:
+                ui.echo(f"evaluation suite {ref} (scores of {tag})", "muted")
+            suite = fr.suite(ref, refresh=refresh)
+        rows = fr.select(suite, list(services), list(tests))
+        if failing:
+            rows = [r for r in rows if published.get(r["check_id"]) == "fail"]
+        if limit:
+            rows = rows[:limit]
+        if not rows:
+            raise RuntimeErrorWithHint("no tests to run" + (" (none of them fail in the published scores)"
+                                                           if failing else ""))
+        log = (lambda m: None) if as_json else (lambda m: ui.echo(m, "muted"))
+        fr.prepare(suite, [r["path"] for r in rows], log)
+        results = []
+        for i, row in enumerate(rows, 1):
+            result = fr.run_one(suite, row, command, published)
+            results.append(result)
+            if not as_json:
+                mark = {"passed": "✓", "failed": "✗"}.get(result.verdict, "!")
+                note = "" if result.agrees in (None, True) else f"  (published: {result.published})"
+                ui.echo(f"[{i}/{len(rows)}] {mark} {result.check_id}  {result.verdict}{note}",
+                        "ok" if result.verdict == "passed" else "error")
+                if result.verdict != "passed" and result.detail:
+                    ui.echo("      " + result.detail.splitlines()[0][:200], "muted")
+    except fr.RunError as exc:
+        raise RuntimeErrorWithHint(str(exc), exc.hint) from exc
+
+    summary = {"passed": sum(r.verdict == "passed" for r in results),
+               "failed": sum(r.verdict == "failed" for r in results),
+               "error": sum(r.verdict == "error" for r in results),
+               "differ_from_published": [r.check_id for r in results if r.agrees is False]}
+    if as_json:
+        ui.print_json({"release": tag, "installed": installed, "suite": suite.ref,
+                       "tests": [r.as_dict() for r in results], "summary": summary})
+    else:
+        ui.echo()
+        ui.echo(f"{summary['passed']} passed, {summary['failed']} failed, {summary['error']} error(s) "
+                f"against your emulator{f' (v{installed})' if installed else ''}.")
+        if summary["differ_from_published"]:
+            ui.warn(f"{len(summary['differ_from_published'])} differ from the published scores of {tag}: "
+                    + ", ".join(summary["differ_from_published"][:10]))
+    if summary["failed"] or summary["error"]:
+        raise SystemExit(exitcodes.FAILED)
+
+
+def chk_latest_suite() -> str | None:
+    from .. import check as chk
+
+    return chk.latest_suite_version()
