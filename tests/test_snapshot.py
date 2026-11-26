@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from awsemu import cli as cli_mod
+from awsemu.commands import lifecycle as cli_mod
 from awsemu import runtime
 from awsemu.cli import cli
 from awsemu.commands import seed as seed_cmd

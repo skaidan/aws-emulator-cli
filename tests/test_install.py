@@ -186,7 +186,7 @@ def test_list(runner, monkeypatch, tmp_path):
 
 
 def test_pin_picks_the_docker_image(monkeypatch, tmp_path):
-    from awsemu import cli as cli_mod
+    from awsemu.commands import lifecycle as cli_mod
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / "awsemu.toml").write_text('emulator_version = "1.0.385"\n')

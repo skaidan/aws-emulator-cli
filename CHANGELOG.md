@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **Faster startup**: commands are imported only when they run, so `awsemu --version` and `awsemu --help`'s first line no longer load every module (about 170 ms → 40 ms on a laptop). The commands that lived in `cli.py` moved to `awsemu/commands/` (`lifecycle`, `env`, `logs_`, `doctor`, `image`, `config`, `ui`, `completion_`); nothing changes on the command line.
+
 ### Breaking
 
 - **Python 3.11 or later** is now required: Python 3.10 reached its end of life in October 2026. pip keeps installing awsemu 0.13.0 on Python 3.10. `tomli` is no longer a dependency (awsemu uses the standard library's `tomllib`). The policy for Python versions is now in [docs/deprecations.md](docs/deprecations.md).

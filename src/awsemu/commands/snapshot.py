@@ -159,7 +159,7 @@ def restore(ctx, c: Ctx, name: str, base: Path | None, no_reset: bool):
     if no_reset:
         run_apply(load_or_fail(str(folder / "seed.yaml")), c.port)
         return
-    from ..cli import restart
+    from .lifecycle import restart
 
     ctx.invoke(restart, seed_file=str(folder / "seed.yaml"))
 

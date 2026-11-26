@@ -33,8 +33,8 @@
 src/awsemu/
   _meta.py          project identity (package, repository, command): the one place to rename
   exitcodes.py      exit codes 0-3, part of the stable interface
-  cli.py            lifecycle, environment, doctor, image, config, up/down/init, ui and
-                    completion commands; registers the rest
+  cli.py            the root command: global options, aliases and prefixes, and the list of
+                    commands (LAZY_COMMANDS), each imported only when it runs or --help lists it
   context.py        global --port and error handling (botocore → message + hint)
   runtime.py        start/stop/status: native, Docker, --port 0, cleanup, Dockerfile
   health.py         /__admin/health check with the instance's ca.pem
@@ -65,10 +65,13 @@ src/awsemu/
   tui.py            the Textual app (optional 'ui' extra)
   paths.py          paths and constants (port, region, account 000000000000)
   ui.py             output with Rich, or plain text if it's missing or with --plain
-  commands/         one module per service: overview, s3, sqs, dynamodb, sns, lambda_,
-                    secrets (secrets + ssm), events, kinesis, sfn, describe,
-                    seed (idempotent apply, export), compose, fidelity, watch, check, issues, install, proxy
-  commands/_common.py  service roles, queue policies, Lambda permissions, error codes
+  commands/         one module per command group: lifecycle (start, stop, restart, up, down,
+                    init, status), env (env, exec, shell, aws, whoami), logs_, doctor, image,
+                    config, ui, completion_; one per service: overview, s3, sqs, dynamodb, sns,
+                    lambda_, secrets (secrets + ssm), events, kinesis, sfn, describe, call;
+                    and seed, snapshot, compose, fidelity, watch, check, issues, install, proxy,
+                    report, explain, iam, mcp
+  commands/_common.py  AliasedGroup, service roles, queue policies, Lambda permissions, error codes
 action.yml          composite GitHub Action (verified package, awsemu, seed, variables)
 scripts/            gen_reference.py (docs/reference.md), rename.py (package/repository rename)
 ```
