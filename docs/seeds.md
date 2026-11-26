@@ -199,6 +199,38 @@ Handy for building a scenario by hand (or with your application) and saving it f
 
 The exported file can be applied as-is; CI checks that exporting, restarting and applying leaves the emulator as it was.
 
+## Import from a real account
+
+To start locally from something close to your environment, `seed import` reads the **configuration** of a real AWS account and writes it as a seed:
+
+```bash
+awsemu seed import --profile dev --region eu-west-1 -o seed.yaml
+awsemu seed import --profile dev -s queues -s tables       # only some sections
+awsemu seed apply seed.yaml
+```
+
+| Section | What it reads | What it leaves out |
+| --- | --- | --- |
+| `buckets` | the names of the buckets in that Region | their objects |
+| `queues` | FIFO, content dedup, visibility timeout, delay, dead-letter queue | messages |
+| `tables` | name and key schema | items; secondary indexes (noted) |
+| `topics` | names, SQS subscriptions to imported queues (raw, filter) | other subscriptions (noted) |
+| `parameters` | `String` and `StringList` values | `SecureString` values: a placeholder |
+| `secrets` | names and descriptions | values: a placeholder |
+| `streams` | shards, retention | records |
+| `state_machines` | definitions, with the account's ARNs rewritten to the emulator's account and Region | executions |
+| `rules` | patterns, schedules, targets that are imported too | other targets (noted) |
+| `functions` | — | everything: their code isn't read |
+
+How it's kept read-only and away from the wrong account:
+
+- It needs `--profile`, and uses only that profile: never the default credentials, the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` variables or the emulator's keys.
+- It ignores `AWS_ENDPOINT_URL` and endpoints in your AWS config, so it talks to AWS and only AWS.
+- Every call goes through a check that runs before anything is sent: only `Describe*`, `List*`, `Get*` and `Head*` operations pass, and not those that return data or secrets (`GetSecretValue`, `GetObject`, `GetItem`, `Query`, `Scan`, `ReceiveMessage`, `GetParameter(s)` with decryption…). Anything else raises an error instead of reaching AWS.
+- It says which account, identity and Region it's about to read and asks first (`--yes` to skip, needed without a terminal).
+
+Secrets and `SecureString` parameters get the value `change-me (awsemu seed import doesn't read secret values)`: set test values in the seed before you share it. The seed has your resource names and configuration, so treat it like the rest of your infrastructure code.
+
 ## Snapshots
 
 A snapshot saves **everything** in the emulator, so you can come back to it later. It's a seed export of every section, with the files it needs (S3 objects that don't fit in the seed, Lambda code) and a little metadata. The emulator has no snapshots of its own: its state lives in memory.

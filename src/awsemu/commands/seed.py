@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import ssl
+import sys
 import time
 import urllib.request
 from datetime import datetime
@@ -975,5 +976,65 @@ def export_cmd(c: Ctx, output: Path | None, objects_dir: Path | None, no_secrets
         if not no_secrets and (data.get("secrets") or any(p.get("type") == "SecureString"
                                                           for p in data.get("parameters", []))):
             ui.warn(f"{output} contains secret values in plain text")
+    else:
+        click.echo(text, nl=False)
+
+
+@seed.command(name="import")
+@click.option("--profile", required=True, metavar="NAME",
+              help="The AWS profile to read with (required: the default credentials are never used).")
+@click.option("--region", metavar="REGION", help="Region to read (default: the profile's).")
+@click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path),
+              help="Write to this file (default: stdout).")
+@click.option("-s", "--section", "sections", multiple=True, type=click.Choice(seedlib.SECTIONS),
+              help="Only these sections. Repeatable.")
+@click.option("--yes", is_flag=True, help="Don't ask before reading the account.")
+@handle_errors
+def import_cmd(profile: str, region, output: Path | None, sections, yes: bool):
+    """Write a seed from a real AWS account's configuration, read-only.
+
+    \\b
+      awsemu seed import --profile dev --region eu-west-1 -o seed.yaml
+      awsemu seed apply seed.yaml
+
+    Reads buckets (not their objects), queues, tables (not their items),
+    topics, parameters (SecureString values replaced), secrets (names only),
+    streams, state machines and rules. Any call that isn't a read is refused
+    before it's sent, and AWS_ENDPOINT_URL is ignored. Guide: docs/seeds.md.
+    """
+    from .. import realaccount as ra
+
+    try:
+        sess = ra.session(profile, region)
+        if not sess.region_name:
+            raise click.UsageError(f"profile '{profile}' has no Region: pass --region")
+        who = ra.client(sess, "sts").get_caller_identity()
+    except ra.NotReadOnly as exc:
+        raise RuntimeErrorWithHint(str(exc)) from exc
+    except Exception as exc:
+        if type(exc).__name__ in ("ProfileNotFound", "NoCredentialsError", "PartialCredentialsError"):
+            raise RuntimeErrorWithHint(f"can't use profile '{profile}': {exc}",
+                                       "List your profiles with: aws configure list-profiles") from exc
+        raise
+    ui.echo(f"Reading AWS account {who['Account']} ({who['Arn']}), Region {sess.region_name}, read-only.", "warn",
+            err=True)
+    if not yes:
+        if not sys.stdin.isatty():
+            raise click.UsageError("reading a real account needs --yes when there's no terminal to ask")
+        click.confirm("Go on?", abort=True, err=True)
+    try:
+        data, notes = ra.import_seed(sess, set(sections) or set(seedlib.SECTIONS))
+    except ra.NotReadOnly as exc:  # pragma: no cover - a bug if it happens: say so loudly
+        raise RuntimeErrorWithHint(str(exc)) from exc
+    header = (f"# Seed imported by awsemu from AWS account {who['Account']}, {sess.region_name}, on "
+              f"{datetime.now().strftime('%Y-%m-%d %H:%M')} (configuration only, read-only).\n"
+              "# Secret values are placeholders. Apply it with: awsemu seed apply <this file>\n")
+    text = header + seedlib.dump(data)
+    for n in notes:
+        ui.warn(n)
+    if output:
+        output.write_text(text, encoding="utf-8")
+        counts = ", ".join(f"{len(v)} {k}" for k, v in data.items() if isinstance(v, list)) or "nothing"
+        ui.success(f"wrote {output} ({counts})")
     else:
         click.echo(text, nl=False)

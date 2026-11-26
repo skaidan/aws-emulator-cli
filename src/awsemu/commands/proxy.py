@@ -90,10 +90,18 @@ def proxy():
                    "and anyone on your network: the emulator's keys and the admin token still apply.")
 @click.option("--bodies", is_flag=True,
               help="Also log headers and bodies (up to 64 KB each), with secrets and credentials masked.")
+@click.option("--shadow", "shadow_profile", metavar="PROFILE",
+              help="Shadow mode: also send read-only calls to the real AWS account of this profile, and log "
+                   "where the answers differ (see 'awsemu proxy shadow').")
+@click.option("--shadow-region", metavar="REGION", help="Region for shadow mode (default: the profile's).")
+@click.option("--shadow-max", type=click.IntRange(1), default=500, show_default=True, metavar="N",
+              help="Send at most N calls to AWS.")
+@click.option("--yes", is_flag=True, help="Don't ask before using a real account for shadow mode.")
 @click.option("--foreground", is_flag=True, hidden=True)
 @pass_ctx
 @handle_errors
-def start(c: Ctx, listen, specs, detach, quiet, no_tls, host, bodies, foreground):
+def start(c: Ctx, listen, specs, detach, quiet, no_tls, host, bodies, shadow_profile, shadow_region, shadow_max,
+          yes, foreground):
     """Start the proxy in front of the emulator on --port.
 
     In the foreground it prints each call until Ctrl-C; with -d it runs in the
@@ -110,8 +118,13 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, host, bodies, foreground
                                    "Stop it first: awsemu proxy stop")
     if not foreground and not health.check(c.port).healthy:
         ui.warn(f"no emulator answers on port {c.port} yet; calls will get a 502 until it does")
+    shadow = None
+    if shadow_profile:
+        shadow = {"profile": shadow_profile, "region": shadow_region, "max": shadow_max}
+        if not foreground:
+            _confirm_shadow(shadow, yes)
     if detach:
-        state = px.start_detached(c.port, listen, specs, tls=not no_tls, bodies=bodies, host=host)
+        state = px.start_detached(c.port, listen, specs, tls=not no_tls, bodies=bodies, host=host, shadow=shadow)
         _started(state, rules)
         return
 
@@ -123,10 +136,34 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, host, bodies, foreground
 
     try:
         px.serve(c.port, listen, rules, tls=not no_tls, on_call=None if quiet else print_call, on_ready=ready,
-                 bodies=bodies, host=host)
+                 bodies=bodies, host=host, shadow=shadow)
     except OSError as exc:
         raise RuntimeErrorWithHint(f"the proxy can't listen on port {listen}: {exc}",
                                    "Pick another with --listen PORT (0 = any free port).") from exc
+
+
+def _confirm_shadow(shadow: dict, yes: bool) -> None:
+    """Say which real account shadow mode will read, and ask (unless --yes)."""
+    from .. import realaccount as ra
+
+    try:
+        sess = ra.session(shadow["profile"], shadow["region"])
+        if not sess.region_name:
+            raise click.UsageError(f"profile '{shadow['profile']}' has no Region: pass --shadow-region")
+        who = ra.client(sess, "sts").get_caller_identity()
+    except ra.NotReadOnly as exc:
+        raise RuntimeErrorWithHint(str(exc)) from exc
+    except click.UsageError:
+        raise
+    except Exception as exc:
+        raise RuntimeErrorWithHint(f"can't use profile '{shadow['profile']}' for shadow mode: {exc}") from exc
+    shadow["region"] = sess.region_name
+    ui.warn(f"Shadow mode: read-only calls also go to AWS account {who['Account']} ({who['Arn']}), "
+            f"{sess.region_name}, at most {shadow['max']}. Writes and data reads are never sent.")
+    if not yes:
+        if not sys.stdin.isatty():
+            raise click.UsageError("shadow mode needs --yes when there's no terminal to ask")
+        click.confirm("Go on?", abort=True, err=True)
 
 
 def _started(state: dict, rules: list[faults.Fault]) -> None:
@@ -442,3 +479,54 @@ def cost_cmd(c: Ctx, runs, calls_file, prices_file, as_json):
                 "muted")
     ui.echo("An estimate: no free tier, storage, data transfer or discounts; some units are approximations "
             "(docs/proxy.md).", "muted")
+
+
+@proxy.command(name="shadow")
+@click.option("--all", "show_all", is_flag=True, help="Every compared call, not only those that differ.")
+@json_option
+@pass_ctx
+@handle_errors
+def shadow_cmd(c: Ctx, show_all, as_json):
+    """Where the emulator answered differently from AWS (shadow mode's comparisons).
+
+    \b
+      awsemu proxy start -d --shadow dev     # a profile of a real account
+      awsemu exec --proxy -- pytest
+      awsemu proxy shadow
+
+    Compares the HTTP status, the error code and the response's fields (not
+    their values) of read-only calls. Guide: docs/proxy.md.
+    """
+    path = px.ProxyFiles(c.port).shadow
+    entries = read_calls(path)
+    differing = [e for e in entries if e.get("differs")]
+    failed = [e for e in entries if e.get("differs") is None]
+    if as_json:
+        ui.print_json({"compared": len(entries) - len(failed), "differ": len(differing), "failed": len(failed),
+                       "calls": entries if show_all else differing})
+        return
+    if not entries:
+        ui.echo(f"No shadow comparisons yet ({path}).", "muted")
+        ui.echo("Start the proxy with --shadow PROFILE and run read-only calls through it.", "muted")
+        return
+    shown = entries if show_all else differing
+    rows = []
+    for e in shown:
+        if e.get("differs") is None:
+            what = f"not compared: {e.get('failed', '')[:60]}"
+        else:
+            emu, aws = e["emulator"], e["aws"]
+            what = []
+            if not e["same_status"] or not e["same_error"]:
+                what.append(f"AWS {aws['status']} {aws['error'] or ''}".strip() + ", emulator "
+                            + f"{emu['status']} {emu['error'] or ''}".strip())
+            if e.get("missing_in_emulator"):
+                what.append("missing: " + ", ".join(e["missing_in_emulator"][:4]))
+            if e.get("extra_in_emulator"):
+                what.append("extra: " + ", ".join(e["extra_in_emulator"][:4]))
+            what = "; ".join(what) or "same"
+        rows.append([e.get("id"), f"{e['service']} {e['operation']}", e.get("resource") or "", what])
+    ui.table(["call", "operation", "resource", "difference"], rows,
+             empty="Every compared call got the same answer from both.")
+    ui.echo(f"{len(entries) - len(failed)} call(s) compared, {len(differing)} differ"
+            + (f", {len(failed)} couldn't be sent" if failed else "") + ".", "muted")

@@ -1013,6 +1013,27 @@ awsemu proxy har [OPTIONS]
 | `--service NAME` | Only this service. Repeatable. |
 | `--errors` | Only calls that failed. |
 
+### `awsemu proxy shadow`
+
+Where the emulator answered differently from AWS (shadow mode's comparisons).
+
+```bash
+awsemu proxy start -d --shadow dev     # a profile of a real account
+awsemu exec --proxy -- pytest
+awsemu proxy shadow
+```
+Compares the HTTP status, the error code and the response's fields (not
+their values) of read-only calls. Guide: docs/proxy.md.
+
+```
+awsemu proxy shadow [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--all` | Every compared call, not only those that differ. |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
 ### `awsemu proxy start`
 
 Start the proxy in front of the emulator on --port.
@@ -1033,6 +1054,10 @@ awsemu proxy start [OPTIONS]
 | `--no-tls` | Plain HTTP instead of HTTPS (no certificate to trust). |
 | `--host ADDRESS` | Address to listen on. 0.0.0.0 lets containers reach it (at host.docker.internal), and anyone on your network: the emulator's keys and the admin token still apply.  [default: 127.0.0.1] |
 | `--bodies` | Also log headers and bodies (up to 64 KB each), with secrets and credentials masked. |
+| `--shadow PROFILE` | Shadow mode: also send read-only calls to the real AWS account of this profile, and log where the answers differ (see 'awsemu proxy shadow'). |
+| `--shadow-region REGION` | Region for shadow mode (default: the profile's). |
+| `--shadow-max N` | Send at most N calls to AWS.  [default: 500; x>=1] |
+| `--yes` | Don't ask before using a real account for shadow mode. |
 
 ### `awsemu proxy status`
 
@@ -1301,6 +1326,32 @@ awsemu seed export [OPTIONS]
 | `--objects-dir DIRECTORY` | Save binary or large S3 objects, and Lambda functions' code, here (referenced from the seed). |
 | `--no-secrets` | Leave out secrets and SecureString parameters. |
 | `-s, --section [buckets|queues|tables|topics|secrets|parameters|streams|functions|state_machines|rules]` | Only these sections. Repeatable. |
+
+### `awsemu seed import`
+
+Write a seed from a real AWS account's configuration, read-only.
+
+\b
+```bash
+awsemu seed import --profile dev --region eu-west-1 -o seed.yaml
+awsemu seed apply seed.yaml
+```
+Reads buckets (not their objects), queues, tables (not their items),
+topics, parameters (SecureString values replaced), secrets (names only),
+streams, state machines and rules. Any call that isn't a read is refused
+before it's sent, and AWS_ENDPOINT_URL is ignored. Guide: docs/seeds.md.
+
+```
+awsemu seed import [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--profile NAME` | The AWS profile to read with (required: the default credentials are never used).  [required] |
+| `--region REGION` | Region to read (default: the profile's). |
+| `-o, --output FILE` | Write to this file (default: stdout). |
+| `-s, --section [buckets|queues|tables|topics|secrets|parameters|streams|functions|state_machines|rules]` | Only these sections. Repeatable. |
+| `--yes` | Don't ask before reading the account. |
 
 ### `awsemu seed validate`
 

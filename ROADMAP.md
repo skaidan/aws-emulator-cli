@@ -141,7 +141,7 @@ Goal: a coding agent tests its code against the emulator without touching AWS.
 - ✅ **Guard rails for agents**: the MCP tools never use real credentials or a real AWS endpoint, refuse anything that isn't `127.0.0.1`, and say so in their answers, so an agent can't test against a production account by mistake.
 - ✅ **Explain a failure**: given a failing call (from the proxy's log), say whether it matches a known emulator difference (`awsemu check` data) or is probably a bug in the code under test.
 
-## v0.12 — From local to AWS 🚧
+## v0.12 — From local to AWS ✅
 
 Goal: what works locally should work on AWS too. The emulator can't promise that for permissions and costs, and it doesn't check IAM like AWS does: some services evaluate policies differently, a request signed with a key it created is never denied, and KMS key policies and S3 bucket policies aren't checked. A missing permission only shows up after deploying.
 
@@ -149,8 +149,8 @@ Goal: what works locally should work on AWS too. The emulator can't promise that
 - ✅ **Permissions your infrastructure is missing**: `awsemu check --iam` compares those calls (or the static scan) with the roles and policies in your Terraform/CloudFormation/CDK, and lists actions your code needs that no policy grants. Local tests can't show that today.
 - ✅ **Run the fidelity tests yourself**: `awsemu fidelity run SERVICE [--test ID]` runs tests of the public suite against your local emulator. That reproduces a known difference on your machine, checks a new emulator version before the scores are published, or confirms a fix.
 - ✅ **What it would cost on AWS**: `awsemu proxy cost` estimates, from the calls log and AWS's public prices, what a test run or a workload would cost against a real account (requests, not storage over time). It's an order of magnitude, clearly labelled as an estimate.
-- ⬜ **Shadow mode** in the proxy: send read-only calls to both the emulator and a real AWS account you name explicitly, and report where the answers differ. That's your own fidelity test, built from your traffic. Opt-in and read-only, with great care for credentials and costs.
-- ⬜ **A seed from a real account**: `awsemu seed import --profile NAME` reads the configuration of an account (tables, queues, topics, buckets without their objects, parameters without SecureString values), read-only and only with a profile you name, and writes a seed, to start locally from something close to your environment.
+- ✅ **Shadow mode** in the proxy: send read-only calls to both the emulator and a real AWS account you name explicitly, and report where the answers differ. That's your own fidelity test, built from your traffic. Opt-in and read-only, with great care for credentials and costs.
+- ✅ **A seed from a real account**: `awsemu seed import --profile NAME` reads the configuration of an account (tables, queues, topics, buckets without their objects, parameters without SecureString values), read-only and only with a profile you name, and writes a seed, to start locally from something close to your environment.
 
 ## v0.13 — Hardening before 1.0
 

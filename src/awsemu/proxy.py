@@ -112,6 +112,10 @@ class ProxyFiles:
         return self.dir / "proxy.log"
 
     @property
+    def shadow(self) -> Path:
+        return self.dir / "shadow.jsonl"
+
+    @property
     def ca(self) -> Path:
         return cli_root() / "proxy" / "ca.pem"
 
@@ -301,9 +305,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(status, list(h.items()), data, head=self.command == "HEAD")
             return
         lower = {k.lower(): v for k, v in resp_headers}
-        self.server.record(ident, self, status, awscalls.error_code(status, lower, data), started,
-                           awscalls.request_id(lower), decision.label, len(body), len(data),
-                           (body, resp_headers, data))
+        logged = self.server.record(ident, self, status, awscalls.error_code(status, lower, data), started,
+                                    awscalls.request_id(lower), decision.label, len(body), len(data),
+                                    (body, resp_headers, data))
+        if self.server.shadow is not None:
+            self.server.shadow.offer(logged, self.command, self.path, self.headers.items(), body,
+                                     (status, lower, data))
         self._send(status, resp_headers, data, head=self.command == "HEAD")
 
     def _reset(self) -> None:
@@ -361,10 +368,11 @@ class ProxyServer(ThreadingHTTPServer):
 
     def __init__(self, emulator_port: int, listen_port: int = 0, rules: list[faults.Fault] | None = None,
                  tls: bool = True, calls_file: Path | None = None, on_call=None, timeout: float = 120.0,
-                 bodies: bool = False, host: str = DEFAULT_HOST, admin_token: str | None = ""):
+                 bodies: bool = False, host: str = DEFAULT_HOST, admin_token: str | None = "", shadow=None):
         """``admin_token``: "" makes a random one; None turns the check off (tests)."""
         self.emulator_port = emulator_port
         self.bodies = bodies
+        self.shadow = shadow  # awsemu.shadow.Shadow, or None
         self.host = host
         self.admin_token = secrets.token_urlsafe(24) if admin_token == "" else admin_token
         self.faults = faults.FaultSet(rules)
@@ -467,7 +475,7 @@ class ProxyServer(ThreadingHTTPServer):
     # -- calls
 
     def record(self, ident, handler, status, error, started, request_id, fault, bytes_in, bytes_out,
-               bodies=None) -> None:
+               bodies=None) -> dict:
         """Log one call. ``bodies`` is ``(request body, response headers, response body)``,
         kept (masked) only when the proxy runs with --bodies."""
         call = awscalls.Call(
@@ -492,6 +500,7 @@ class ProxyServer(ThreadingHTTPServer):
                 self.on_call(data)
             except Exception:  # noqa: BLE001
                 pass
+        return data
 
     def _append(self, data: dict) -> None:
         try:
@@ -574,16 +583,24 @@ def _write_private(path: Path, text: str) -> None:
 
 
 def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: bool = True,
-          on_call=None, on_ready=None, bodies: bool = False, host: str = DEFAULT_HOST) -> int:
+          on_call=None, on_ready=None, bodies: bool = False, host: str = DEFAULT_HOST,
+          shadow: dict | None = None) -> int:
     """Run the proxy in this process until SIGTERM/Ctrl-C, keeping the state file."""
     files = ProxyFiles(emulator_port)
     files.dir.mkdir(parents=True, exist_ok=True)
+    shadow_obj = None
+    if shadow:
+        from .shadow import Shadow
+
+        shadow_obj = Shadow(shadow["profile"], shadow.get("region"), files.shadow, shadow.get("max", 500))
     server = ProxyServer(emulator_port, listen_port, rules, tls=tls, calls_file=files.calls, on_call=on_call,
-                         bodies=bodies, host=host)
+                         bodies=bodies, host=host, shadow=shadow_obj)
     state = {"pid": os.getpid(), "emulator_port": emulator_port, "port": server.port,
              "endpoint_url": server.endpoint_url, "host": host,
              "container_endpoint_url": server.container_endpoint_url,
              "tls": tls, "ca": str(files.ca) if tls else None, "bodies": bodies, "token": server.admin_token,
+             "shadow": ({"profile": shadow["profile"], "region": shadow_obj.region, "max": shadow_obj.max_calls}
+                        if shadow_obj else None),
              "calls": str(files.calls), "started_at": dt.datetime.now(dt.timezone.utc).isoformat()}
     _write_private(files.state, json.dumps(state))
 
@@ -604,6 +621,8 @@ def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: 
         pass
     finally:
         server.server_close()
+        if shadow_obj is not None:
+            shadow_obj.close()
         current = read_state(emulator_port)
         if current and current.get("pid") == os.getpid():
             files.state.unlink(missing_ok=True)
@@ -611,7 +630,8 @@ def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: 
 
 
 def start_detached(emulator_port: int, listen_port: int, specs: list[str], tls: bool = True,
-                   wait: float = 20.0, bodies: bool = False, host: str = DEFAULT_HOST) -> dict:
+                   wait: float = 20.0, bodies: bool = False, host: str = DEFAULT_HOST,
+                   shadow: dict | None = None) -> dict:
     """Start ``awsemu proxy start`` in the background and wait until it answers."""
     from .runtime import _popen_detached
 
@@ -626,6 +646,10 @@ def start_detached(emulator_port: int, listen_port: int, specs: list[str], tls: 
         cmd.append("--bodies")
     if host != DEFAULT_HOST:
         cmd += ["--host", host]
+    if shadow:
+        cmd += ["--shadow", shadow["profile"], "--shadow-max", str(shadow.get("max", 500)), "--yes"]
+        if shadow.get("region"):
+            cmd += ["--shadow-region", shadow["region"]]
     for spec in specs:
         cmd += ["--fault", spec]
     # The child runs this same awsemu, even from a source checkout that isn't installed.

@@ -98,6 +98,7 @@ awsemu watch --calls               # = awsemu proxy calls --follow
 awsemu proxy har -o calls.har      # the calls as a HAR file, for a browser's developer tools
 awsemu report CALL                 # a draft emulator issue from one call (below)
 awsemu proxy cost [--runs N]       # what the logged calls would cost on AWS (an estimate)
+awsemu proxy shadow                # where the emulator and a real account answered differently (shadow mode)
 ```
 
 `awsemu --port N proxy …` works with the emulator on port N; the proxy follows it (port N + 1). Calls are also kept in `~/.aws/emulator-cli/proxy/<emulator port>/calls.jsonl`, which rotates at 20 MB, so you can read them after the proxy stops. `awsemu ui` shows them too: press `c`.
@@ -246,6 +247,37 @@ It's an order of magnitude, and says so:
 - `--prices FILE` replaces prices with yours: a JSON object of `"service.item": USD per unit`, with the keys `--json` shows (`dynamodb.write`, `sqs.standard`, `s3.put`, `lambda.gb_second`…).
 
 Check AWS's pricing pages, or the AWS Pricing Calculator, before you rely on a number.
+
+## Shadow mode: your own fidelity test
+
+The fidelity scores say how the emulator does on AWS's tests; shadow mode checks it on **your** traffic. The proxy answers your code from the emulator as always and, in the background, sends the same read-only calls to a real AWS account you name, then logs where the answers differ:
+
+```bash
+awsemu proxy start -d --shadow dev                  # the profile of a test account
+awsemu proxy start -d --shadow dev --shadow-region eu-west-1 --shadow-max 100
+awsemu exec --proxy -- pytest
+awsemu proxy shadow                                 # the calls whose answers differ
+awsemu proxy shadow --all --json
+```
+
+```
+ call  operation                 resource  difference
+ 14    dynamodb DescribeTable    orders    missing: Table.TableClassSummary, Table.WarmThroughput
+ 31    sqs GetQueueAttributes    jobs      AWS 400 InvalidAttributeName, emulator 200
+12 call(s) compared, 2 differ.
+```
+
+What is compared: the HTTP status, the error code, and the response's **shape** (the fields present, not their values, since IDs, dates and counts always differ). AWS's responses aren't stored: `~/.aws/emulator-cli/proxy/<port>/shadow.jsonl` has only the comparison.
+
+What is sent, and the care taken with the account:
+
+- Only configuration reads: `Describe*`, `List*`, `Get*` and `Head*` operations, without those that return data or secrets (`GetItem`, `Query`, `Scan`, `GetObject`, `GetSecretValue`, `GetParameter(s)`, `ReceiveMessage`…), and never a call that got an injected fault. Writes are never sent.
+- Each call is signed again with the profile you name (`--shadow PROFILE`; your default credentials and the `AWS_*` key variables are never used) and sent to AWS's own endpoint for the service, ignoring `AWS_ENDPOINT_URL`.
+- At most `--shadow-max` calls (500 by default) per proxy run. Each one is a normal request on your bill: most reads are free or cost a fraction of a cent, but check before pointing it at a busy account.
+- Starting it says which account and Region it'll use and asks first (`--yes` to skip; needed with `-d` from a script).
+- Your code never waits for AWS: the comparison happens after the emulator has answered.
+
+Your tests create their resources in the emulator, not in the account, so a call that names one (`DescribeTable orders`) gets `ResourceNotFoundException` from AWS unless the account has a resource with that name. Shadow mode is most useful with a test account that has the same resources (`awsemu seed import` goes the other way: account to seed), and for calls that don't depend on them (`ListQueues`, validation errors).
 
 ## Reporting a difference to the emulator
 
