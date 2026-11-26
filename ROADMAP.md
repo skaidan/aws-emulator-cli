@@ -152,12 +152,12 @@ Goal: what works locally should work on AWS too. The emulator can't promise that
 - ✅ **Shadow mode** in the proxy: send read-only calls to both the emulator and a real AWS account you name explicitly, and report where the answers differ. That's your own fidelity test, built from your traffic. Opt-in and read-only, with great care for credentials and costs.
 - ✅ **A seed from a real account**: `awsemu seed import --profile NAME` reads the configuration of an account (tables, queues, topics, buckets without their objects, parameters without SecureString values), read-only and only with a profile you name, and writes a seed, to start locally from something close to your environment.
 
-## v0.13 — Hardening before 1.0
+## v0.13 — Hardening before 1.0 🚧
 
 Goal: what a project people depend on needs, beyond features.
 
 - ⬜ **A compatibility matrix**: the oldest emulator version each awsemu release works with, tested in CI with `awsemu install VERSION`, and shown by `awsemu doctor`.
-- ⬜ **Static checks in CI**: ruff (lint and format) and mypy on `src/`, and test coverage with a minimum. Fix the warnings that exist today (`tests/test_watch.py`).
+- ✅ **Static checks in CI**: ruff (lint and format) and mypy on `src/`, and test coverage with a minimum. Fix the warnings that exist today (`tests/test_watch.py`).
 - ⬜ **Update notices**: `awsemu doctor` (and, at most once a day, `awsemu start`) says when there's a newer emulator release, or a newer awsemu, without getting in the way in CI.
 - ⬜ **Supply chain**: Dependabot for Python dependencies and Actions, pinned Action versions, signed release artifacts with provenance (Sigstore / GitHub attestations), and an SBOM.
 - ⬜ **Project health**: `SECURITY.md` (how to report a vulnerability, e.g. in the proxy), issue and pull request templates, a code of conduct, and labels for "good first issue".

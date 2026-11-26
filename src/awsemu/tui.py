@@ -16,6 +16,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
+from textual.timer import Timer
 from textual.widgets import DataTable, Footer, Header, Static, Tree
 
 from . import browse, health
@@ -119,7 +120,7 @@ class EmulatorApp(App):
         self.port = port
         self.auto_interval = auto_refresh
         self.auto = False
-        self._timer = None
+        self._timer: Timer | None = None
         self.selected: tuple[str, str] | None = None
         self.current_details: Any = None  # last details shown (also handy for tests)
         self.last_error: str | None = None

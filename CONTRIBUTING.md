@@ -13,7 +13,20 @@ pip install -e ".[dev,ui]"
 pytest
 ```
 
-`[dev]` installs pytest and `cryptography` (the fake emulator uses it to generate its certificate); `[ui]` installs Textual to test `awsemu ui` (without it, those tests are skipped).
+`[dev]` installs pytest and pytest-cov; `[ui]` installs Textual to test `awsemu ui` (without it, those tests are skipped).
+
+Before a pull request, the same checks as CI:
+
+```bash
+pip install ruff mypy
+ruff check src tests scripts          # lint: bug-finding rules (pyproject.toml)
+ruff format src tests scripts         # the format, applied
+mypy                                  # types, on src/
+pytest --cov                          # tests, with coverage (CI requires 65%)
+python scripts/gen_reference.py       # docs/reference.md, after changing commands or options
+```
+
+Imports inside functions are deliberate: they keep `awsemu` quick to start, so the linter doesn't flag them. The test suite runs without warnings (no unclosed sockets or processes); keep it that way.
 
 ## Tests
 

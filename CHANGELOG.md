@@ -4,6 +4,8 @@
 
 Towards 0.12.0.
 
+- Development: ruff (lint and format) and mypy run in CI, the code is formatted and type-checked, and tests have a coverage minimum (65%; 69% today). The proxy now closes every socket and upstream connection when it stops, and the suite runs without resource warnings.
+
 - `awsemu iam policy`: the least-privilege IAM policy for the calls in the proxy's log: actions (with S3, Lambda and batch exceptions mapped) and resource ARNs where the calls name them; `--account`, `--region`, `--service`, `--format terraform`.
 - `awsemu fidelity run SERVICES|--test ID [--failing] [--limit N]`: AWS's fidelity tests against your installed emulator, each with its own fresh emulator and the suite's own runner (fetched at the version your release was scored with, prepared with uv), with the verdicts compared to the published scores. `awsemu fidelity` is now a group: `fidelity [SERVICES]` still shows the scores (`fidelity show`). Tested in CI against the real emulator.
 - `awsemu seed import --profile NAME [--region R]`: a seed from a real account's configuration (buckets without objects, queues, tables without items, topics, parameters, streams, state machines, rules; secret values replaced), read-only: only the named profile, `AWS_ENDPOINT_URL` ignored, and anything but a configuration read refused before it's sent. Asks first.
