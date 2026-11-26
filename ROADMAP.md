@@ -165,7 +165,43 @@ Goal: what a project people depend on needs, beyond features.
 - ✅ **A deprecation policy**: how long a flag, setting or JSON field keeps working after it's replaced, and warnings when it's used, written down before 1.0 promises stability.
 - ✅ **Lighter installs**: check whether `boto3` and `cryptography` can become extras (for example, `awsemu start`/`env` without them) without making the common case worse. Checked: they stay dependencies (pip has no default extras, so making them optional would make the usual install worse); a minimal install without them is documented and tested, and commands that need them say what to install. Revisit if default extras (PEP 771) land.
 
-## v0.14 — More services
+## v0.14 — Deep refactor: architecture and performance
+
+Goal: before adding dozens of services (v0.15 to v0.18), make adding one cheap and safe, and make the code faster and easier to change. **No change in behaviour**: every `--json` output is already checked against its JSON Schema, the reference is generated from the code and the real-emulator tests run in CI, so they are the safety net. Small pull requests, each one green; a benchmark before and after for the performance items.
+
+Where we are (measured on 0.13.0): 18,400 lines in 73 modules; `cli.py` has 1,167 lines and imports all 26 command modules (and with them the proxy, `check`, `http.client`, `urllib.request` and `yaml`) even for `awsemu --version`, so importing the CLI takes about 90–150 ms before any command runs; what awsemu knows about one service is spread over many files (Secrets Manager appears in 14 modules: `overview`, `describe`, `watch`, seeds, snapshots, completion, `check`, cost, IAM, the MCP server, `seed import`, the UI…); boto3 clients are created in 5 different places; there are 57 `except Exception` and 44 direct `subprocess` calls.
+
+**Architecture**
+
+- ⬜ **A service registry**: one module per service under `awsemu/services/` that declares, in one place, how to list its resources, describe one, seed and snapshot it, watch it, complete its names, estimate its cost, which IAM actions it needs, what `seed import` reads and which MCP tools it exposes. `overview`, `describe`, `watch`, the UI, `seed`, `snapshot`, `completion`, `check`, `cost`, `iam policy`, `realaccount` and `mcp` read the registry instead of having their own `if service == ...` code. A new service becomes one file plus its tests, and a test checks every registered service implements every hook (or says why not).
+- ⬜ **Layers**: a core with no Click and no Rich (pure logic that returns dataclasses), adapters for the outside world (boto3, processes, Docker, files, the network) and a presentation layer (Click commands, Rich tables, JSON). The same core result feeds the table, `--json`, the MCP server and the pytest plugin, so they can't drift apart.
+- ⬜ **JSON Schemas from the types**: generate `schemas.py` from the core's dataclasses instead of writing the schemas by hand, so an output and its schema can't disagree.
+- ⬜ **A public Python API** (`awsemu.api`): start, stop, env, seed, snapshot, proxy, faults and calls as plain functions, documented and covered by the stability promise. The CLI, the pytest plugin, the Testcontainers module and the MCP server all use it; today each has part of that logic.
+- ⬜ **One client factory**: one place that creates boto3 clients for the emulator, the proxy or a real account (CA, endpoint, region, retries, timeouts, the read-only guard), with a cache per process.
+- ⬜ **One runtime interface** for native and Docker modes (start, stop, health, logs, version, files), with a fake implementation for tests, instead of `subprocess` calls spread across modules.
+- ⬜ **One configuration model**: `settings`, `project`, `envvars` and command-line options merged into one layered object that knows where each value came from; `awsemu config --explain` prints it ("port 4566 from awsemu.toml, line 3").
+- ⬜ **Errors**: a small hierarchy of awsemu errors mapped to exit codes in one place; narrow the 57 `except Exception` to what each one really expects, and log the rest with `--debug`.
+- ⬜ **Split the big modules** along those lines: `cli.py` (1,167 lines), `commands/seed.py` (1,124), `proxy.py` (890), `commands/proxy.py` (663), `runtime.py` (567), `seed.py` (568), `commands/lambda_.py` (565).
+- ⬜ **The proxy as a pipeline**: parse → match faults → forward → record → shadow → cost, each step a small class with its own tests, so new steps (IAM enforcement, tracing in v0.20) plug in without touching the others.
+- ⬜ Keep old import paths working through the deprecation policy (the pytest plugin and `awsemu.containers` are imported by users).
+
+**Performance**
+
+- ⬜ **Lazy commands**: load a command's module only when it runs (Click lazy groups), and keep heavy imports (boto3, cryptography, the proxy, YAML) inside the functions that need them. Target: `awsemu --version` and `awsemu env` under 50 ms, and completion that feels instant.
+- ⬜ **Proxy throughput**: reuse upstream connections (a pool per thread), stream large bodies instead of reading them into memory, and write the call log in batches; measure calls per second and added latency with `awsemu bench` (moved here from the ideas list) before and after.
+- ⬜ **One wait helper**: the 18 `time.sleep` loops (health checks, waiting for resources, `--follow`) become one helper with a deadline, backoff and a clear timeout message.
+- ⬜ **Caching**: botocore's service models and the fidelity scores loaded once per process; `check` and `scan` reuse one parsed index.
+- ⬜ Profile `seed apply`, `snapshot save/restore`, `overview` and `check` on a large project (thousands of objects and items) and fix what shows up.
+
+**Quality**
+
+- ⬜ mypy `strict` on the core and the adapters; coverage target from 65% to 80%.
+- ⬜ Property-based tests (Hypothesis) for the parsers: fault rules, durations, seeds and redaction.
+- ⬜ Mutation testing (mutmut) on the core once, to find tests that don't really check anything.
+- ⬜ An architecture test (import-linter) that stops the core importing Click or Rich, and commands importing each other.
+- ⬜ Update `docs/architecture.md` with the new layers and the service registry, and a "how to add a service" guide in CONTRIBUTING.md.
+
+## v0.15 — More services
 
 Goal: the services people use next to the ten awsemu already covers get the same treatment (their own commands, seed sections, `overview`, `describe`, `watch`, the UI, completion and `check`). Today they only work through `awsemu call` and `describe`.
 
@@ -173,8 +209,8 @@ Evidence: the emulator has 438 service models, and the public fidelity suite has
 
 **First: the web and auth layer of a serverless app**
 
-- ⬜ **API Gateway** (REST 97.0%, HTTP APIs 75.6%; WebSocket data plane not served yet): `awsemu api ls` (APIs, stages, routes and their integrations), `awsemu api invoke API [STAGE] METHOD PATH` (call a deployed stage locally without working out the invoke host by hand; the emulator routes `{api}.execute-api.{region}.amazonaws.com`, so awsemu sets that host), the invoke URL in `env`/`overview`, and APIs in seeds. Pairs with `lambda deploy --watch` for a local edit-and-call loop.
-- ⬜ **Cognito user pools** (94.4%, 53 open; Lambda triggers are among the known gaps): `awsemu cognito pool create`, `user add EMAIL --password` (confirmed, no email step), `token USER` (InitiateAuth, printing ID/access tokens, or `--export` as variables for curl and tests), and pools, clients and users in seeds. A pytest fixture that returns a signed-in user. Say clearly which triggers the emulator does not invoke yet.
+- ⬜ **API Gateway** (REST 97.0%, HTTP APIs 75.6%; WebSocket data plane not served yet): `awsemu api ls` (APIs, stages, routes and their integrations), `awsemu api invoke API [STAGE] METHOD PATH` (call a deployed stage locally without working out the invoke host by hand; the emulator routes `{api}.execute-api.{region}.amazonaws.com`, so awsemu sets that host), the invoke URL in `env`/`overview`, and APIs in seeds. Pairs with `lambda deploy --watch` for a local edit-and-call loop. For WebSocket APIs, `api ws send CONNECTION 'msg'` through the **API Gateway Management API** (97.0%), to test code that pushes to connected clients.
+- ⬜ **Cognito user pools** (94.4%, 53 open; Lambda triggers are among the known gaps): `awsemu cognito pool create`, `user add EMAIL --password` (confirmed, no email step), `token USER` (InitiateAuth, printing ID/access tokens, or `--export` as variables for curl and tests), and pools, clients and users in seeds. A pytest fixture that returns a signed-in user. Say clearly which triggers the emulator does not invoke yet. **Identity pools** (Cognito Identity, 94.1%) too: `cognito credentials USER` exchanges the user's token for temporary AWS credentials, the way web and mobile apps get them.
 - ⬜ **CloudWatch Logs** (95.1%, 190 open): `awsemu logs ls`, `awsemu logs tail GROUP [--follow] [--filter PATTERN]`, and `awsemu lambda logs NAME` on top of it. Also a "logs" pane in the UI and log groups in `overview`.
 
 **Next: services that are configuration people seed**
@@ -200,11 +236,11 @@ Evidence: the emulator has 438 service models, and the public fidelity suite has
 - ⬜ Real-emulator tests for each command in CI, like the existing services.
 - ⬜ A `docs/services.md` section per service, with what the emulator does not support yet and a link to the score.
 
-## v0.15 — More services: APIs, search, streaming and AI
+## v0.16 — More services: APIs, search, streaming and AI
 
-Goal: the next group of services, taken from the "ideas" list, with the same treatment as v0.14 (commands, seeds, `overview`, `describe`, `watch`, the UI, completion, `check`, IAM, cost, `seed import`, MCP, real-emulator tests and docs). Scores are single-service tests passed for emulator v1.0.629.
+Goal: the next group of services, taken from the "ideas" list, with the same treatment as v0.15 (commands, seeds, `overview`, `describe`, `watch`, the UI, completion, `check`, IAM, cost, `seed import`, MCP, real-emulator tests and docs). Scores are single-service tests passed for emulator v1.0.629.
 
-- ⬜ **AppSync** (88.4%): `awsemu appsync ls` and `appsync query API 'GRAPHQL' [--vars JSON]` to run a query or mutation against the local API, with the API key or a Cognito token from v0.14. APIs, schemas and resolvers in seeds.
+- ⬜ **AppSync** (88.4%): `awsemu appsync ls` and `appsync query API 'GRAPHQL' [--vars JSON]` to run a query or mutation against the local API, with the API key or a Cognito token from v0.15. APIs, schemas and resolvers in seeds.
 - ⬜ **OpenSearch** (83.8%) and **OpenSearch Serverless** (97.6%): domains and collections in seeds and `overview`. Find out whether the emulator serves the search data plane (index, search) or only the control plane, and say so; only then add `awsemu search query`.
 - ⬜ **MSK (Kafka)** (80.3%) and **MSK Connect** (100%): clusters in `overview`/`describe`. Find out whether brokers really run (bootstrap brokers you can connect to); if they do, `awsemu kafka produce/consume`.
 - ⬜ **IoT Core** (69.2%; data plane 96.2%, jobs 94.4%): things, policies and certificates in seeds, and `awsemu iot publish TOPIC` / `iot subscribe TOPIC --follow` on the data plane. The low control-plane score goes into `check`.
@@ -212,9 +248,9 @@ Goal: the next group of services, taken from the "ideas" list, with the same tre
 - ⬜ **Lex v2** (models 84.6%, runtime 100%): `awsemu lex say BOT 'text'` to talk to a bot from the terminal.
 - ⬜ **AI services**: Polly (96.9%), Comprehend (81.0%), Rekognition (77.4%), Textract (66.7%), Translate (60.0%). No real models run locally, so first document what each answers (fixed or shaped responses, errors) and what you can test with it (request shapes, error handling, retries with proxy faults). Commands only if there's demand.
 
-## v0.16 — More services: the rest of a typical account
+## v0.17 — More services: the rest of a typical account
 
-Goal: the services found in a typical AWS account that v0.14 and v0.15 don't cover, mostly as seed sections and `overview`/`describe`/`check` support, with new commands only where awsemu adds something over `call`. Same evidence as above.
+Goal: the services found in a typical AWS account that v0.15 and v0.16 don't cover, mostly as seed sections and `overview`/`describe`/`check` support, with new commands only where awsemu adds something over `call`. Same evidence as above.
 
 **Cross-service views (most value first)**
 
@@ -227,7 +263,7 @@ Goal: the services found in a typical AWS account that v0.14 and v0.15 don't cov
 
 - ⬜ **EC2 networking** (EC2 70.9%): VPCs, subnets, security groups and endpoints in seeds, because Terraform and CDK projects create them before anything else. Instances only in `overview`; the low score goes into `check`.
 - ⬜ **Elastic Load Balancing v2** (90.7%), **Auto Scaling** (88.3%), **EKS** (84.3%), **Batch** (92.3%), **Elastic Beanstalk** (83.0%): `overview`/`describe` and seeds.
-- ⬜ **CloudFront** (88.8%; KeyValueStore 0%), **WAFv2** (93.1%), **Route 53 Resolver** (96.1%), **Cloud Map** (98.9%): seeds and `describe`; `awsemu dns ls` for Route 53 (v0.14) and Cloud Map together.
+- ⬜ **CloudFront** (88.8%; KeyValueStore 0%), **WAFv2** (93.1%), **Route 53 Resolver** (96.1%), **Cloud Map** (98.9%): seeds and `describe`; `awsemu dns ls` for Route 53 (v0.15) and Cloud Map together.
 
 **CI/CD**
 
@@ -241,7 +277,7 @@ Goal: the services found in a typical AWS account that v0.14 and v0.15 don't cov
 **Data, analytics and databases**
 
 - ⬜ **DynamoDB Streams** (93.3%): `awsemu ddb stream TABLE --follow`, to see the change records a table emits (part of the existing `ddb` group).
-- ⬜ **Redshift** (94.9%) and the **Redshift Data API** (100%): `awsemu redshift query SQL`, like Athena's in v0.14.
+- ⬜ **Redshift** (94.9%) and the **Redshift Data API** (100%): `awsemu redshift query SQL`, like Athena's in v0.15.
 - ⬜ **EMR** (90.2%), **EMR Serverless** (90.6%; job runs are recorded but not executed), **Managed Flink** (96.9%), **MWAA** (100%), **Kinesis Video** (100%): `overview`/`describe` and seeds.
 - ⬜ **Keyspaces** (83.3%), **DocumentDB Elastic** (95.7%), **Neptune Analytics** (97.7%), **MemoryDB** (73.0%), **Amazon MQ** (77.1%): `overview`/`describe`; find out which of them run a real data plane.
 - ⬜ **SageMaker** (85.1%): `overview`/`describe` only.
@@ -254,6 +290,58 @@ Goal: the services found in a typical AWS account that v0.14 and v0.15 don't cov
 **Wait until the scores improve**
 
 - ⬜ Service Quotas (25.3%), Lake Formation (31.2%), Database Migration Service (35.0%), Redshift Serverless (46.7%), CloudFront KeyValueStore (0%): no commands yet; `check` warns when a project uses them. Look again with each new scores release (`awsemu fidelity --compare`).
+
+## v0.18 — More services: recommended gaps
+
+Goal: services that a review of all 438 service models in the emulator (and the 351 with fidelity tests) found commonly used, worth having, and not planned in v0.15 to v0.17. Same treatment and same evidence as above.
+
+- ⬜ **Application Auto Scaling** (98.6%): scalable targets and policies for DynamoDB, Lambda concurrency and ECS in seeds and `describe`, so infrastructure that sets them up applies cleanly.
+- ⬜ **Transfer Family** (81.4%): SFTP servers and users in seeds. Find out whether the emulator serves the SFTP endpoint itself; if it does, `awsemu sftp USER` to test file drops into S3 from the terminal.
+- ⬜ **Aurora DSQL** (78.7%) and **DAX** (92.6%): clusters in `overview`/`describe`; find out whether they serve a data plane you can connect to.
+- ⬜ **IAM Access Analyzer** (85.7%): use its policy validation in `awsemu iam policy --validate` and `check --iam`, so the policies we generate are checked the way AWS checks them.
+- ⬜ **Price List API** (92.7%): find out whether it returns usable prices; if it does, `proxy cost` stops shipping its own price table.
+- ⬜ **Resource Explorer** (92.6%): try it as another backend for a cross-service `awsemu find TEXT`, next to the Cloud Control and tagging work in v0.17.
+- ⬜ **Organizations** and **IAM Identity Center** login (SSO OIDC, 90.9%): find out how far the emulator goes, for code that reads the account structure or signs in with SSO.
+- ⬜ **ECR Public** (95.1%), **Signer** (91.8%, Lambda code signing), **IAM Roles Anywhere** (97.2%), **Network Firewall** (88.1%), **Image Builder** (88.9%), **Lightsail** (89.2%), **Amplify** (83.3%), **Serverless Application Repository** (71.4%), **SWF** (94.7%): seeds and `overview`/`describe`.
+- ⬜ **Location Service** (places 96.3%, routes 86.5%, maps 64.3%): `awsemu geo search 'text'` and `geo route A B` to see what the emulator answers.
+- ⬜ **Transcribe** (91.2%), **SageMaker runtime** (90.4%), **Personalize runtime** (100%), **Bedrock Data Automation** (100%) and **Bedrock AgentCore** (control 83.6%, runtime 75.0%): like the AI services in v0.16, first document what they answer without real models, then commands by demand. AgentCore matters for people building agents, who are also the MCP server's users.
+- ⬜ **IoT SiteWise** (99.1%), **Greengrass v2** (97.5%) and **IoT TwinMaker** (100%): seeds and `describe`, after IoT Core in v0.16.
+- ⬜ Watch list, not ready (score under 40%): S3 Control and access points (34.8%), Route 53 Global Resolver (37.5%), Storage Gateway (0%), Transcribe streaming (0%), Application Insights (27.3%). `check` warns when a project uses them.
+
+## v0.19 — Features: the local development loop
+
+Goal: make the daily loop (edit, run, look, fix) faster than against a real account.
+
+- ⬜ **`awsemu dev`**: one command, configured in `awsemu.toml`, that starts the emulator, applies the seed, starts the proxy, watches Lambda folders and state machine and rule files, and shows calls and logs in one screen; Ctrl+C stops everything.
+- ⬜ **Partial reset**: `awsemu reset [SERVICE|RESOURCE]` empties queues, buckets or tables (and reapplies the seed for them) without restarting the emulator, in well under a second.
+- ⬜ **Sample events**: `awsemu event sample s3-put|sqs|ddb-stream|api-gw|eventbridge|sns|cognito-trigger [--set key=value]` prints a realistic event, and `lambda invoke NAME --event s3-put` uses it.
+- ⬜ **Lambda**: Node, Java and Go packaging in `lambda deploy` (today Python), layers, container-image functions, environment from `.env`, and `lambda deploy --debug` to attach a debugger (debugpy, Node inspector).
+- ⬜ **Hot reload** for Step Functions definitions (`sfn deploy FILE --watch`), EventBridge rules and API Gateway OpenAPI files.
+- ⬜ **`awsemu s3 sync DIR s3://bucket --watch`**, for static sites and front ends served from S3.
+- ⬜ **Follow a request across services**: `awsemu trace` joins the proxy's calls, CloudWatch Logs and Step Functions history into one timeline (S3 upload → event → Lambda → queue → consumer), from the "event sourcing" idea.
+- ⬜ **Fake data**: `seed generate TABLE --rows 1000 --from-schema FILE` fills tables, buckets and queues with realistic fake data, for UI work and load tests.
+- ⬜ **DynamoDB**: `ddb import/export` (CSV and JSON lines), `ddb query` with key conditions written in a simple syntax, and an item editor in the UI.
+- ⬜ **A web UI**: `awsemu ui --web` serves the same views as the terminal UI on localhost (resources, calls, logs, faults), for people who prefer a browser.
+- ⬜ **Infrastructure as code**: `awsemu tf` and `awsemu cdk` wrappers that point Terraform and CDK at the emulator (provider and endpoint overrides, bootstrap), and `seed from-terraform STATE`, `seed from-cdk cdk.out` and `seed from-sam template.yaml` to start from what your IaC describes.
+- ⬜ **Other ways to run it**: Podman as well as Docker; a remote emulator (`awsemu connect HOST:PORT` for one running on another machine or in a cluster); a Helm chart and a `kind` guide for Kubernetes.
+
+## v0.20 — Features: testing, CI and safety
+
+Goal: tests that catch more, CI that explains failures, and fewer surprises when moving to AWS.
+
+- ⬜ **IAM enforcement in the proxy**: `proxy start --enforce-iam POLICY.json` denies the calls a policy wouldn't allow (`AccessDenied`, like AWS), evaluated locally (actions, resources, conditions we can evaluate), so you find missing permissions before deploying. The emulator itself doesn't enforce IAM.
+- ⬜ **API coverage**: `awsemu coverage` lists which AWS operations your test suite used (from the proxy log), and which of the operations your code calls (from `check`) no test exercises.
+- ⬜ **Parallel tests**: pytest-xdist support (one emulator per worker, or one shared emulator with a resource prefix per worker) and a guide for parallel Jest and JUnit.
+- ⬜ **Snapshots between tests**, from the ideas list: restore a snapshot instead of restarting (`aws_emulator_fresh` takes seconds), and `awsemu snapshot diff A B` to see what a test changed.
+- ⬜ **Chaos profiles**: `proxy start --chaos light|heavy` adds random throttling, timeouts and 5xx answers at a rate you choose, with a seed to replay the same run.
+- ⬜ **Latency profiles**: add the latency of a real region (or a slow network) to every call, to test timeouts.
+- ⬜ **Record on AWS, replay locally**: record a session against a real account with shadow mode, then replay it against the emulator as a regression test (`proxy calls --as-pytest`, from the ideas list).
+- ⬜ **A CI report**: the GitHub Action writes a job summary with the calls, the faults injected, the operations covered and the emulator's errors, and uploads the HAR file when a job fails.
+- ⬜ **Bug reports upstream**: `awsemu issue draft CALL` writes a minimal reproduction (the request, the emulator's answer, what AWS answers, versions) for an issue in AWS Emulator's repository.
+- ⬜ **A reproduction bundle**: `awsemu bundle` packs the seed, a snapshot, the settings and the proxy log into one file a teammate opens with `awsemu bundle open`.
+- ⬜ **Secrets in seeds**: warn when a seed, snapshot or HAR file holds what looks like a real secret or real account ID before it's committed (and a pre-commit hook).
+- ⬜ **Observability**: export proxy calls as OpenTelemetry spans, a Prometheus endpoint with per-operation counts and latencies, and `awsemu top` for live rates.
+- ⬜ **More for agents**: MCP resources (seeds, snapshots, the call log) and prompts ("why does this call fail?"), and one emulator per agent session so agents don't step on each other.
 
 ## v1.0 — Stable distribution
 
@@ -276,16 +364,16 @@ Goal: install and upgrade anywhere with one command.
 
 - Several regions: the emulator supports one region per instance, so `awsemu` could manage a group of instances, one per region.
 - A named AWS CLI profile (`--profile emulator`) as an alternative to exporting variables.
-- **Snapshots per test**: once `snapshot save/restore` exists, restore a snapshot between tests instead of restarting the emulator (`aws_emulator_fresh` takes a few seconds per test).
-- **Load and timing**: `awsemu bench` to measure the emulator's latency and throughput on your machine, to size test suites and timeouts.
 - **Editor integration**: a VS Code extension (start/stop, resources, calls) on top of the JSON output and the MCP server.
 - **A dev container feature** that installs the emulator and awsemu, for Codespaces and dev containers.
-- **More services after v0.16**, by demand, with the fidelity scores to decide.
+- **More services after v0.18**, by demand, with the fidelity scores to decide.
+- **Shell integration**: a prompt segment (Starship, Oh My Zsh) showing whether the emulator is running and on which port, and man pages.
+- **Output formats**: `--output yaml|csv` next to the table and `--json`.
+- **Time travel**: a fake clock (if the emulator gets one) to test TTLs, schedules, retention and expirations without waiting.
+- **Teams**: shared presets in a company repository (`awsemu preset use acme/web`) with seeds, settings and fault profiles.
 - **Plugins**: let other packages add `awsemu` commands (entry points), for company-specific workflows.
 - **Docs in other languages**, starting with Spanish, once the English docs are stable.
-- **Tests from your calls**: `awsemu proxy calls --as-pytest` writes a regression test that replays a recorded session (the calls and the answers they got) and checks the emulator still answers the same way, to catch behaviour changes when upgrading.
 - **Other local emulators as backends**: run the same commands, seeds, proxy and pytest fixtures against LocalStack, Floci, MiniStack or moto, and compare how they answer your own calls. It would only be worth it if people ask; the project is built around AWS Emulator.
 - **Rust embedded mode**: AWS's emulator can also run inside a Rust test binary. A guide on when to use it and when awsemu (other languages, Docker, shared instances) fits better.
-- **Event sourcing for debugging**: keep the proxy's log as the sequence of what your code did, and show it as a timeline per resource ("this queue was created by test X, filled by Y, drained by Z").
 
 Have an idea or need something sooner? Open an issue.
