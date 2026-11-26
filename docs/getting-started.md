@@ -115,6 +115,7 @@ Without touching your shell:
 ```bash
 awsemu exec -- npm test          # a command with the environment already set
 awsemu aws s3 ls                 # the AWS CLI pointed at the emulator
+awsemu call s3 list-buckets      # any operation, through boto3 (no AWS CLI needed)
 awsemu shell                     # a connected sub-shell
 ```
 

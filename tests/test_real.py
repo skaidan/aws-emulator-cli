@@ -294,6 +294,29 @@ def test_describe_arns(emu):
     run(emu, "sns", "rm", "awsemu-describe-t", "--yes")
 
 
+def test_call_any_operation(emu, tmp_path):
+    body = tmp_path / "data.bin"
+    body.write_bytes(b"\x00binary\xff")
+    run(emu, "call", "s3", "create-bucket", "-p", "Bucket=awsemu-call")
+    run(emu, "call", "s3", "PutObject", "-p", "Bucket=awsemu-call", "-p", "Key=a.bin", "-p", f"Body=@{body}")
+    names = json.loads(run(emu, "call", "s3", "list_objects_v2", "--params", '{"Bucket": "awsemu-call"}',
+                           "--query", "Contents[].Key").output)
+    assert names == ["a.bin"]
+    out = tmp_path / "back.bin"
+    run(emu, "call", "s3", "get-object", "-p", "Bucket=awsemu-call", "-p", "Key=a.bin", "--out", str(out))
+    assert out.read_bytes() == body.read_bytes()
+    missing = run(emu, "call", "s3", "head-bucket", "-p", "Bucket=awsemu-nope", ok=False)
+    assert missing.exit_code == 1
+    run(emu, "call", "s3", "delete-object", "-p", "Bucket=awsemu-call", "-p", "Key=a.bin")
+    run(emu, "call", "s3", "delete-bucket", "-p", "Bucket=awsemu-call")
+    # a service without its own command, with pages
+    run(emu, "call", "logs", "create-log-group", "-p", "logGroupName=/awsemu/call")
+    groups = json.loads(run(emu, "call", "logs", "describe-log-groups", "--paginate",
+                            "--query", "logGroups[].logGroupName").output)
+    assert "/awsemu/call" in groups
+    run(emu, "call", "logs", "delete-log-group", "-p", "logGroupName=/awsemu/call")
+
+
 def test_lambda_watch_redeploys_and_installs_requirements(emu, tmp_path, real_home):
     """The loop: deploy a folder with requirements.txt, save, see the new result."""
     import subprocess

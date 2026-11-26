@@ -8,6 +8,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 
 
 - [`aws`](#awsemu-aws) — Run the AWS CLI against the emulator: 'awsemu aws s3 ls'.
+- [`call`](#awsemu-call) — Call any operation of any service, and print the response as JSON.
 - [`check`](#awsemu-check) — Find the AWS operations your project uses and the known emulator differences for them.
 - [`completion`](#awsemu-completion) — Print the shell completion script (commands, options and resource names).
 - [`compose`](#awsemu-compose) — Print a Docker Compose service for the emulator (same setup as 'start --docker').
@@ -56,6 +57,33 @@ Goes through the proxy when awsemu.toml has proxy = true and it's running.
 ```
 awsemu aws [OPTIONS] [ARGS]...
 ```
+
+## `awsemu call`
+
+Call any operation of any service, and print the response as JSON.
+
+```bash
+awsemu call s3 list-buckets
+awsemu call sqs SendMessage -p QueueUrl=https://… -p MessageBody=hi
+awsemu call dynamodb query --params @query.json --query 'Items[].id.S'
+awsemu call logs describe-log-groups --paginate
+awsemu call ssm                       # the operations of a service
+awsemu call                           # the services
+```
+An error from the service exits with 1 and prints its code and message.
+
+```
+awsemu call [OPTIONS] [SERVICE] [OPERATION]
+```
+
+| Option | Description |
+| --- | --- |
+| `--params JSON` | The request as JSON, '@file.json', or '-' for stdin. |
+| `-p, --param KEY=VALUE` | One parameter (JSON values parsed, '@file' for bytes). Repeatable. |
+| `--paginate` | Follow every page and merge them. |
+| `--query JMESPATH` | Keep part of the response, like the AWS CLI's --query. |
+| `--out FILE` | Write a streaming body (S3 GetObject…) to this file. |
+| `--metadata` | Keep ResponseMetadata in the output. |
 
 ## `awsemu check`
 

@@ -6,7 +6,7 @@ Every service command talks to the emulator on the selected port (`--port`, defa
 
 Most accept `--json` for scripts, and the ones that delete ask for confirmation unless you pass `--yes`.
 
-For operations `awsemu` doesn't cover, use the AWS CLI pointed at the emulator: `awsemu aws <service> <operation> ...`.
+For operations `awsemu` doesn't cover, use [`awsemu call`](#any-operation-awsemu-call) (any operation, through boto3, nothing else to install) or the AWS CLI pointed at the emulator: `awsemu aws <service> <operation> ...`.
 
 ## Overview
 
@@ -259,6 +259,26 @@ awsemu describe arn:aws:states:us-east-1:000000000000:execution:greeter:awsemu-1
 ```
 
 Works with ARNs of S3, SQS, DynamoDB, SNS (topics and subscriptions), Lambda, Secrets Manager, SSM, Kinesis, EventBridge (rules and buses), Step Functions (state machines and executions), CloudWatch Logs and IAM (roles, users and policies). The output is JSON.
+
+## Any operation: `awsemu call`
+
+```bash
+awsemu call s3 list-buckets
+awsemu call sqs SendMessage -p QueueUrl=https://127.0.0.1:9297/000000000000/jobs -p MessageBody=hi
+awsemu call s3 put-object -p Bucket=photos -p Key=cat.jpg -p Body=@cat.jpg
+awsemu call s3 get-object -p Bucket=photos -p Key=cat.jpg --out cat-copy.jpg
+awsemu call dynamodb query --params @query.json --query 'Items[].id.S'
+awsemu call logs describe-log-groups --paginate
+awsemu call ssm               # the operations of a service
+awsemu call                   # the services
+```
+
+Any operation of any service, through boto3: for the services without their own commands, and on machines without the AWS CLI. The operation can be written as the API reference does (`ListBuckets`), as boto3 does (`list_buckets`) or as the AWS CLI does (`list-buckets`), and a typo gets suggestions. The parameters use the API's names:
+
+- `--params` takes the whole request as JSON, `@file.json`, or `-` for stdin;
+- `-p Key=value` adds one; the value is read as JSON when it parses (`-p MaxKeys=10`, `-p Enabled=true`, `-p 'Tags=[…]'`) and as text otherwise, and `-p Body=@file` reads a file's bytes.
+
+The response is printed as JSON, without `ResponseMetadata` (`--metadata` keeps it). `--query` keeps part of it, with JMESPath like the AWS CLI's `--query`, and a single string is printed bare, for scripts. `--paginate` follows every page and joins the lists. A streaming body (S3 `GetObject`) is printed if it's text, or written with `--out FILE`. An error from the service exits with 1 and shows its code and message; a missing or wrong parameter exits with 2 and links to the operation's reference.
 
 ## Emulator settings
 

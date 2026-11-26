@@ -833,6 +833,7 @@ def config_path():
 
 # =========================================================================== services
 
+from .commands import call as _call  # noqa: E402
 from .commands import check as _check  # noqa: E402
 from .commands import compose as _compose  # noqa: E402
 from .commands import describe as _describe  # noqa: E402
@@ -866,6 +867,7 @@ cli.add_command(_events.events)
 cli.add_command(_kinesis.kinesis)
 cli.add_command(_sfn.sfn)
 cli.add_command(_describe.describe)
+cli.add_command(_call.call)
 cli.add_command(_seed.seed)
 cli.add_command(_compose.compose)
 cli.add_command(_fidelity.fidelity)

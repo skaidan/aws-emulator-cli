@@ -123,6 +123,7 @@ If you'd rather not touch your current shell:
 ```bash
 awsemu exec -- pytest -k integration       # any command, already pointed at the emulator
 awsemu aws s3 ls                           # the AWS CLI, pointed at the emulator
+awsemu call s3 list-buckets                # any operation, without the AWS CLI
 awsemu shell                               # a connected sub-shell ('exit' to leave)
 awsemu whoami                              # checks you're talking to account 000000000000
 ```
@@ -174,7 +175,7 @@ awsemu lambda ls   |   awsemu lambda info NAME   |   awsemu lambda rm NAME
 
 There's also `awsemu secrets`, `ssm`, `events`, `kinesis`, `sfn` and `describe ARN`: examples of all of them in the [services guide](docs/services.md).
 
-For any other service or operation: `awsemu aws <service> <operation> ...`.
+For any other service or operation: `awsemu call <service> <operation> -p Key=value` (through boto3, nothing else to install) or `awsemu aws <service> <operation> ...` (the AWS CLI).
 
 ### Exploring
 
