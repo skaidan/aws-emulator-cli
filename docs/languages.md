@@ -14,7 +14,7 @@ Each example below is in [`examples/`](../examples) and runs in CI against the r
 | --- | --- | --- |
 | Python (boto3) | the pytest plugin, [testing.md](testing.md) | `awsemu exec -- pytest` |
 | JavaScript / TypeScript, SDK v3 | [`examples/sdks/node`](../examples/sdks/node) | `awsemu exec --sdk node -- node smoke.mjs` |
-| Java, SDK v2 | [`examples/sdks/java`](../examples/sdks/java) | `awsemu exec --sdk java -- mvn -q -o exec:java` |
+| Java, SDK v2 | [`examples/sdks/java`](../examples/sdks/java) | `awsemu exec --sdk java -- mvn -q compile exec:java` |
 | Go, SDK v2 | [`examples/sdks/go`](../examples/sdks/go) | `awsemu exec -- go run .` |
 | Terraform | [`examples/terraform`](../examples/terraform) | `awsemu exec -- terraform apply` |
 | AWS CDK | [`examples/cdk`](../examples/cdk) | `awsemu exec --sdk node -- npx cdk deploy` |
@@ -26,7 +26,7 @@ Each example below is in [`examples/`](../examples) and runs in CI against the r
 | `AWS_ENDPOINT_URL` | `https://127.0.0.1:<port>` | every current SDK, the AWS CLI, Terraform's AWS provider, the CDK CLI |
 | `AWS_CA_BUNDLE` | the emulator's certificate | Python, Go, Rust, the AWS CLI, Terraform; **not** Node or Java |
 | `NODE_EXTRA_CA_CERTS` (`--sdk node`) | the same certificate, for Node.js | JavaScript SDK, CDK CLI |
-| `JAVA_TOOL_OPTIONS` (`--sdk java`) | the emulator's truststore for the JVM, added to your own options | Java and Kotlin SDKs |
+| `JAVA_TOOL_OPTIONS` (`--sdk java`) | a truststore with the emulator's certificate added to what Java already trusted, in your own options | Java and Kotlin SDKs |
 | `AWS_CONFIG_FILE`, `AWS_SHARED_CREDENTIALS_FILE` | region and credentials written by the emulator | every SDK |
 | `AWS_DISABLE_HOST_PREFIX_INJECTION` | no `account-id.` or similar host prefixes | every SDK |
 
@@ -46,11 +46,11 @@ Create clients without options (`new S3Client({})`): endpoint, region and creden
 
 ```bash
 cd examples/sdks/java
-mvn -q compile dependency:resolve-plugins     # first, outside awsemu exec
-awsemu exec --sdk java -- mvn -q -o exec:java
+awsemu exec --sdk java -- mvn -q compile exec:java
+awsemu exec --sdk java -- ./gradlew test         # the same for Gradle
 ```
 
-`--sdk java` adds `-Djavax.net.ssl.trustStore=<the emulator's truststore>` to your `JAVA_TOOL_OPTIONS`, keeping your other options (proxy settings, memory). The JVM then trusts **only** the emulator. Anything else in that process that uses HTTPS fails, for example Maven or Gradle downloading dependencies. So build first, then run with the emulator's truststore (`mvn -o` works offline). In your tests, run the test task itself through `awsemu exec --sdk java`, after a build that downloaded everything.
+The JVM ignores `AWS_CA_BUNDLE`; it trusts the certificates of a *truststore*. The emulator writes one with only its own certificate, and pointing Java at it would break every other HTTPS connection of the process, like Maven downloading dependencies. So `--sdk java` builds a copy of the truststore Java was already using (the one in your `JAVA_TOOL_OPTIONS`, or the JDK's `cacerts`) with the emulator's certificate added. It does that with `keytool`, which comes with every JDK, in `~/.aws/emulator-cli/java/`, and rebuilds it when the emulator makes a new certificate (on every start). Your other `JAVA_TOOL_OPTIONS` (proxy settings, memory) are kept. Without `keytool` on `PATH` or `JAVA_HOME`, it falls back to the emulator's own truststore.
 
 ## Go
 
@@ -71,7 +71,9 @@ awsemu exec -- terraform apply -auto-approve
 awsemu exec -- terraform destroy -auto-approve
 ```
 
-The `provider "aws" {}` block has nothing emulator-specific: the AWS provider reads `AWS_ENDPOINT_URL`, `AWS_CA_BUNDLE` and the credentials from the environment. Avoid per-service `endpoints {}` blocks and `skip_*` settings written for other emulators; they aren't needed. In CI, the example also checks that a second `plan` finds nothing to change, so every resource reads back the way it was written.
+The `provider "aws" {}` block has nothing emulator-specific: the AWS provider reads `AWS_ENDPOINT_URL`, `AWS_CA_BUNDLE` and the credentials from the environment. Avoid per-service `endpoints {}` blocks and `skip_*` settings written for other emulators; they aren't needed.
+
+**S3 buckets and provider 6.23 or later:** from that version, `aws_s3_bucket` reads and writes its tags through the S3 Control API. For S3 Control the SDK always puts the account ID in the host name (`000000000000.127.0.0.1`), which can't be turned off and doesn't resolve, so the next `plan` fails with `request send failed` while listing the bucket's tags. Until that changes, pin the provider below 6.23 (`version = ">= 5.80, < 6.23"`), as the example does. In CI, the example also checks that a second `plan` finds nothing to change, so every resource reads back the way it was written.
 
 Fidelity of the resources you use: `awsemu check examples/terraform` (it reads `.tf` files).
 

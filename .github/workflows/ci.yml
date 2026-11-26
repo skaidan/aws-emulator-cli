@@ -108,10 +108,9 @@ jobs:
         if: matrix.tool == 'java'
         working-directory: examples/sdks/java
         run: |
-          # Download and compile first: with --sdk java the JVM trusts only the emulator,
-          # so Maven couldn't reach Maven Central inside 'awsemu exec'.
-          mvn -q -B compile dependency:resolve-plugins
-          awsemu exec --sdk java -- mvn -q -B -o exec:java
+          # Maven downloads everything inside awsemu exec: --sdk java trusts the emulator
+          # on top of the JDK's certificates, not instead of them.
+          awsemu exec --sdk java -- mvn -q -B compile exec:java
           awsemu s3 ls java-example | grep hello.txt
 
       - name: AWS SDK for Go v2

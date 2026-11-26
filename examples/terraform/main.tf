@@ -10,8 +10,11 @@
 terraform {
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.80"
+      source = "hashicorp/aws"
+      # From 6.23, aws_s3_bucket reads and writes its tags through S3 Control, whose
+      # SDK always puts the account ID in the host name (000000000000.127.0.0.1):
+      # that can't reach a local emulator. See docs/languages.md#terraform.
+      version = ">= 5.80, < 6.23"
     }
   }
 }

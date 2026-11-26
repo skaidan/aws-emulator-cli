@@ -429,3 +429,36 @@ def test_java_tool_options_keeps_yours():
 def test_java_tool_options_quotes_only_spaces():
     out = envvars.java_tool_options('-Dhttp.nonProxyHosts=localhost|127.* "-Dname=a b"', "/t.p12")
     assert out.startswith('-Dhttp.nonProxyHosts=localhost|127.* "-Dname=a b" -Djavax.net.ssl.trustStore=/t.p12')
+
+
+def test_java_truststore_trusts_the_emulator_and_what_java_trusted(isolated_home, monkeypatch):
+    import shutil
+    import subprocess
+
+    from awsemu import javatrust
+    from tests.fake_emulator import make_cert
+
+    tool = javatrust.keytool()
+    if not tool or not javatrust.jdk_cacerts(tool):
+        pytest.skip("needs a JDK (keytool and cacerts)")
+    files = InstanceFiles(9297)
+    files.dir.mkdir(parents=True)
+    make_cert(files.ca, files.dir / "key.pem")
+    monkeypatch.delenv("JAVA_TOOL_OPTIONS", raising=False)
+
+    store, password = javatrust.combined(9297)
+    assert password == javatrust.PASSWORD and store.name == "truststore-9297.p12"
+    listing = subprocess.run([tool, "-list", "-keystore", str(store), "-storepass", password],
+                             capture_output=True, text=True).stdout
+    assert "awsemu-emulator-9297" in listing
+    assert int(listing.split("contains ")[1].split()[0]) > 10  # the JDK's certificates are still there
+    built = store.stat().st_mtime_ns
+    assert javatrust.combined(9297)[0].stat().st_mtime_ns == built  # cached until the CA changes
+
+    options = envvars.emulator_env(9297, ["java"])["JAVA_TOOL_OPTIONS"]
+    assert f"-Djavax.net.ssl.trustStore={store}" in options
+    assert f"-Djavax.net.ssl.trustStorePassword={password}" in options
+
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.delenv("JAVA_HOME", raising=False)
+    assert javatrust.combined(9297) == (files.truststore, None)  # no JDK: the emulator's own
