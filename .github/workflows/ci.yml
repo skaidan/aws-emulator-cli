@@ -49,8 +49,9 @@ jobs:
       - name: Install the oldest release awsemu supports (updates.MIN_EMULATOR)
         run: |
           MIN=$(python -c "from awsemu.updates import MIN_EMULATOR; print(MIN_EMULATOR)")
-          awsemu install "$MIN"
-          aws-emulator -v | grep "$MIN"
+          awsemu install "$MIN" --yes
+          INSTALLED=$(awsemu install --list --json | python -c "import json, sys; print(json.load(sys.stdin)['installed'])")
+          test "$INSTALLED" = "$MIN" || { echo "installed $INSTALLED, wanted $MIN"; exit 1; }
       - name: What awsemu does itself, against it
         run: >
           AWSEMU_REAL_TESTS=1 pytest -m real -v -k "status_and_files or startup_line or whoami
