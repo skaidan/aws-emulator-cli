@@ -61,6 +61,8 @@ jobs:
         continue-on-error: true
       - name: Integration tests
         run: AWSEMU_REAL_TESTS=1 pytest -m real -v -s
+        env:
+          GITHUB_TOKEN: ${{ github.token }}  # the fidelity and issues tests read GitHub's API
 
   languages:
     name: ${{ matrix.tool }} against the real AWS Emulator
