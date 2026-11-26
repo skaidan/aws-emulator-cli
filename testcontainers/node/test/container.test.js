@@ -22,6 +22,7 @@ test("endpoint is an IP and the mapped port", () => {
   assert.equal(url.protocol, "https:");
   assert.equal(Number(url.port), emulator.getMappedPort(PORT));
   assert.match(emulator.getCaCertificate(), /BEGIN CERTIFICATE/);
+  assert.equal(emulator.getAwsEnv().AWS_ENDPOINT_URL, emulator.getEndpoint());
 });
 
 test("s3", async () => {

@@ -22,7 +22,7 @@ export declare class StartedAwsEmulatorContainer extends AbstractStartedContaine
     credentials: { accessKeyId: string; secretAccessKey: string };
     requestHandler: NodeHttpHandler;
   };
-  getEnv(): Record<string, string>;
+  getAwsEnv(): Record<string, string>;
 }
 
 export declare function parseKeys(ini: string): [string, string];

@@ -84,7 +84,7 @@ export class StartedAwsEmulatorContainer extends AbstractStartedContainer {
   }
 
   /** The variables that point a child process at this container (write the CA to a file for AWS_CA_BUNDLE). */
-  getEnv() {
+  getAwsEnv() {
     return {
       AWS_ENDPOINT_URL: this.getEndpoint(),
       AWS_ACCESS_KEY_ID: this.accessKeyId,

@@ -206,7 +206,7 @@ public class AwsEmulatorContainer extends GenericContainer<AwsEmulatorContainer>
      * The variables that point a process (the AWS CLI, Terraform, another SDK) at this container. The
      * certificate is in {@code AWS_CA_BUNDLE} only once written to a file: see {@link #getCaCertificatePem()}.
      */
-    public Map<String, String> getEnv() {
+    public Map<String, String> getAwsEnv() {
         Map<String, String> env = new LinkedHashMap<>();
         env.put("AWS_ENDPOINT_URL", getEndpoint().toString());
         env.put("AWS_ACCESS_KEY_ID", getAccessKeyId());

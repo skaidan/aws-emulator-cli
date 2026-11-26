@@ -35,6 +35,7 @@ class AwsEmulatorContainerTest {
         assertEquals("https", endpoint.getScheme());
         assertEquals((int) emulator.getMappedPort(AwsEmulatorContainer.PORT), endpoint.getPort());
         assertTrue(emulator.getCaCertificatePem().contains("BEGIN CERTIFICATE"));
+        assertEquals(endpoint.toString(), emulator.getAwsEnv().get("AWS_ENDPOINT_URL"));
     }
 
     @Test
