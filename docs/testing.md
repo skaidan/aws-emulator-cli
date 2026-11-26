@@ -182,7 +182,9 @@ eval "$(awsemu env)"
 
 It uses the project's settings (`port`, `auth`, `telemetry`, `idle_timeout`, `image`, `memory`) and accepts `--no-auth`, `--no-telemetry`, `--idle-timeout`, `--name` and `--no-build` (if you already built the image with `awsemu image build`).
 
-For **other containers** to talk to the emulator: on Linux, `network_mode: host` and the variables from `awsemu env --shell dotenv`, mounting `~/.aws/emulator` at the same path so `AWS_CA_BUNDLE` exists inside the container. The emulator's certificate is for `127.0.0.1`, so going through the service name would fail TLS verification.
+To send **other containers** through the [proxy](proxy.md#containers) (calls log, faults), `awsemu compose --proxy` adds the settings they need.
+
+For **other containers** to talk to the emulator directly: on Linux, `network_mode: host` and the variables from `awsemu env --shell dotenv`, mounting `~/.aws/emulator` at the same path so `AWS_CA_BUNDLE` exists inside the container. The emulator's certificate is for `127.0.0.1`, so going through the service name would fail TLS verification.
 
 The `docker` job in CI builds the image, tests `awsemu start --docker` and brings up the file `awsemu compose` generates.
 

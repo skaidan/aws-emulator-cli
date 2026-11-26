@@ -2,6 +2,7 @@
 
 import http.client
 import json
+import os
 import ssl
 import threading
 import time
@@ -278,7 +279,13 @@ def test_chunked_request_body(aws, proxy):
 
 
 def test_admin_api(aws, proxy):
-    state = {"endpoint_url": proxy.endpoint_url, "ca": str(proxy.files.ca)}
+    stranger = {"endpoint_url": proxy.endpoint_url, "ca": str(proxy.files.ca)}
+    for method, route in (("GET", "health"), ("GET", "calls"), ("DELETE", "faults")):
+        with pytest.raises(px.ProxyError, match="needs the proxy's token"):
+            px.admin(stranger, method, route)
+    with pytest.raises(px.ProxyError, match="needs the proxy's token"):
+        px.admin({**stranger, "token": "guess"}, "GET", "faults")
+    state = {**stranger, "token": proxy.admin_token}
     assert px.admin(state, "GET", "health")["emulator_port"] == aws.port
     px.admin(state, "PUT", "faults", {"rules": ["s3=503@50%", "sqs=latency:10ms"]})
     px.admin(state, "POST", "faults", {"rules": ["dynamodb=throttle"]})
@@ -292,6 +299,39 @@ def test_admin_api(aws, proxy):
     assert data["last"] == 1 and data["calls"][0]["operation"] == "GetObject"
     with pytest.raises(px.ProxyError, match="unknown admin route"):
         px.admin(state, "GET", "nope")
+
+
+def test_certificate_names_for_containers_and_hosts(isolated_home):
+    from cryptography import x509
+
+    files = px.ProxyFiles(9297)
+
+    def names():
+        cert = x509.load_pem_x509_certificate(files.cert.read_bytes())
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        return {str(v) for v in san.get_values_for_type(x509.DNSName)} | \
+            {str(v) for v in san.get_values_for_type(x509.IPAddress)}
+
+    px.ensure_certs(files)
+    assert {"127.0.0.1", "::1", "localhost", "host.docker.internal"} <= names()
+    ca = files.ca.read_bytes()
+    px.ensure_certs(files, ("0.0.0.0",))  # a wildcard address is no name
+    assert "0.0.0.0" not in names()
+    px.ensure_certs(files, ("192.168.1.20", "devbox.lan"))  # renewed with the new names, same CA
+    assert {"192.168.1.20", "devbox.lan", "host.docker.internal"} <= names() and files.ca.read_bytes() == ca
+
+
+def test_listening_beyond_localhost(aws):
+    server = px.ProxyServer(aws.port, 0, host="0.0.0.0")
+    try:
+        assert server.endpoint_url.startswith("https://127.0.0.1:")
+        assert server.container_endpoint_url == f"https://host.docker.internal:{server.port}"
+        assert server.admin_token and len(server.admin_token) > 20
+    finally:
+        server.server_close()
+    local = px.ProxyServer(aws.port, 0)
+    assert local.container_endpoint_url is None
+    local.server_close()
 
 
 def test_ca_is_kept_and_server_cert_renewed(isolated_home):
@@ -329,6 +369,9 @@ def test_commands(runner, aws, monkeypatch):
         assert f"AWS_CA_BUNDLE={status['ca']}" in env
 
         state = px.read_state(aws.port)
+        assert state["token"]  # the admin API needs it
+        if os.name != "nt":
+            assert px.ProxyFiles(aws.port).state.stat().st_mode & 0o077 == 0  # only you can read it
         ddb = boto3.client("dynamodb", region_name="us-east-1", endpoint_url=state["endpoint_url"],
                            verify=state["ca"], aws_access_key_id="t", aws_secret_access_key="t")
         with pytest.raises(ClientError):

@@ -144,6 +144,7 @@ Print a Docker Compose service for the emulator (same setup as 'start --docker')
 ```bash
 awsemu compose -o compose.emulator.yaml
 docker compose -f compose.emulator.yaml up -d
+awsemu compose --proxy -o compose.emulator.yaml   # app containers via the proxy
 ```
 
 ```
@@ -158,6 +159,7 @@ awsemu compose [OPTIONS]
 | `--auth / --no-auth` | Require SigV4-signed requests (default: awsemu.toml, else auth).  [default: (auth)] |
 | `--telemetry / --no-telemetry` | Force telemetry on/off (default: awsemu.toml, else emulator settings). |
 | `--idle-timeout SECONDS` | Stop after this many seconds without API calls.  [1<=x<=31536000] |
+| `--proxy` | Also write settings (x-aws-emulator-client) that send app containers through the awsemu proxy. |
 
 ## `awsemu config`
 
@@ -879,6 +881,7 @@ awsemu proxy start [OPTIONS]
 | `-d, --detach` | Run in the background ('awsemu proxy stop' stops it). |
 | `--quiet` | Don't print each call (they're still logged). |
 | `--no-tls` | Plain HTTP instead of HTTPS (no certificate to trust). |
+| `--host ADDRESS` | Address to listen on. 0.0.0.0 lets containers reach it (at host.docker.internal), and anyone on your network: the emulator's keys and the admin token still apply.  [default: 127.0.0.1] |
 | `--bodies` | Also log headers and bodies (up to 64 KB each), with secrets and credentials masked. |
 
 ### `awsemu proxy status`

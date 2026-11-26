@@ -576,8 +576,16 @@ def _proxy_env(port: int, use_proxy: bool | None, extras) -> dict[str, str]:
     if state.get("ca") and "node" in extras:
         env["NODE_EXTRA_CA_CERTS"] = state["ca"]
     if state.get("ca") and "java" in extras:
-        ui.warn("Java ignores AWS_CA_BUNDLE: import the proxy's certificate into your truststore "
-                f"(keytool -importcert -file {state['ca']}) or start the proxy with --no-tls")
+        from .javatrust import combined
+
+        current = os.environ.get("JAVA_TOOL_OPTIONS", "")
+        store, password = combined(port, current, also=Path(state["ca"]))
+        if password:
+            env["JAVA_TOOL_OPTIONS"] = envvars.java_tool_options(current, store, password)
+        else:
+            ui.warn("Java ignores AWS_CA_BUNDLE, and without keytool awsemu can't add the proxy's certificate "
+                    f"to a truststore: import it yourself (keytool -importcert -file {state['ca']}) "
+                    "or start the proxy with --no-tls")
     return env
 
 

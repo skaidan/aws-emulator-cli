@@ -46,8 +46,31 @@ The proxy listens on `https://127.0.0.1:<emulator port + 1>` with its own certif
 | A `.env` file | `awsemu env --proxy --shell dotenv > .env.emulator` |
 | pytest | the `aws_faults` and `aws_calls` fixtures, or `--awsemu-proxy` ([below](#in-pytest)) |
 | Every command, by default | `proxy = true` in `awsemu.toml` ([below](#in-awsemutoml)) |
+| Containers | `awsemu proxy start -d --host 0.0.0.0` and `awsemu compose --proxy` ([below](#containers)) |
 
-`env --proxy` sets `AWS_ENDPOINT_URL` to the proxy and `AWS_CA_BUNDLE` to its certificate, `~/.aws/emulator-cli/proxy/ca.pem`. Unlike the emulator's, which is new on every start, the proxy's certificate stays the same, so it can be trusted once. `--sdk node` also sets `NODE_EXTRA_CA_CERTS`. Java ignores `AWS_CA_BUNDLE`: import `ca.pem` into your truststore with `keytool -importcert`, or start the proxy with `--no-tls` (plain HTTP, nothing to trust).
+`env --proxy` sets `AWS_ENDPOINT_URL` to the proxy and `AWS_CA_BUNDLE` to its certificate, `~/.aws/emulator-cli/proxy/ca.pem`. Unlike the emulator's, which is new on every start, the proxy's certificate stays the same, so it can be trusted once. `--sdk node` also sets `NODE_EXTRA_CA_CERTS`. Java ignores `AWS_CA_BUNDLE`, so `--sdk java` builds a truststore with what Java already trusted plus the emulator's and the proxy's certificates (as [without the proxy](languages.md#java-and-kotlin), with `keytool`) and points `JAVA_TOOL_OPTIONS` at it. Without `keytool`, import `ca.pem` yourself or start the proxy with `--no-tls` (plain HTTP, nothing to trust).
+
+### Containers
+
+By default the proxy listens on `127.0.0.1` only, which containers can't reach (except with `network_mode: host` on Linux). To send your app's containers through it:
+
+```bash
+awsemu proxy start -d --host 0.0.0.0
+awsemu compose --proxy -o compose.emulator.yaml
+```
+
+Containers reach the proxy at `host.docker.internal:<port>`, a name its certificate includes. `compose --proxy` adds an `x-aws-emulator-client` block to the file, with what an app container needs: the endpoint, the proxy's certificate and the emulator's credentials file mounted read-only at the same paths (the credentials change on every start, so they're mounted, not copied), and `host.docker.internal` mapped to the host on Linux. Use it in your services:
+
+```yaml
+services:
+  app:
+    image: my-app
+    <<: *aws-emulator-client
+```
+
+A service's own `environment:` or `volumes:` replaces the block's instead of adding to it; copy the lines you need. The CI tests this with the AWS CLI image.
+
+`--host 0.0.0.0` makes the proxy reachable from your network too, not just from containers. Requests still need the emulator's keys (unless it runs with `--auth off`), and the admin API needs the proxy's token ([below](#the-admin-api)). On a shared network, prefer the address of Docker's bridge (`--host 172.17.0.1` on Linux) or a firewall. `--host` also accepts a name or address of this machine, which goes in the certificate.
 
 The proxy forwards each request untouched, `Host` header included. So SigV4 signatures stay valid, and the URLs the emulator builds from the host (SQS queue URLs) point at the proxy, keeping later calls on it.
 
@@ -190,6 +213,10 @@ With `proxy = true`:
 - `awsemu env`, `exec`, `shell` and `aws` go through it whenever it's running (`--no-proxy` to skip it);
 - `awsemu down` and `awsemu stop` stop both;
 - the pytest plugin sends every test through a proxy with these faults.
+
+## The admin API
+
+`awsemu proxy faults`, `status` and the pytest fixtures talk to the proxy through a small API on its own port, under `/__awsemu/proxy/`. Every call to it needs a token, made on each start and kept in the proxy's state file, `~/.aws/emulator-cli/proxy/<emulator port>/state.json`, which only you can read. So another process on your machine, or someone on the network with `--host 0.0.0.0`, can't change the faults or read the calls. Your own scripts can send it in the `X-Awsemu-Token` header.
 
 ## Limits
 

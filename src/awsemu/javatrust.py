@@ -63,11 +63,12 @@ def source_store(current_options: str, tool: str) -> tuple[Path, str] | None:
     return (cacerts, DEFAULT_PASSWORD) if cacerts else None
 
 
-def combined(port: int, current_options: str = "") -> tuple[Path, str | None]:
+def combined(port: int, current_options: str = "", also: Path | None = None) -> tuple[Path, str | None]:
     """``(truststore, password)`` for ``--sdk java``.
 
     The combined one when keytool and a source truststore are found, else the
-    emulator's own (``password`` None: it has none).
+    emulator's own (``password`` None: it has none). ``also`` adds another
+    certificate (the proxy's), in a separate truststore.
     """
     files = InstanceFiles(port)
     tool = keytool()
@@ -77,9 +78,9 @@ def combined(port: int, current_options: str = "") -> tuple[Path, str | None]:
     if not source:
         return files.truststore, None
     src, src_password = source
-    out = cli_root() / "java" / f"truststore-{port}.p12"
+    out = cli_root() / "java" / (f"truststore-{port}-proxy.p12" if also else f"truststore-{port}.p12")
     try:
-        newest = max(files.ca.stat().st_mtime, src.stat().st_mtime)
+        newest = max(files.ca.stat().st_mtime, src.stat().st_mtime, also.stat().st_mtime if also else 0)
         if out.exists() and out.stat().st_mtime >= newest:
             return out, PASSWORD
     except OSError:
@@ -94,6 +95,10 @@ def combined(port: int, current_options: str = "") -> tuple[Path, str | None]:
         subprocess.run([tool, "-importcert", "-noprompt", "-alias", f"awsemu-emulator-{port}", "-file", str(files.ca),
                         "-keystore", str(tmp), "-storetype", "PKCS12", "-storepass", PASSWORD],
                        check=True, capture_output=True, timeout=60)
+        if also:
+            subprocess.run([tool, "-importcert", "-noprompt", "-alias", "awsemu-proxy", "-file", str(also),
+                            "-keystore", str(tmp), "-storetype", "PKCS12", "-storepass", PASSWORD],
+                           check=True, capture_output=True, timeout=60)
         tmp.replace(out)
     except (OSError, subprocess.SubprocessError):
         tmp.unlink(missing_ok=True)

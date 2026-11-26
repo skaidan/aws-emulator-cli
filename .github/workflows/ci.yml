@@ -189,6 +189,21 @@ jobs:
           awsemu --port 9302 whoami
           awsemu --port 9302 exec -- python -c "import boto3; boto3.client('sqs').create_queue(QueueName='from-compose')"
           awsemu --port 9302 sqs ls | grep from-compose
+
+      - name: App containers through the proxy (compose --proxy, proxy --host 0.0.0.0)
+        run: |
+          awsemu --port 9302 compose --proxy --no-build -o compose.proxy.yaml --no-telemetry
+          printf '  app:\n    image: amazon/aws-cli:latest\n    <<: *aws-emulator-client\n' >> compose.proxy.yaml
+          cat compose.proxy.yaml
+          awsemu --port 9302 proxy start -d --host 0.0.0.0 --bodies
+          docker compose -f compose.proxy.yaml run --rm app s3api create-bucket --bucket via-proxy
+          docker compose -f compose.proxy.yaml run --rm app sqs create-queue --queue-name via-proxy
+          awsemu --port 9302 s3 ls | grep via-proxy
+          awsemu --port 9302 proxy calls --json | grep -q '"operation": "CreateBucket"'
+          awsemu --port 9302 proxy calls --json | grep -q 'host.docker.internal'
+          awsemu --port 9302 proxy har -o calls.har && grep -q CreateQueue calls.har
+          awsemu --port 9302 check --from-calls --no-explain
+          awsemu --port 9302 proxy stop
           docker compose -f compose.emulator.yaml down
 
   testcontainers:

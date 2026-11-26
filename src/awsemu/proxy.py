@@ -11,16 +11,21 @@ The request goes upstream untouched, ``Host`` header included, so SigV4 signatur
 stay valid and URLs the emulator builds from it (SQS queue URLs) point at the proxy.
 
 A small admin API lives under ``/__awsemu/proxy/`` on the same port (``health``,
-``faults``, ``calls``); ``awsemu proxy faults`` and the pytest fixtures use it.
+``faults``, ``calls``); ``awsemu proxy faults`` and the pytest fixtures use it. It needs
+the token in the ``X-Awsemu-Token`` header (in the state file, readable only by you),
+so other local processes, or the network with ``--host 0.0.0.0``, can't change the
+faults or read the calls.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import hmac
 import http.client
 import ipaddress
 import json
 import os
+import secrets
 import signal
 import socket
 import ssl
@@ -38,6 +43,9 @@ from . import awscalls, faults, redact
 from .paths import DEFAULT_HOST, InstanceFiles, cli_root
 
 ADMIN = "/__awsemu/proxy"
+TOKEN_HEADER = "X-Awsemu-Token"
+# Names containers use to reach the host (Docker Desktop, and Linux with host-gateway)
+CONTAINER_HOST = "host.docker.internal"
 HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te",
               "trailer", "transfer-encoding", "upgrade", "expect"}
 MAX_LOG_BYTES = 20_000_000
@@ -120,11 +128,26 @@ class ProxyFiles:
         return cli_root() / "proxy" / "server-key.pem"
 
 
-def ensure_certs(files: ProxyFiles) -> None:
-    """The proxy's CA and server certificate (127.0.0.1, ::1, localhost), made once.
+def _san_entries(x509, names) -> list:
+    out = []
+    for name in names:
+        try:
+            out.append(x509.IPAddress(ipaddress.ip_address(name)))
+        except ValueError:
+            out.append(x509.DNSName(name))
+    return out
 
-    The CA stays the same across restarts, so ``AWS_CA_BUNDLE`` keeps working; the
-    server certificate is renewed when it's about to expire.
+
+BASE_NAMES = ("127.0.0.1", "::1", "localhost", CONTAINER_HOST)
+
+
+def ensure_certs(files: ProxyFiles, extra_names: tuple[str, ...] = ()) -> None:
+    """The proxy's CA and server certificate, made once.
+
+    The server certificate is for 127.0.0.1, ::1, localhost and host.docker.internal
+    (for containers), plus ``extra_names``. The CA stays the same across restarts, so
+    ``AWS_CA_BUNDLE`` keeps working; the server certificate is renewed when it's about
+    to expire or lacks a name.
     """
     try:
         from cryptography import x509
@@ -167,10 +190,16 @@ def ensure_certs(files: ProxyFiles) -> None:
         files.ca.write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM))
         files.cert.unlink(missing_ok=True)
 
+    names = tuple(dict.fromkeys(BASE_NAMES + tuple(n for n in extra_names if n not in ("0.0.0.0", "::"))))
+    wanted = _san_entries(x509, names)
     if files.cert.exists() and files.key.exists():
         cert = x509.load_pem_x509_certificate(files.cert.read_bytes())
         expires = getattr(cert, "not_valid_after_utc", None) or cert.not_valid_after.replace(tzinfo=dt.timezone.utc)
-        if expires - now > dt.timedelta(days=7):
+        try:
+            have = set(cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value)
+        except x509.ExtensionNotFound:
+            have = set()
+        if expires - now > dt.timedelta(days=7) and set(wanted) <= have:
             return
     key = ec.generate_private_key(ec.SECP256R1())
     cert = (x509.CertificateBuilder()
@@ -179,9 +208,7 @@ def ensure_certs(files: ProxyFiles) -> None:
             .serial_number(x509.random_serial_number())
             .not_valid_before(now - dt.timedelta(minutes=5))
             .not_valid_after(now + dt.timedelta(days=397))
-            .add_extension(x509.SubjectAlternativeName([
-                x509.IPAddress(ipaddress.ip_address("127.0.0.1")), x509.IPAddress(ipaddress.ip_address("::1")),
-                x509.DNSName("localhost")]), critical=False)
+            .add_extension(x509.SubjectAlternativeName(wanted), critical=False)
             .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
             .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
             .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
@@ -292,6 +319,12 @@ class _Handler(BaseHTTPRequestHandler):
         route = url.path[len(ADMIN):].strip("/")
         query = dict(parse_qsl(url.query))
         status, data = 200, {}
+        token = self.server.admin_token
+        if token and not hmac.compare_digest(self.headers.get(TOKEN_HEADER, ""), token):
+            payload = json.dumps({"message": f"the admin API needs the proxy's token ({TOKEN_HEADER}); "
+                                             "awsemu proxy commands send it"}).encode()
+            self._send(401, [("Content-Type", "application/json")], payload)
+            return
         try:
             if route == "health":
                 data = {"ok": True, "emulator_port": self.server.emulator_port, "calls": self.server.count}
@@ -328,9 +361,12 @@ class ProxyServer(ThreadingHTTPServer):
 
     def __init__(self, emulator_port: int, listen_port: int = 0, rules: list[faults.Fault] | None = None,
                  tls: bool = True, calls_file: Path | None = None, on_call=None, timeout: float = 120.0,
-                 bodies: bool = False):
+                 bodies: bool = False, host: str = DEFAULT_HOST, admin_token: str | None = ""):
+        """``admin_token``: "" makes a random one; None turns the check off (tests)."""
         self.emulator_port = emulator_port
         self.bodies = bodies
+        self.host = host
+        self.admin_token = secrets.token_urlsafe(24) if admin_token == "" else admin_token
         self.faults = faults.FaultSet(rules)
         self.files = ProxyFiles(emulator_port)
         self.calls_file = calls_file
@@ -344,10 +380,12 @@ class ProxyServer(ThreadingHTTPServer):
         self.tls = tls
         self._ctx = None
         if tls:
-            ensure_certs(self.files)
+            ensure_certs(self.files, (host,))
             self._ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             self._ctx.load_cert_chain(self.files.cert, self.files.key)
-        super().__init__((DEFAULT_HOST, listen_port), _Handler)
+        if ":" in host:
+            self.address_family = socket.AF_INET6
+        super().__init__((host, listen_port), _Handler)
 
     def server_bind(self):
         # HTTPServer.server_bind() looks up the host's FQDN (reverse DNS), which can take
@@ -372,7 +410,15 @@ class ProxyServer(ThreadingHTTPServer):
 
     @property
     def endpoint_url(self) -> str:
+        """For programs on this machine."""
         return f"{'https' if self.tls else 'http'}://{DEFAULT_HOST}:{self.port}"
+
+    @property
+    def container_endpoint_url(self) -> str | None:
+        """For containers, when the proxy listens beyond 127.0.0.1."""
+        if self.host in (DEFAULT_HOST, "localhost", "::1"):
+            return None
+        return f"{'https' if self.tls else 'http'}://{CONTAINER_HOST}:{self.port}"
 
     # -- upstream
 
@@ -499,9 +545,11 @@ def admin(state: dict, method: str, route: str, payload: dict | None = None, tim
     else:
         conn = http.client.HTTPConnection(url.hostname, url.port, timeout=timeout)
     body = json.dumps(payload).encode() if payload is not None else None
+    headers = {"Content-Type": "application/json"} if body else {}
+    if state.get("token"):
+        headers[TOKEN_HEADER] = state["token"]
     try:
-        conn.request(method, f"{ADMIN}/{route}", body=body,
-                     headers={"Content-Type": "application/json"} if body else {})
+        conn.request(method, f"{ADMIN}/{route}", body=body, headers=headers)
         resp = conn.getresponse()
         data = json.loads(resp.read() or b"{}")
     except (OSError, http.client.HTTPException, ValueError) as exc:
@@ -513,18 +561,31 @@ def admin(state: dict, method: str, route: str, payload: dict | None = None, tim
     return data
 
 
+def _write_private(path: Path, text: str) -> None:
+    """Write a file only its owner can read (it holds the admin token)."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    fd = os.open(path, flags, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    try:
+        path.chmod(0o600)
+    except OSError:  # pragma: no cover
+        pass
+
+
 def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: bool = True,
-          on_call=None, on_ready=None, bodies: bool = False) -> int:
+          on_call=None, on_ready=None, bodies: bool = False, host: str = DEFAULT_HOST) -> int:
     """Run the proxy in this process until SIGTERM/Ctrl-C, keeping the state file."""
     files = ProxyFiles(emulator_port)
     files.dir.mkdir(parents=True, exist_ok=True)
     server = ProxyServer(emulator_port, listen_port, rules, tls=tls, calls_file=files.calls, on_call=on_call,
-                         bodies=bodies)
+                         bodies=bodies, host=host)
     state = {"pid": os.getpid(), "emulator_port": emulator_port, "port": server.port,
-             "endpoint_url": server.endpoint_url, "tls": tls, "ca": str(files.ca) if tls else None,
-             "bodies": bodies,
+             "endpoint_url": server.endpoint_url, "host": host,
+             "container_endpoint_url": server.container_endpoint_url,
+             "tls": tls, "ca": str(files.ca) if tls else None, "bodies": bodies, "token": server.admin_token,
              "calls": str(files.calls), "started_at": dt.datetime.now(dt.timezone.utc).isoformat()}
-    files.state.write_text(json.dumps(state), encoding="utf-8")
+    _write_private(files.state, json.dumps(state))
 
     def stop(*_):
         threading.Thread(target=server.shutdown, daemon=True).start()
@@ -550,7 +611,7 @@ def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: 
 
 
 def start_detached(emulator_port: int, listen_port: int, specs: list[str], tls: bool = True,
-                   wait: float = 20.0, bodies: bool = False) -> dict:
+                   wait: float = 20.0, bodies: bool = False, host: str = DEFAULT_HOST) -> dict:
     """Start ``awsemu proxy start`` in the background and wait until it answers."""
     from .runtime import _popen_detached
 
@@ -563,6 +624,8 @@ def start_detached(emulator_port: int, listen_port: int, specs: list[str], tls: 
         cmd.append("--no-tls")
     if bodies:
         cmd.append("--bodies")
+    if host != DEFAULT_HOST:
+        cmd += ["--host", host]
     for spec in specs:
         cmd += ["--fault", spec]
     # The child runs this same awsemu, even from a source checkout that isn't installed.

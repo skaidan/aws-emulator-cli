@@ -85,12 +85,15 @@ def proxy():
 @click.option("-d", "--detach", is_flag=True, help="Run in the background ('awsemu proxy stop' stops it).")
 @click.option("--quiet", is_flag=True, help="Don't print each call (they're still logged).")
 @click.option("--no-tls", is_flag=True, help="Plain HTTP instead of HTTPS (no certificate to trust).")
+@click.option("--host", default="127.0.0.1", show_default=True, metavar="ADDRESS",
+              help="Address to listen on. 0.0.0.0 lets containers reach it (at host.docker.internal), "
+                   "and anyone on your network: the emulator's keys and the admin token still apply.")
 @click.option("--bodies", is_flag=True,
               help="Also log headers and bodies (up to 64 KB each), with secrets and credentials masked.")
 @click.option("--foreground", is_flag=True, hidden=True)
 @pass_ctx
 @handle_errors
-def start(c: Ctx, listen, specs, detach, quiet, no_tls, bodies, foreground):
+def start(c: Ctx, listen, specs, detach, quiet, no_tls, host, bodies, foreground):
     """Start the proxy in front of the emulator on --port.
 
     In the foreground it prints each call until Ctrl-C; with -d it runs in the
@@ -108,7 +111,7 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, bodies, foreground):
     if not foreground and not health.check(c.port).healthy:
         ui.warn(f"no emulator answers on port {c.port} yet; calls will get a 502 until it does")
     if detach:
-        state = px.start_detached(c.port, listen, specs, tls=not no_tls, bodies=bodies)
+        state = px.start_detached(c.port, listen, specs, tls=not no_tls, bodies=bodies, host=host)
         _started(state, rules)
         return
 
@@ -120,7 +123,7 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, bodies, foreground):
 
     try:
         px.serve(c.port, listen, rules, tls=not no_tls, on_call=None if quiet else print_call, on_ready=ready,
-                 bodies=bodies)
+                 bodies=bodies, host=host)
     except OSError as exc:
         raise RuntimeErrorWithHint(f"the proxy can't listen on port {listen}: {exc}",
                                    "Pick another with --listen PORT (0 = any free port).") from exc
@@ -128,6 +131,9 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, bodies, foreground):
 
 def _started(state: dict, rules: list[faults.Fault]) -> None:
     ui.success(f"Proxy listening on {state['endpoint_url']} -> emulator on port {state['emulator_port']}")
+    if state.get("container_endpoint_url"):
+        ui.echo(f"Containers: {state['container_endpoint_url']} (awsemu compose --proxy writes their settings)",
+                "muted")
     ui.kv([("use it", "awsemu exec --proxy -- COMMAND   ·   eval \"$(awsemu env --proxy)\""),
            ("watch", "awsemu watch --calls"),
            ("faults", ", ".join(r.spec for r in rules) or "none (awsemu proxy faults add RULE)")])

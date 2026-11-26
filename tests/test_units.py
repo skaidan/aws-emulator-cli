@@ -297,6 +297,30 @@ def test_compose_service_matches_docker_recipe(isolated_home):
     assert win["volumes"][0].endswith(":/home/emulator/.aws/emulator")
 
 
+def test_compose_with_the_proxy_for_app_containers(isolated_home):
+    import yaml
+
+    from awsemu.commands import compose
+
+    opts = runtime.StartOptions(port=9310, mode="docker")
+    client = compose.client_settings(9310, 9311, auth=True, system="Linux")
+    text = compose.render("emu", compose.service(opts, system="Linux", build=False), 9310, client, 9311)
+    assert "proxy start -d --host 0.0.0.0" in text and "<<: *aws-emulator-client" in text
+    # an app service using the anchor, as the header says
+    doc = yaml.safe_load(text + "  app:\n    image: my-app\n    <<: *aws-emulator-client\n")
+    app = doc["services"]["app"]
+    ca = str(isolated_home / ".aws" / "emulator-cli" / "proxy" / "ca.pem")
+    creds = str(isolated_home / ".aws" / "emulator" / "9310" / "emulator_credentials")
+    assert app["environment"]["AWS_ENDPOINT_URL"] == "https://host.docker.internal:9311"
+    assert app["environment"]["AWS_CA_BUNDLE"] == ca and app["environment"]["AWS_SHARED_CREDENTIALS_FILE"] == creds
+    assert f"{ca}:{ca}:ro" in app["volumes"] and not any("ca-key" in v for v in app["volumes"])
+    assert app["extra_hosts"] == ["host.docker.internal:host-gateway"]
+
+    off = compose.client_settings(9310, 9311, auth=False, system="Windows")
+    assert off["environment"]["AWS_ACCESS_KEY_ID"] == "EMULATORAUTHOFF00000"
+    assert off["environment"]["AWS_CA_BUNDLE"] == "/awsemu/proxy-ca.pem"
+
+
 def test_every_command_and_option_has_help():
     """Help is part of the product: no command or option without it."""
     import click
