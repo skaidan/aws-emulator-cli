@@ -22,7 +22,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from . import health, logs
+from . import health, logs, waiting
 from .paths import CliFiles, InstanceFiles, cli_root, emulator_root
 
 BINARY = "aws-emulator"
@@ -351,16 +351,17 @@ def _forget_detached() -> None:
 
 def _wait_for_startup(log_file: Path, proc: subprocess.Popen, timeout: float) -> dict | None:
     """Wait for the ``emulator server information`` line (used with ``-p 0``)."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+
+    def started() -> dict | None:
         if log_file.exists():
             info = logs.find_startup(tail(log_file, 200))
             if info:
                 return info
         if proc.poll() is not None:
-            return None
-        time.sleep(0.2)
-    return None
+            return {}  # it exited: stop waiting, and report nothing
+        return None
+
+    return waiting.poll(started, timeout=timeout) or None
 
 
 def _port_from_url(url: str) -> int | None:
@@ -482,12 +483,7 @@ def _send_stop(pid: int, force: bool) -> None:
 
 
 def _wait_gone(pid: int, timeout: float) -> bool:
-    deadline = time.monotonic() + timeout
-    while pid_alive(pid):
-        if time.monotonic() >= deadline:
-            return False
-        time.sleep(0.2)
-    return True
+    return waiting.until(lambda: not pid_alive(pid), timeout=timeout)
 
 
 def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
@@ -528,10 +524,7 @@ def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
     if not _wait_gone(pid, timeout):
         raise RuntimeErrorWithHint(f"pid {pid} is still running after {timeout:.0f}s.", "Try 'awsemu stop --force'.")
     # Give the port a moment to close before deciding the files are stale.
-    for _ in range(10):
-        if not health.port_open(port):
-            break
-        time.sleep(0.1)
+    health.wait_port_closed(port, timeout=1.0)
     State.clear(port)
     cleaned = cleanup_instance_files(port)
     how = "forced" if force else "stopped"

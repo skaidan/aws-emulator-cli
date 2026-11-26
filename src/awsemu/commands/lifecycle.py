@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-import time
 from pathlib import Path
 
 import click
@@ -263,10 +262,7 @@ def restart(c: Ctx, **kwargs):
     if not result.startswith("not running"):
         ui.echo(f"Stopped ({result}).", "muted")
     # Port may linger for a moment after the process exits.
-    for _ in range(25):
-        if not health.port_open(c.port):
-            break
-        time.sleep(0.2)
+    health.wait_port_closed(c.port, timeout=5.0)
     _do_start(c.port, **kwargs)
 
 

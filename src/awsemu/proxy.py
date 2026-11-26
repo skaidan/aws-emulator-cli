@@ -39,7 +39,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
-from . import awscalls, faults, redact
+from . import awscalls, faults, redact, waiting
 from .paths import DEFAULT_HOST, InstanceFiles, cli_root
 
 ADMIN = "/__awsemu/proxy"
@@ -849,14 +849,14 @@ def start_detached(
         except OSError:
             return ""
 
-    deadline = time.monotonic() + wait
-    while time.monotonic() < deadline:
+    def answering():
         if proc.poll() is not None:
             raise ProxyError(f"the proxy exited with code {proc.returncode}:\n{log_tail()}")
-        state = running(emulator_port)
-        if state:
-            return state
-        time.sleep(0.15)
+        return running(emulator_port) or None
+
+    state = waiting.poll(answering, timeout=wait, interval=0.15)
+    if state:
+        return state
     state = read_state(emulator_port)
     detail = f"state: {state}" if state else "it never wrote its state file"
     raise ProxyError(f"the proxy didn't answer within {wait:.0f} s ({detail}; log: {files.log})\n{log_tail()}")

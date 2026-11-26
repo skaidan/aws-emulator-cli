@@ -165,7 +165,7 @@ def test_sfn_start_waits_and_reports_failure(runner, monkeypatch, running):
     )
     s = FakeClient(start_execution={"executionArn": "arn:exec"}, describe_execution=lambda **_: next(states))
     use(monkeypatch, sfn_mod, stepfunctions=s)
-    monkeypatch.setattr(sfn_mod.time, "sleep", lambda _: None)
+    monkeypatch.setattr(sfn_mod.waiting.time, "sleep", lambda _: None)
     result = runner.invoke(cli, ["sfn", "start", "flow", '{"x": 1}'])
     assert result.exit_code == 1
     assert "FAILED: States.TaskFailed boom" in result.output

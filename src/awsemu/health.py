@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import socket
 import ssl
-import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -60,13 +59,29 @@ def check(port: int, timeout: float = 2.0) -> Health:
 
 def wait_healthy(port: int, timeout: float = 30.0, interval: float = 0.5, abort=None) -> Health:
     """Poll until healthy or ``timeout`` seconds. ``abort()`` returning a string stops early."""
-    deadline = time.monotonic() + timeout
+    from .waiting import poll
+
     last = check(port)
-    while not last.healthy and time.monotonic() < deadline:
+    first = True
+
+    def attempt() -> Health | None:
+        nonlocal last, first
+        if not first:
+            last = check(port)
+        first = False
+        if last.healthy:
+            return last
         if abort is not None:
             reason = abort()
             if reason:
                 return Health(port, last.port_open, False, reason)
-        time.sleep(interval)
-        last = check(port)
-    return last
+        return None
+
+    return poll(attempt, timeout=timeout, interval=interval) or last
+
+
+def wait_port_closed(port: int, timeout: float = 5.0) -> bool:
+    """Wait until nothing listens on ``port`` (it may linger after the process exits)."""
+    from .waiting import until
+
+    return until(lambda: not port_open(port), timeout=timeout, interval=0.1)

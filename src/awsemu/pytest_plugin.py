@@ -208,13 +208,8 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _wait_port_closed(port: int, tries: int = 25) -> None:
-    import time
-
-    for _ in range(tries):
-        if not health.port_open(port):
-            return
-        time.sleep(0.2)
+def _wait_port_closed(port: int, timeout: float = 5.0) -> None:
+    health.wait_port_closed(port, timeout)
 
 
 def _load_seed(path: Path):

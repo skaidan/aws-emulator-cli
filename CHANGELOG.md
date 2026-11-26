@@ -5,6 +5,7 @@
 ### Changed
 
 - **Faster startup**: commands are imported only when they run, so `awsemu --version` and `awsemu --help`'s first line no longer load every module (about 170 ms → 40 ms on a laptop). The commands that lived in `cli.py` moved to `awsemu/commands/` (`lifecycle`, `env`, `logs_`, `doctor`, `image`, `config`, `ui`, `completion_`); nothing changes on the command line.
+- **One way to wait**: every wait for something to happen (the emulator to be healthy or to stop, a port to close, the proxy to answer, a Step Functions execution to finish, a file in a Testcontainers container) now goes through `awsemu.waiting.poll`, which always tries one last time at the deadline.
 
 ### Breaking
 

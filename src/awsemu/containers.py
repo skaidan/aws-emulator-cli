@@ -20,7 +20,6 @@ from __future__ import annotations
 import configparser
 import os
 import tempfile
-import time
 
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.waiting_utils import wait_for_logs
@@ -91,14 +90,16 @@ class AwsEmulatorContainer(DockerContainer):
 
     def _read(self, path: str, timeout: float = 15) -> str:
         """A file the emulator writes at start (it may lag the log line a little)."""
-        deadline = time.monotonic() + timeout
-        while True:
+        from .waiting import poll
+
+        def written() -> str | None:
             result = self.exec(["cat", path])
-            if result.exit_code == 0 and result.output:
-                return result.output.decode("utf-8")
-            if time.monotonic() > deadline:
-                raise RuntimeError(f"the emulator didn't write {path} in the container")
-            time.sleep(0.2)
+            return result.output.decode("utf-8") if result.exit_code == 0 and result.output else None
+
+        text = poll(written, timeout=timeout)
+        if text is None:
+            raise RuntimeError(f"the emulator didn't write {path} in the container")
+        return text
 
     def _read_keys(self) -> tuple[str, str]:
         parser = configparser.ConfigParser()
