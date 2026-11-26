@@ -44,7 +44,7 @@ DynamoDB tables  1      users
 - [Project settings](docs/project-config.md): `awsemu.toml`, `init`, `up` and `down`.
 - [Seeds](docs/seeds.md): reproducible starting data (format, validation, `apply` and `export`), and snapshots.
 - [Services guide](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions and `describe`, with examples.
-- [Testing and CI](docs/testing.md): pytest plugin, GitHub Action, scripts and Docker Compose.
+- [Testing and CI](docs/testing.md): pytest plugin, GitHub Action, Testcontainers (Python, Java, Node), scripts and Docker Compose.
 - [Scripting](docs/scripting.md): stable JSON output and exit codes.
 - [Troubleshooting](docs/troubleshooting.md): what each error means.
 - [Command reference](docs/reference.md): every command and option.

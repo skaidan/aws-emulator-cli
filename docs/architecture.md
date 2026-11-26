@@ -108,6 +108,6 @@ scripts/            gen_reference.py (docs/reference.md), rename.py (package/rep
 - `tests/fake_emulator.py` mimics the binary's documented behaviour: options, `-p 0`, files, certificate, health check, `tracing`-format log and cleanup on stop. It lets the lifecycle be tested on Linux, macOS and Windows without the emulator.
 - Service commands are tested with a fake boto3 client (`tests/test_services.py`).
 - `tests/test_real.py` runs against the real emulator (`AWSEMU_REAL_TESTS=1`), in the `real-emulator` CI job.
-- The `docker` job tests `image build`, `start --docker` and `compose` with the real emulator, and the `action` job uses the repository's own GitHub Action.
+- The `docker` job tests `image build`, `start --docker` and `compose` with the real emulator, the `testcontainers` job the Python, Java and Node modules against the image, and the `action` job uses the repository's own GitHub Action.
 
 More details in [CONTRIBUTING.md](../CONTRIBUTING.md).

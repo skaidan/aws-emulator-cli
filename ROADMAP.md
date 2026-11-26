@@ -122,7 +122,7 @@ Goal: close the known gaps in what's already done.
 - ✅ **Java without a truststore trap**: `--sdk java` makes the JVM trust only the emulator, so Maven or Gradle can't download anything in the same process. Build a truststore with the JDK's own certificates plus the emulator's (with `keytool`, which every JDK has) and point the JVM at that one. Done (it starts from your own truststore if `JAVA_TOOL_OPTIONS` names one).
 - ✅ **A fast Lambda loop**: `awsemu lambda deploy PATH [--watch]` packages local code (Python, Node), creates or updates the function and redeploys on save, so changing a function doesn't mean a zip and three commands. Done, with `--invoke JSON` to run it after each deploy and `requirements.txt` installed into the package.
 - ✅ **`awsemu call SERVICE OPERATION [--params JSON]`**: any API call through boto3, for the services without their own commands and for machines without the AWS CLI (`awsemu aws` needs it). Done, with `-p Key=value`, `--paginate`, `--query` and `--out`.
-- ⬜ **Testcontainers modules** (Python, Java, Node): an `AwsEmulatorContainer` built on the Docker image, for teams that start their dependencies with Testcontainers rather than pytest fixtures.
+- ✅ **Testcontainers modules** (Python, Java, Node): an `AwsEmulatorContainer` built on the Docker image, for teams that start their dependencies with Testcontainers rather than pytest fixtures. Done, in `awsemu.containers`, `testcontainers/java` and `testcontainers/node`, tested in CI; they're published with the rest at v1.0.
 - ⬜ **Proxy, the next step**:
   - fault rules per resource (`dynamodb:PutItem[orders]=throttle`) and over time (`s3=503 for 30s`, an outage that recovers);
   - optional request and response bodies in the calls log (`--bodies`), with secrets and credentials masked;
@@ -172,6 +172,7 @@ Goal: install and upgrade anywhere with one command.
 - ⬜ **Final name, right before publishing.** "aws-emulator-cli" uses the AWS trademark; for an unofficial project on PyPI and Homebrew it may cause problems or be mistaken for something official. Choose the name, check it's free on PyPI, Homebrew and GitHub, apply it with the v0.7 script and publish straight away, so nobody takes it in between.
 - ✅ Automatic GitHub releases from `CHANGELOG.md` (wheel and sdist attached).
 - ⬜ Publishing on **PyPI** (`pipx install <name>`).
+- ⬜ Publishing the **Testcontainers modules** on Maven Central and npm, with the final name (today `io.github.skaidan:aws-emulator-testcontainers` and `aws-emulator-testcontainers`, which `scripts/rename.py` doesn't change: they don't carry the package name).
 - ⬜ A **Homebrew tap** and standalone binaries (PyInstaller) for those without Python.
 - ⬜ A **prebuilt Docker image** (multi-arch, on GitHub Container Registry), one tag per emulator version, so macOS and Windows users don't build it themselves. The emulator's source is CC0 (Apache 2.0 in `vendor/`); check the license and notice files in AWS's package before redistributing it.
 - ⬜ **Upgrade notes** for each release in the docs, and a "what changed for me" summary when upgrading awsemu itself.

@@ -226,7 +226,7 @@ jobs:
       - name: Java
         if: matrix.language == 'java'
         working-directory: testcontainers/java
-        run: mvn -q -B test || (sleep 30 && mvn -q -B test)   # Maven Central answers 429 at times
+        run: mvn -q -B test || (sleep 90 && mvn -q -B test)   # Maven Central answers 429 at times
       - name: Node
         if: matrix.language == 'node'
         working-directory: testcontainers/node

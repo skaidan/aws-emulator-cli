@@ -6,6 +6,7 @@ The emulator is ideal for integration tests: no AWS account needed, it starts in
 | --- | --- |
 | pytest | [Plugin](#pytest-plugin): `aws_emulator` fixture, no setup |
 | GitHub Actions | [Action](#github-actions): `uses: skaidan/aws-emulator-cli@v0.9.0` |
+| Testcontainers (Python, Java, Node) | [`AwsEmulatorContainer`](#testcontainers) |
 | Anywhere else | [Scripts](#scripts) with `awsemu start`/`exec`/`stop`, or [Docker Compose](#docker-compose) |
 
 In every case, starting data goes in a [seed](seeds.md).
@@ -184,6 +185,19 @@ It uses the project's settings (`port`, `auth`, `telemetry`, `idle_timeout`, `im
 For **other containers** to talk to the emulator: on Linux, `network_mode: host` and the variables from `awsemu env --shell dotenv`, mounting `~/.aws/emulator` at the same path so `AWS_CA_BUNDLE` exists inside the container. The emulator's certificate is for `127.0.0.1`, so going through the service name would fail TLS verification.
 
 The `docker` job in CI builds the image, tests `awsemu start --docker` and brings up the file `awsemu compose` generates.
+
+## Testcontainers
+
+If your tests already start their dependencies with Testcontainers, `AwsEmulatorContainer` (Python, Java and Node) runs the emulator the same way: the image from `awsemu image build`, a random port, and the certificate and keys read from the container.
+
+```python
+from awsemu.containers import AwsEmulatorContainer   # pip install "aws-emulator-cli[testcontainers]"
+
+with AwsEmulatorContainer() as emulator:
+    emulator.client("s3").create_bucket(Bucket="photos")
+```
+
+The Java and Node modules, their API and their limits are in [`testcontainers/`](../testcontainers/README.md).
 
 ## Checking you're talking to the emulator
 
