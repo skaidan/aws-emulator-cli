@@ -1,16 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 — 2026-11-26
 
-Towards 0.12.0.
+Everything planned for 0.12 and 0.13. Going from local to AWS: the IAM policy your calls need and what your infrastructure misses (`awsemu iam policy`, `awsemu check --iam`), AWS's fidelity tests run on your machine (`awsemu fidelity run`), a cost estimate, and read-only bridges to a real account (`awsemu seed import`, the proxy's shadow mode). Hardening before 1.0: a tested minimum emulator version (1.0.290), update notices, JSON Schemas for every `--json` output, a deprecation policy, and the first release with signed provenance, an SBOM and checksums.
 
-- A minimal install, documented and tested: without `boto3` and `cryptography`, the emulator's lifecycle and the environment commands work; commands that need them say what to install instead of failing with an import error. They stay dependencies of the package (see `docs/getting-started.md`).
-- A deprecation policy (`docs/deprecations.md`): renamed options, settings and JSON fields keep working for at least two minor releases and three months, with a warning; the code has the helpers to do it (`awsemu.deprecation`).
-- JSON Schemas for every `--json` output in `docs/schemas/` (generated from `src/awsemu/schemas.py`; the contract tests validate real outputs against them).
-- `awsemu doctor` shows whether your emulator is supported (from 1.0.290, the oldest release CI tests awsemu with: earlier ones don't log the startup line random ports need) and whether a newer emulator or awsemu is out; `awsemu start` mentions newer releases at most once a day, on a terminal, never in CI or with `AWSEMU_NO_UPDATE_CHECK=1`.
-- Releases come with signed build provenance (Sigstore, GitHub attestations), a CycloneDX SBOM and SHA-256 checksums; `SECURITY.md` says how to verify them. GitHub Actions are pinned to commit SHAs, and Dependabot proposes updates for Python, Actions, npm and Maven dependencies.
-- Project health: `SECURITY.md` (private vulnerability reports, scope), a code of conduct, issue forms (bugs, ideas, links to the emulator's own issues) and a pull request template.
-- Development: ruff (lint and format) and mypy run in CI, the code is formatted and type-checked, and tests have a coverage minimum (65%; 69% today). The proxy now closes every socket and upstream connection when it stops, and the suite runs without resource warnings.
+### From local to AWS
 
 - `awsemu iam policy`: the least-privilege IAM policy for the calls in the proxy's log: actions (with S3, Lambda and batch exceptions mapped) and resource ARNs where the calls name them; `--account`, `--region`, `--service`, `--format terraform`.
 - `awsemu fidelity run SERVICES|--test ID [--failing] [--limit N]`: AWS's fidelity tests against your installed emulator, each with its own fresh emulator and the suite's own runner (fetched at the version your release was scored with, prepared with uv), with the verdicts compared to the published scores. `awsemu fidelity` is now a group: `fidelity [SERVICES]` still shows the scores (`fidelity show`). Tested in CI against the real emulator.
@@ -18,6 +12,19 @@ Towards 0.12.0.
 - Shadow mode: `awsemu proxy start --shadow PROFILE` also sends read-only configuration calls to that real account in the background and logs where the status, error code or response shape differ; `awsemu proxy shadow` lists them. Writes and data reads are never sent, at most `--shadow-max` calls, AWS's responses aren't stored.
 - `awsemu proxy cost [--runs N] [--prices FILE]`: an estimate of the request charges the logged calls would have on AWS (us-east-1 list prices, no free tier or storage), clearly labelled as one.
 - `awsemu check --iam`: the IAM actions your code needs (from the static scan, or `--from-calls`) that no `Allow` in your Terraform, CloudFormation/SAM or synthesized CDK policies grants; managed policies and SAM templates are listed as not expanded. `--strict` for CI. Guide: `docs/iam.md`.
+
+### Safer to depend on
+
+- A minimal install, documented and tested: without `boto3` and `cryptography`, the emulator's lifecycle and the environment commands work; commands that need them say what to install instead of failing with an import error. They stay dependencies of the package (see `docs/getting-started.md`).
+- A deprecation policy (`docs/deprecations.md`): renamed options, settings and JSON fields keep working for at least two minor releases and three months, with a warning; the code has the helpers to do it (`awsemu.deprecation`).
+- JSON Schemas for every `--json` output in `docs/schemas/` (generated from `src/awsemu/schemas.py`; the contract tests validate real outputs against them).
+- `awsemu doctor` shows whether your emulator is supported (from 1.0.290, the oldest release CI tests awsemu with: earlier ones don't log the startup line random ports need) and whether a newer emulator or awsemu is out; `awsemu start` mentions newer releases at most once a day, on a terminal, never in CI or with `AWSEMU_NO_UPDATE_CHECK=1`.
+
+### Releases and the project
+
+- Releases come with signed build provenance (Sigstore, GitHub attestations), a CycloneDX SBOM and SHA-256 checksums; `SECURITY.md` says how to verify them. GitHub Actions are pinned to commit SHAs, and Dependabot proposes updates for Python, Actions, npm and Maven dependencies.
+- Project health: `SECURITY.md` (private vulnerability reports, scope), a code of conduct, issue forms (bugs, ideas, links to the emulator's own issues) and a pull request template.
+- Development: ruff (lint and format) and mypy run in CI, the code is formatted and type-checked, and tests have a coverage minimum (65%; 69% today). The proxy now closes every socket and upstream connection when it stops, and the suite runs without resource warnings.
 
 ## 0.11.0 — 2026-11-26
 

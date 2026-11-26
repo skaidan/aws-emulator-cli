@@ -236,7 +236,7 @@ Each awsemu release works with emulator releases from `MIN_EMULATOR` on: today *
 ```
 emulator support  warn  1.0.400 (supported from 1.0.290); 1.0.629 is out
                         → awsemu install latest
-awsemu            ok    0.12.0, the latest
+awsemu            ok    0.13.0, the latest
 ```
 
 It fails if your emulator is older than the minimum. `awsemu start` (with the native binary) says when there's a newer emulator or awsemu, at most once a day, and only on a terminal: never in CI (when `CI` is set), and never with `AWSEMU_NO_UPDATE_CHECK=1`. The answers come from GitHub's releases, cached for a day in `~/.aws/emulator-cli/updates.json`; with `AWSEMU_NO_UPDATE_CHECK=1`, `doctor` uses only that cache and nothing is looked up.

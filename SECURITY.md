@@ -27,7 +27,7 @@ awsemu runs on developers' machines and in CI, and some of it handles credential
 Each release's wheel and source archive have a signed build provenance (Sigstore, through GitHub attestations), a CycloneDX SBOM and SHA-256 checksums:
 
 ```bash
-gh release download v0.12.0 -R skaidan/aws-emulator-cli
-gh attestation verify aws_emulator_cli-0.12.0-py3-none-any.whl -R skaidan/aws-emulator-cli
+gh release download v0.13.0 -R skaidan/aws-emulator-cli
+gh attestation verify aws_emulator_cli-0.13.0-py3-none-any.whl -R skaidan/aws-emulator-cli
 sha256sum -c SHA256SUMS
 ```

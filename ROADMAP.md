@@ -141,7 +141,7 @@ Goal: a coding agent tests its code against the emulator without touching AWS.
 - ✅ **Guard rails for agents**: the MCP tools never use real credentials or a real AWS endpoint, refuse anything that isn't `127.0.0.1`, and say so in their answers, so an agent can't test against a production account by mistake.
 - ✅ **Explain a failure**: given a failing call (from the proxy's log), say whether it matches a known emulator difference (`awsemu check` data) or is probably a bug in the code under test.
 
-## v0.12 — From local to AWS ✅
+## v0.12 — From local to AWS ✅ (released in 0.13.0)
 
 Goal: what works locally should work on AWS too. The emulator can't promise that for permissions and costs, and it doesn't check IAM like AWS does: some services evaluate policies differently, a request signed with a key it created is never denied, and KMS key policies and S3 bucket policies aren't checked. A missing permission only shows up after deploying.
 
@@ -152,7 +152,7 @@ Goal: what works locally should work on AWS too. The emulator can't promise that
 - ✅ **Shadow mode** in the proxy: send read-only calls to both the emulator and a real AWS account you name explicitly, and report where the answers differ. That's your own fidelity test, built from your traffic. Opt-in and read-only, with great care for credentials and costs.
 - ✅ **A seed from a real account**: `awsemu seed import --profile NAME` reads the configuration of an account (tables, queues, topics, buckets without their objects, parameters without SecureString values), read-only and only with a profile you name, and writes a seed, to start locally from something close to your environment.
 
-## v0.13 — Hardening before 1.0 ✅
+## v0.13 — Hardening before 1.0 ✅ (0.13.0)
 
 Goal: what a project people depend on needs, beyond features.
 
