@@ -262,3 +262,14 @@ def test_proxy(runner, monkeypatch):
                          "calls_file"}
     assert data["faults"] == ["s3=503"]
     assert run_json(runner, "--port", "9297", "proxy", "faults", "--json") == [{"rule": "s3=503", "hits": 2}]
+
+
+def test_snapshot_ls(runner, monkeypatch):
+    from awsemu.commands import seed as seed_cmd
+
+    monkeypatch.setattr(seed_cmd, "_export", lambda *a, **k: ({"version": 1, "queues": [{"name": "q"}]}, []))
+    monkeypatch.setattr("awsemu.fidelity.installed_version", lambda binary=None: None)
+    assert runner.invoke(cli, ["snapshot", "save", "s1"]).exit_code == 0
+    (row,) = run_json(runner, "snapshot", "ls", "--json")
+    assert set(row) == {"name", "created_at", "port", "emulator_version", "counts", "secrets", "path"}
+    assert row["counts"] == {"queues": 1}

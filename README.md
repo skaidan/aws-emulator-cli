@@ -41,7 +41,7 @@ DynamoDB tables  1      users
 - [The proxy](docs/proxy.md): every call logged, fault injection, `aws_faults` in pytest.
 - [Will my project work?](docs/compatibility.md): `check`, `fidelity --compare`, `install` and the version pin.
 - [Project settings](docs/project-config.md): `awsemu.toml`, `init`, `up` and `down`.
-- [Seeds](docs/seeds.md): reproducible starting data (format, validation, `apply` and `export`).
+- [Seeds](docs/seeds.md): reproducible starting data (format, validation, `apply` and `export`), and snapshots.
 - [Services guide](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions and `describe`, with examples.
 - [Testing and CI](docs/testing.md): pytest plugin, GitHub Action, scripts and Docker Compose.
 - [Scripting](docs/scripting.md): stable JSON output and exit codes.
@@ -251,6 +251,8 @@ awsemu reset --seed seed.yaml      # empty state + seed
 awsemu seed export -o seed.yaml    # the current state, as a seed
 ```
 
+Save a whole scenario and come back to it with `awsemu snapshot save NAME` and `awsemu snapshot restore NAME`.
+
 Format and details in [docs/seeds.md](docs/seeds.md); a full example in [examples/seed.yaml](examples/seed.yaml).
 
 ### Emulator settings
@@ -279,7 +281,7 @@ awsemu start --no-telemetry        # just for this run
 
 - `--port 0` only works in native mode: Docker can't forward a port chosen at startup.
 - On Windows, the clean stop uses Ctrl+Break. If the emulator doesn't handle it, `awsemu` still deletes its files, but the emulator doesn't get to send its last telemetry batch.
-- The emulator doesn't persist data: stopping or restarting loses everything. That's by design; [seeds](docs/seeds.md) solve it.
+- The emulator doesn't persist data: stopping or restarting loses everything. That's by design; [seeds and snapshots](docs/seeds.md) solve it.
 - S3 Control doesn't work against the emulator (the SDK always puts the account ID in the host name). That's an emulator limitation.
 
 ## Roadmap

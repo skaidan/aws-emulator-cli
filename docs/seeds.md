@@ -198,6 +198,24 @@ Handy for building a scenario by hand (or with your application) and saving it f
 
 The exported file can be applied as-is; CI checks that exporting, restarting and applying leaves the emulator as it was.
 
+## Snapshots
+
+A snapshot saves **everything** in the emulator, so you can come back to it later. It's a seed export of every section, with the files it needs (S3 objects that don't fit in the seed, Lambda code) and a little metadata. The emulator has no snapshots of its own: its state lives in memory.
+
+```bash
+awsemu snapshot save checkout-ready      # everything there now
+awsemu snapshot ls                       # name, when, emulator version, contents
+awsemu snapshot restore checkout-ready   # empty the emulator (a restart) and recreate it
+awsemu snapshot restore checkout-ready --no-reset   # apply it on top instead
+awsemu snapshot rm checkout-ready
+```
+
+- Snapshots live in `~/.aws/emulator-cli/snapshots/NAME/` (`seed.yaml`, `files/`, `snapshot.json`). `--dir DIR` keeps them elsewhere, for example in your repository to share a scenario with the team.
+- They may contain secret values in plain text (awsemu warns you). `--no-secrets` leaves them out, as `seed export` does.
+- `save` checks the result is a valid seed and never leaves a half-written snapshot behind; `--force` replaces one with the same name.
+- `restore` warns when the snapshot was saved with another emulator version.
+- What a seed can't describe isn't in a snapshot either: messages waiting in queues, Kinesis records, executions, and resources of services without a seed section.
+
 ## In tests and CI
 
 ```bash

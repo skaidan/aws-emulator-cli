@@ -29,7 +29,7 @@ awsemu seed validate seed.yaml; [ $? -eq 2 ] && echo "fix the seed"
 ## JSON conventions
 
 - `--json` prints one JSON document to standard output (`kinesis read --json` prints one object per line, see below). Warnings and errors go to standard error.
-- **awsemu's own summaries** (`status`, `overview`, `doctor`, `fidelity`, `check`, `install --list`, `issues`, `proxy status`, `proxy calls`, `proxy faults`, `sqs ls`, `sns ls`, `ddb ls`, `kinesis read`) use `snake_case` keys.
+- **awsemu's own summaries** (`status`, `overview`, `doctor`, `fidelity`, `check`, `install --list`, `issues`, `snapshot ls`, `proxy status`, `proxy calls`, `proxy faults`, `sqs ls`, `sns ls`, `ddb ls`, `kinesis read`) use `snake_case` keys.
 - **AWS resources passed through** keep AWS's own field names (`PascalCase` or `camelCase`, as the AWS API returns them): buckets, objects, messages, functions, state machines, executions, rules, buses, subscriptions, secrets, parameters, streams.
 - Dates are ISO 8601 strings (`2026-11-16T12:00:00+00:00`). Numbers stored by DynamoDB come out as JSON numbers; binary data as base64.
 - `null` means "not known" or "doesn't apply" (for example `pid` when awsemu didn't start the emulator).

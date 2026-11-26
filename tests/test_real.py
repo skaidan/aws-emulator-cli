@@ -724,3 +724,23 @@ def test_seed_functions_streams_machines_rules(emu, tmp_path):
     run(emu, "reset", "--native", "--no-telemetry", "--idle-timeout", "900", "--wait", "60", "--seed", str(exported))
     assert json.loads(run(emu, "lambda", "invoke", "more-echo", "{}", "--raw").output)["stage"] == "prod"
     assert "more-orders" in run(emu, "events", "rules").output
+
+
+def test_snapshot_save_and_restore(emu, tmp_path):
+    path = _write_seed(tmp_path)
+    run(emu, "seed", "apply", str(path))
+    more = _write_more(tmp_path)
+    run(emu, "seed", "apply", str(more))
+    run(emu, "snapshot", "save", "real-snap", "--dir", str(tmp_path / "snaps"))
+
+    # Change things: a new bucket, a deleted queue, a changed parameter
+    run(emu, "s3", "mb", "after-snapshot")
+    client("sqs", emu).delete_queue(QueueUrl=client("sqs", emu).get_queue_url(QueueName="seed-jobs")["QueueUrl"])
+    run(emu, "ssm", "put", "/seed/host", "changed")
+
+    run(emu, "snapshot", "restore", "real-snap", "--dir", str(tmp_path / "snaps"))
+    assert "after-snapshot" not in run(emu, "s3", "ls").output
+    assert "seed-jobs" in run(emu, "sqs", "ls").output
+    assert run(emu, "ssm", "get", "/seed/host").output.strip() == "localhost"
+    assert json.loads(run(emu, "lambda", "invoke", "more-echo", "{}", "--raw").output)["stage"] == "test"
+    assert "more-orders" in run(emu, "events", "rules").output

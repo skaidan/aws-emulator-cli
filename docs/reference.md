@@ -35,6 +35,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`seed`](#awsemu-seed) — Seed files: the same starting data after every start or reset.
 - [`sfn`](#awsemu-sfn) — Step Functions: state machines and executions.
 - [`shell`](#awsemu-shell) — Open a sub-shell already pointed at the emulator ('exit' to leave).
+- [`snapshot`](#awsemu-snapshot) — Save and restore a whole scenario (the emulator has no snapshots of its own).
 - [`sns`](#awsemu-sns) — SNS: topics, publishing and subscriptions.
 - [`sqs`](#awsemu-sqs) — SQS: queues and messages.
 - [`ssm`](#awsemu-ssm) — SSM Parameter Store: configuration parameters.
@@ -1152,6 +1153,72 @@ awsemu shell [OPTIONS]
 | --- | --- |
 | `--sdk [node|java|rust|dotnet]` | Also trust the certificate in these SDKs (default: awsemu.toml 'sdk'). Repeatable. |
 | `--proxy / --no-proxy` | Go through the running proxy (default: yes when awsemu.toml has proxy = true and it's running). |
+
+## `awsemu snapshot`
+
+Save and restore a whole scenario (the emulator has no snapshots of its own).
+
+```bash
+awsemu snapshot save checkout-ready     # everything in the emulator now
+awsemu snapshot restore checkout-ready  # empty it and put that back
+awsemu snapshot ls
+```
+A snapshot is a seed (see 'awsemu seed') with the files it needs: S3 objects
+and Lambda code. It may contain secrets in plain text, so the default place
+is your home folder; --no-secrets leaves them out.
+
+### `awsemu snapshot ls`
+
+List the saved snapshots.
+
+```
+awsemu snapshot ls [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--dir DIR` | Where snapshots are kept (default: ~/.aws/emulator-cli/snapshots). |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
+### `awsemu snapshot restore`
+
+Empty the emulator (a restart) and recreate snapshot NAME.
+
+```
+awsemu snapshot restore [OPTIONS] NAME
+```
+
+| Option | Description |
+| --- | --- |
+| `--dir DIR` | Where snapshots are kept (default: ~/.aws/emulator-cli/snapshots). |
+| `--no-reset` | Apply it on top of what's there instead of emptying the emulator first. |
+
+### `awsemu snapshot rm`
+
+Delete snapshot NAME.
+
+```
+awsemu snapshot rm [OPTIONS] NAME
+```
+
+| Option | Description |
+| --- | --- |
+| `--dir DIR` | Where snapshots are kept (default: ~/.aws/emulator-cli/snapshots). |
+| `-y, --yes` | Don't ask for confirmation (for scripts). |
+
+### `awsemu snapshot save`
+
+Save everything in the emulator as snapshot NAME.
+
+```
+awsemu snapshot save [OPTIONS] NAME
+```
+
+| Option | Description |
+| --- | --- |
+| `--dir DIR` | Where snapshots are kept (default: ~/.aws/emulator-cli/snapshots). |
+| `--no-secrets` | Leave out secrets and SecureString parameters. |
+| `--force` | Replace a snapshot with the same name. |
 
 ## `awsemu sns`
 
