@@ -164,12 +164,13 @@ awsemu sns publish TOPIC 'message' [--subject S] [-a key=value]
 awsemu sns subs [TOPIC]   |   awsemu sns rm TOPIC
 
 awsemu lambda deploy NAME ./folder|file.py|code.zip [-e KEY=value]   # alias: fn
+awsemu lambda deploy ./folder --watch [--invoke '{}']               # redeploy on every save
 awsemu lambda invoke NAME '{"name": "Ana"}' [--raw] [--async]
 awsemu lambda logs NAME [-f]
 awsemu lambda ls   |   awsemu lambda info NAME   |   awsemu lambda rm NAME
 ```
 
-`lambda deploy` guesses the handler and runtime from the code (`def handler(...)` in Python, `exports.handler` / `export const handler` in Node), creates an execution role if you don't pass `--role` and, if the function already exists, updates it.
+`lambda deploy` guesses the handler and runtime from the code (`def handler(...)` in Python, `exports.handler` / `export const handler` in Node), creates an execution role if you don't pass `--role` and, if the function already exists, updates it. A folder's `requirements.txt` is installed into the package, and `--watch` redeploys each time you save.
 
 There's also `awsemu secrets`, `ssm`, `events`, `kinesis`, `sfn` and `describe ARN`: examples of all of them in the [services guide](docs/services.md).
 

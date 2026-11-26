@@ -78,6 +78,7 @@ functions:
     env: {BUCKET: photos}
     timeout: 30                # seconds (default 3)
     memory: 256                # MB (default 128)
+    deps: true                 # install the folder's requirements.txt into the package (default true)
     triggers:                  # event source mappings
       - {sqs: jobs, batch_size: 5}
       - {kinesis: clicks, starting_position: TRIM_HORIZON}   # TRIM_HORIZON by default

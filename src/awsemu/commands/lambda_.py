@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
+import shutil
+import subprocess
+import sys
 import time
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -16,6 +21,7 @@ from .. import ui
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
+from ..paths import cli_root
 from ._common import ensure_service_role, is_error, parse_kv
 
 DEFAULT_ROLE_NAME = "awsemu-lambda-role"
@@ -43,26 +49,99 @@ def _add(zf: zipfile.ZipFile, path: Path, name: str) -> None:
     zf.writestr(info, path.read_bytes())
 
 
-def build_zip(source: Path) -> bytes:
+def _files(folder: Path) -> list[tuple[Path, str]]:
+    """The files to package from a folder, as (path, name in the zip), sorted."""
+    out = []
+    for path in sorted(p for p in folder.rglob("*") if p.is_file()):
+        rel = path.relative_to(folder)
+        if not _skip(rel):
+            out.append((path, rel.as_posix()))
+    return out
+
+
+def build_zip(source: Path, dependencies: Path | None = None) -> bytes:
     """Zip a folder (contents at the zip root), a single file, or pass a .zip through.
 
+    ``dependencies`` is a folder of installed packages added at the zip root too
+    (your own files win over a package's file with the same name).
     The zip is reproducible: same files, same bytes."""
     if source.is_file() and source.suffix == ".zip":
         return source.read_bytes()
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        if source.is_file():
-            _add(zf, source, source.name)
-        else:
-            files = sorted(p for p in source.rglob("*") if p.is_file())
-            for path in files:
-                rel = path.relative_to(source)
-                if not _skip(rel):
-                    _add(zf, path, rel.as_posix())
+        own = [(source, source.name)] if source.is_file() else _files(source)
+        names = {name for _, name in own}
+        extra = [(p, n) for p, n in _files(dependencies) if n not in names] if dependencies else []
+        for path, name in sorted(own + extra, key=lambda item: item[1]):
+            _add(zf, path, name)
     data = buf.getvalue()
     if len(zipfile.ZipFile(io.BytesIO(data)).namelist()) == 0:
         raise click.BadParameter(f"nothing to package in {source}")
     return data
+
+
+def requirements_file(source: Path) -> Path | None:
+    req = source / "requirements.txt" if source.is_dir() else None
+    return req if req and req.is_file() else None
+
+
+def _pip() -> list[str]:
+    probe = subprocess.run([sys.executable, "-m", "pip", "--version"], capture_output=True)
+    if probe.returncode == 0:
+        return [sys.executable, "-m", "pip"]
+    found = shutil.which("pip3") or shutil.which("pip")
+    if not found:
+        raise click.ClickException("requirements.txt needs pip, and there's none "
+                                   "(install it, or pass --no-deps and package them yourself)")
+    return [found]
+
+
+def python_dependencies(source: Path, runtime: str | None) -> Path | None:
+    """Install requirements.txt once into a cache folder and return it (None without one).
+
+    The folder is keyed by the file's contents and the runtime, so it's reused until
+    either changes; the packages are installed for this machine, which is where the
+    emulator runs the function."""
+    req = requirements_file(source)
+    if req is None or (runtime and not runtime.startswith("python")):
+        return None
+    digest = hashlib.sha256(req.read_bytes() + (runtime or "").encode()).hexdigest()[:16]
+    target = cli_root() / "lambda-deps" / digest
+    if (target / ".awsemu-complete").exists():
+        return target
+    partial = target.with_name(digest + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    partial.mkdir(parents=True)
+    ui.info(f"installing {req.name} for the function…")
+    done = subprocess.run([*_pip(), "install", "--quiet", "--disable-pip-version-check",
+                           "--no-compile", "-r", str(req), "-t", str(partial)],
+                          capture_output=True, text=True)
+    if done.returncode != 0:
+        shutil.rmtree(partial, ignore_errors=True)
+        tail = "\n".join((done.stderr or done.stdout).strip().splitlines()[-5:])
+        raise click.ClickException(f"pip couldn't install {req}:\n{tail}")
+    shutil.rmtree(target, ignore_errors=True)
+    partial.rename(target)
+    (target / ".awsemu-complete").touch()
+    return target
+
+
+def package(source: Path, runtime: str | None, deps: bool = True) -> bytes:
+    """The function's zip: the code plus, for Python, what requirements.txt asks for."""
+    return build_zip(source, python_dependencies(source, runtime) if deps else None)
+
+
+def fingerprint(source: Path) -> tuple:
+    """What changes when a packaged file is saved, added or removed (cheap to poll)."""
+    files = [(source, source.name)] if source.is_file() else _files(source)
+    out = []
+    for path, name in files:
+        try:
+            st = path.stat()
+        except OSError:  # removed while listing
+            continue
+        out.append((name, st.st_mtime_ns, st.st_size))
+    return tuple(out)
 
 
 def guess_handler_and_runtime(source: Path) -> tuple[str | None, str | None]:
@@ -148,8 +227,8 @@ def ls(c: Ctx, as_json: bool):
 
 
 @lambda_.command(name="deploy")
-@click.argument("name", shell_complete=complete("function"))
-@click.argument("source", type=click.Path(exists=True, path_type=Path))
+@click.argument("name", required=False, shell_complete=complete("function"))
+@click.argument("source", type=click.Path(exists=True, path_type=Path), required=False)
 @click.option("--handler", help="e.g. app.handler (guessed from the code if omitted).")
 @click.option("--runtime", help="e.g. python3.12, nodejs20.x (guessed if omitted).")
 @click.option("--role", metavar="ARN", help=f"Execution role (default: creates '{DEFAULT_ROLE_NAME}').")
@@ -157,19 +236,42 @@ def ls(c: Ctx, as_json: bool):
               help="Environment variable. Repeatable.")
 @click.option("--timeout", type=click.IntRange(1, 900), help="Seconds.")
 @click.option("--memory", type=click.IntRange(128, 10240), help="MB.")
+@click.option("--deps/--no-deps", default=True, show_default=True,
+              help="Install a folder's requirements.txt into the package (Python).")
+@click.option("-w", "--watch", is_flag=True, help="Keep running and redeploy when a file changes.")
+@click.option("--invoke", "invoke_payload", metavar="JSON",
+              help="Invoke the function with this payload after each deploy.")
 @pass_ctx
 @handle_errors
-def deploy(c: Ctx, name: str, source: Path, handler, runtime, role, env_pairs, timeout, memory):
+def deploy(c: Ctx, name, source, handler, runtime, role, env_pairs, timeout, memory, deps, watch,
+           invoke_payload):
     """Create or update a function from a folder, a single file or a .zip.
+
+    With only a path, the function is named after it (./orders -> orders).
+    --watch redeploys on every save, and --invoke runs it each time: the loop
+    of changing a function, without a zip and three commands.
 
     \b
       awsemu lambda deploy hello ./hello.py
       awsemu lambda deploy api ./src --handler app.handler -e STAGE=local
+      awsemu lambda deploy ./orders --watch --invoke '{"id": 1}'
     """
+    if source is None:
+        if name is None or not Path(name).exists():
+            raise click.UsageError("pass the code: 'awsemu lambda deploy [NAME] PATH'")
+        source = Path(name)
+        name = (source.stem if source.is_file() else source.resolve().name).replace(" ", "-")
+    if invoke_payload is not None:
+        try:
+            json.loads(invoke_payload)
+        except json.JSONDecodeError as exc:
+            raise click.BadParameter(f"not JSON: {exc}", param_hint="--invoke") from exc
+    if watch and source.is_file() and source.suffix == ".zip":
+        raise click.UsageError("--watch needs a folder or a source file, not a .zip")
+
     guessed_handler, guessed_runtime = guess_handler_and_runtime(source)
     handler = handler or guessed_handler
     runtime = runtime or guessed_runtime
-    code = build_zip(source)
     lam = client("lambda", c.port)
     env = parse_env(env_pairs)
 
@@ -185,6 +287,7 @@ def deploy(c: Ctx, name: str, source: Path, handler, runtime, role, env_pairs, t
     if env:
         config["Environment"] = {"Variables": env}
 
+    code = package(source, runtime, deps)
     if _exists(lam, name):
         lam.update_function_code(FunctionName=name, ZipFile=code)
         _wait(lam, "function_updated_v2", name)
@@ -194,15 +297,94 @@ def deploy(c: Ctx, name: str, source: Path, handler, runtime, role, env_pairs, t
             lam.update_function_configuration(FunctionName=name, **config)
             _wait(lam, "function_updated_v2", name)
         ui.success(f"updated {name} ({ui.human_size(len(code))})")
-        return
+    else:
+        if not handler or not runtime:
+            raise click.UsageError("couldn't guess the handler/runtime; pass --handler and --runtime")
+        config["Role"] = role or ensure_role(client("iam", c.port))
+        lam.create_function(FunctionName=name, Code={"ZipFile": code}, **config)
+        _wait(lam, "function_active_v2", name)
+        ui.success(f"created {name}: {runtime}, handler {handler} ({ui.human_size(len(code))})")
+        if not watch and invoke_payload is None:
+            ui.echo(f"Try: awsemu lambda invoke {name} '{{}}'", "muted")
 
-    if not handler or not runtime:
-        raise click.UsageError("couldn't guess the handler/runtime; pass --handler and --runtime")
-    config["Role"] = role or ensure_role(client("iam", c.port))
-    lam.create_function(FunctionName=name, Code={"ZipFile": code}, **config)
-    _wait(lam, "function_active_v2", name)
-    ui.success(f"created {name}: {runtime}, handler {handler} ({ui.human_size(len(code))})")
-    ui.echo(f"Try: awsemu lambda invoke {name} '{{}}'", "muted")
+    ok = True
+    if invoke_payload is not None:
+        ok = _invoke_and_show(lam, name, invoke_payload)
+    if not watch:
+        if not ok:
+            raise SystemExit(exitcodes.FAILED)
+        return
+    _watch(lam, name, source, runtime, deps, invoke_payload, code)
+
+
+POLL_SECONDS = 0.5
+SETTLE_SECONDS = 0.3  # editors save in several writes; wait until they're done
+
+
+def _invoke_and_show(lam, name: str, payload: str) -> bool:
+    """Invoke once and print the result in one block; False on a function error."""
+    started = time.monotonic()
+    resp = lam.invoke(FunctionName=name, Payload=payload.encode("utf-8"), LogType="Tail")
+    elapsed = time.monotonic() - started
+    body = resp["Payload"].read().decode("utf-8", "replace") if resp.get("Payload") else ""
+    if resp.get("LogResult"):
+        for line in base64.b64decode(resp["LogResult"]).decode("utf-8", "replace").splitlines():
+            if line and not line.startswith(("START ", "END ", "REPORT ")):
+                ui.echo(f"  {line}", "muted")
+    try:
+        ui.print_json(json.loads(body))
+    except (json.JSONDecodeError, ValueError):
+        click.echo(body)
+    if resp.get("FunctionError"):
+        ui.error(f"function error ({resp['FunctionError']}) after {elapsed:.2f}s")
+        return False
+    ui.echo(f"invoked in {elapsed:.2f}s", "muted")
+    return True
+
+
+def _watch(lam, name, source, runtime, deps, invoke_payload, code, *, max_rounds=None) -> None:
+    """Poll the files and redeploy the code when it changes, until Ctrl+C.
+
+    A failed deploy (a syntax error the emulator rejects, pip failing) is shown and
+    the watch goes on: the next save tries again. ``max_rounds`` is for tests."""
+    last_print = fingerprint(source)
+    last_sha = hashlib.sha256(code).digest()
+    ui.echo(f"watching {source} — save a file to redeploy {name}, Ctrl+C to stop", "muted")
+    rounds = 0
+    try:
+        while max_rounds is None or rounds < max_rounds:
+            rounds += 1
+            time.sleep(POLL_SECONDS)
+            current = fingerprint(source)
+            if current == last_print:
+                continue
+            time.sleep(SETTLE_SECONDS)
+            current = fingerprint(source)
+            last_print = current
+            stamp = datetime.now().strftime("%H:%M:%S")
+            try:
+                code = package(source, runtime, deps)
+            except click.ClickException as exc:
+                ui.error(f"{stamp} {exc.format_message()}")
+                continue
+            sha = hashlib.sha256(code).digest()
+            if sha == last_sha:
+                continue  # only a skipped file, or a save without changes
+            try:
+                lam.update_function_code(FunctionName=name, ZipFile=code)
+                _wait(lam, "function_updated_v2", name)
+            except Exception as exc:  # keep watching; the next save retries
+                ui.error(f"{stamp} couldn't update {name}: {exc}")
+                continue
+            last_sha = sha
+            ui.success(f"{stamp} updated {name} ({ui.human_size(len(code))})")
+            if invoke_payload is not None:
+                try:
+                    _invoke_and_show(lam, name, invoke_payload)
+                except Exception as exc:
+                    ui.error(f"{stamp} couldn't invoke {name}: {exc}")
+    except KeyboardInterrupt:
+        ui.echo("stopped watching", "muted")
 
 
 @lambda_.command(name="invoke")

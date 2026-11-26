@@ -621,13 +621,17 @@ Lambda: deploy, invoke and inspect functions. Alias: 'awsemu fn'.
 
 Create or update a function from a folder, a single file or a .zip.
 
+With only a path, the function is named after it (./orders -> orders).
+--watch redeploys on every save, and --invoke runs it each time: the loop
+of changing a function, without a zip and three commands.
 ```bash
 awsemu lambda deploy hello ./hello.py
 awsemu lambda deploy api ./src --handler app.handler -e STAGE=local
+awsemu lambda deploy ./orders --watch --invoke '{"id": 1}'
 ```
 
 ```
-awsemu lambda deploy [OPTIONS] NAME SOURCE
+awsemu lambda deploy [OPTIONS] [NAME] [SOURCE]
 ```
 
 | Option | Description |
@@ -638,6 +642,9 @@ awsemu lambda deploy [OPTIONS] NAME SOURCE
 | `-e, --env KEY=VALUE` | Environment variable. Repeatable. |
 | `--timeout INTEGER RANGE` | Seconds.  [1<=x<=900] |
 | `--memory INTEGER RANGE` | MB.  [128<=x<=10240] |
+| `--deps / --no-deps` | Install a folder's requirements.txt into the package (Python).  [default: deps] |
+| `-w, --watch` | Keep running and redeploy when a file changes. |
+| `--invoke JSON` | Invoke the function with this payload after each deploy. |
 
 ### `awsemu lambda info`
 

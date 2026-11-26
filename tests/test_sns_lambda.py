@@ -4,6 +4,9 @@ import base64
 import io
 import json
 import zipfile
+from pathlib import Path
+
+import click
 
 import pytest
 
@@ -178,3 +181,123 @@ def test_invoke_function_error_exit_code(runner, monkeypatch, running):
 def test_invoke_rejects_bad_json(runner, running):
     result = runner.invoke(cli, ["lambda", "invoke", "hi", "{nope"])
     assert result.exit_code == 2 and "not JSON" in result.output
+
+
+# ---------------------------------------------------------------- the deploy loop
+
+
+def test_deploy_with_only_a_path_names_the_function_after_it(runner, monkeypatch, running, tmp_path):
+    src = tmp_path / "orders"
+    src.mkdir()
+    (src / "app.py").write_text("def handler(event, context):\n    return 1\n")
+    lam = _lambda_client(exists=True)
+    monkeypatch.setattr(lam_mod, "client", lambda service, port: lam)
+    result = runner.invoke(cli, ["lambda", "deploy", str(src)])
+    assert result.exit_code == 0, result.output
+    assert dict(lam.calls)["update_function_code"]["FunctionName"] == "orders"
+    assert runner.invoke(cli, ["lambda", "deploy"]).exit_code == 2
+
+
+def test_deploy_then_invoke(runner, monkeypatch, running, tmp_path):
+    (tmp_path / "hi.py").write_text("def handler(event, context):\n    return 1\n")
+    lam = _lambda_client(exists=True)
+    lam.responses["invoke"] = {"StatusCode": 200, "Payload": io.BytesIO(b'{"ok": true}'),
+                               "LogResult": base64.b64encode(b"START x\nfrom the code\nEND x").decode()}
+    monkeypatch.setattr(lam_mod, "client", lambda service, port: lam)
+    result = runner.invoke(cli, ["lambda", "deploy", "hi", str(tmp_path / "hi.py"), "--invoke", '{"a": 1}'])
+    assert result.exit_code == 0, result.output
+    assert "from the code" in result.output and '"ok": true' in result.output and "START" not in result.output
+    assert dict(lam.calls)["invoke"]["Payload"] == b'{"a": 1}'
+    bad = runner.invoke(cli, ["lambda", "deploy", "hi", str(tmp_path / "hi.py"), "--invoke", "{nope"])
+    assert bad.exit_code == 2 and "--invoke" in bad.output
+
+
+def test_dependencies_go_in_the_zip_and_your_files_win(tmp_path):
+    src, deps = tmp_path / "src", tmp_path / "deps"
+    (deps / "requests").mkdir(parents=True)
+    src.mkdir()
+    (src / "app.py").write_text("mine")
+    (deps / "app.py").write_text("theirs")
+    (deps / "requests" / "__init__.py").write_text("")
+    zf = zipfile.ZipFile(io.BytesIO(lam_mod.build_zip(src, deps)))
+    assert zf.namelist() == ["app.py", "requests/__init__.py"]
+    assert zf.read("app.py") == b"mine"
+    assert lam_mod.build_zip(src, deps) == lam_mod.build_zip(src, deps)
+
+
+def test_requirements_are_installed_once_per_contents(monkeypatch, tmp_path, isolated_home):
+    src = tmp_path / "fn"
+    src.mkdir()
+    (src / "app.py").write_text("def handler(e, c): pass\n")
+    (src / "requirements.txt").write_text("tinylib==1.0\n")
+    installs = []
+
+    class Done:
+        def __init__(self, code=0, stderr=""):
+            self.returncode, self.stderr, self.stdout = code, stderr, ""
+
+    def fake_run(cmd, **kwargs):
+        if "--version" in cmd:
+            return Done()
+        installs.append(cmd)
+        target = Path(cmd[cmd.index("-t") + 1])
+        (target / "tinylib").mkdir()
+        (target / "tinylib" / "__init__.py").write_text("")
+        return Done()
+
+    monkeypatch.setattr(lam_mod.subprocess, "run", fake_run)
+    names = zipfile.ZipFile(io.BytesIO(lam_mod.package(src, "python3.12"))).namelist()
+    assert "tinylib/__init__.py" in names and "requirements.txt" in names
+    lam_mod.package(src, "python3.12")
+    assert len(installs) == 1  # cached
+    assert "tinylib/__init__.py" not in zipfile.ZipFile(io.BytesIO(
+        lam_mod.package(src, "python3.12", deps=False))).namelist()
+    assert lam_mod.python_dependencies(src, "nodejs20.x") is None
+
+    (src / "requirements.txt").write_text("missing-lib==9\n")
+    monkeypatch.setattr(lam_mod.subprocess, "run",
+                        lambda cmd, **kw: Done() if "--version" in cmd else Done(1, "No matching distribution"))
+    with pytest.raises(click.ClickException, match="No matching distribution"):
+        lam_mod.package(src, "python3.12")
+
+
+def test_watch_redeploys_on_save_and_survives_errors(monkeypatch, tmp_path, capsys):
+    src = tmp_path / "fn"
+    src.mkdir()
+    app = src / "app.py"
+    app.write_text("def handler(e, c):\n    return 1\n")
+    lam = _lambda_client(exists=True)
+    lam.responses["invoke"] = lambda **_: {"StatusCode": 200, "Payload": io.BytesIO(b"2")}
+    edits = iter([
+        lambda: app.write_text("def handler(e, c):\n    return 2\n"),       # a real change
+        lambda: (src / "__pycache__").mkdir() or (src / "__pycache__" / "x.pyc").write_text(""),
+        lambda: app.write_text("def handler(e, c):\n    return 3\n"),       # the update fails
+    ])
+    sleeps = []
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        if seconds == lam_mod.POLL_SECONDS:
+            next(edits, lambda: None)()
+            import os
+            os.utime(app, ns=(len(sleeps) * 10**9, len(sleeps) * 10**9))
+
+    monkeypatch.setattr(lam_mod.time, "sleep", fake_sleep)
+    calls = {"n": 0}
+
+    def update_function_code(**kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("emulator said no")
+        return {}
+
+    lam.responses["update_function_code"] = update_function_code
+    code = lam_mod.build_zip(src)
+    lam_mod._watch(lam, "fn", src, "python3.12", False, "{}", code, max_rounds=4)
+    out = capsys.readouterr()
+    text = out.out + out.err
+    # round 1 deploys, round 2 only touched __pycache__, round 3 fails,
+    # round 4 (any save) retries the code that didn't make it
+    assert text.count("updated fn") == 2 and "emulator said no" in text
+    assert [c[0] for c in lam.calls].count("update_function_code") == 3
+    assert [c[0] for c in lam.calls].count("invoke") == 2

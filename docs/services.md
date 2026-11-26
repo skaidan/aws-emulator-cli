@@ -151,6 +151,16 @@ awsemu lambda rm api --yes
 
 `invoke` exits with code 1 if the function raises an error, so scripts can detect it.
 
+### The loop: `deploy --watch`
+
+```bash
+awsemu lambda deploy ./orders --watch --invoke '{"id": 1}'
+```
+
+With only a path, the function is named after it (`./orders` → `orders`). `--watch` keeps running and, each time you save a file of the function, packages it again and updates the code; `--invoke` runs it after every deploy and prints what it returned and what it printed. A deploy that fails (the emulator rejects the code, pip can't install something) is shown, and the watch goes on: the next save tries again. Saving files that aren't packaged (`__pycache__`, `.git`…) or saving without changes doesn't redeploy. Ctrl+C stops it. Settings (`-e`, `--timeout`…) are applied once, at the start.
+
+**Dependencies.** A Python folder with a `requirements.txt` gets its packages installed into the package, with this machine's `pip` (the emulator runs functions on this machine, so packages with compiled parts work too). They're installed once and cached in `~/.aws/emulator-cli/lambda-deps/` until `requirements.txt` changes, so saving your code doesn't reinstall them. If a package and your code have a file with the same name, yours wins. `--no-deps` skips this (for example when you vendor them yourself). For Node, run `npm install` in the folder: `node_modules` is packaged as it is.
+
 > **Where to see what a function prints.** The emulator doesn't send Lambda output to CloudWatch Logs (checked in CI), so `lambda logs` finds nothing. `lambda invoke` does show the log of each invocation: `START`, whatever the function prints and `REPORT` with the duration. `--async` invocations and those triggered by SNS or EventBridge are accepted, but their output isn't visible.
 
 ## Secrets Manager

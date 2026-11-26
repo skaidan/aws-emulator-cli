@@ -294,6 +294,48 @@ def test_describe_arns(emu):
     run(emu, "sns", "rm", "awsemu-describe-t", "--yes")
 
 
+def test_lambda_watch_redeploys_and_installs_requirements(emu, tmp_path, real_home):
+    """The loop: deploy a folder with requirements.txt, save, see the new result."""
+    import subprocess
+    import time
+
+    src = tmp_path / "awsemu-loop"
+    src.mkdir()
+    (src / "requirements.txt").write_text("six==1.16.0\n")
+    app = src / "app.py"
+    app.write_text("import six\ndef handler(event, context):\n    return {'v': 1, 'six': six.__version__}\n")
+    env = {**os.environ, "HOME": str(real_home), "USERPROFILE": str(real_home), "AWSEMU_PLAIN": "1",
+           "PYTHONUNBUFFERED": "1"}
+    proc = subprocess.Popen([sys.executable, "-m", "awsemu", "--port", str(emu), "lambda", "deploy",
+                             str(src), "--watch", "--invoke", "{}"],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+    lines: list[str] = []
+
+    def wait_for(text, timeout=120):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            line = proc.stdout.readline()
+            if not line:
+                break
+            lines.append(line)
+            if text in line:
+                return
+        raise AssertionError(f"no {text!r} in:\n{''.join(lines)}")
+
+    try:
+        wait_for("watching")
+        assert '"six": "1.16.0"' in "".join(lines) and "created awsemu-loop" in "".join(lines)
+        time.sleep(1)
+        app.write_text("import six\ndef handler(event, context):\n    return {'v': 2}\n")
+        wait_for('"v": 2')
+        assert "updated awsemu-loop" in "".join(lines)
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+    assert json.loads(run(emu, "lambda", "invoke", "awsemu-loop", "--raw").output) == {"v": 2}
+    run(emu, "lambda", "rm", "awsemu-loop", "--yes")
+
+
 def test_lambda_invoke_log_async_and_sns_subscription(emu, tmp_path):
     src = tmp_path / "echo.py"
     src.write_text("def handler(event, context):\n"

@@ -387,7 +387,7 @@ def _apply_triggers(fn: dict, lam, port: int) -> list[str]:
 
 
 def _apply_functions(seed, port, report):
-    from .lambda_ import _exists, _wait, build_zip, ensure_role, guess_handler_and_runtime
+    from .lambda_ import _exists, _wait, ensure_role, guess_handler_and_runtime, package
 
     lam = client("lambda", port)
     for fn in seed.section("functions"):
@@ -397,7 +397,7 @@ def _apply_functions(seed, port, report):
             guessed_handler, guessed_runtime = guess_handler_and_runtime(source)
             handler = fn.get("handler") or guessed_handler
             runtime = fn.get("runtime") or guessed_runtime
-            code = build_zip(source)
+            code = package(source, runtime, fn.get("deps", True))
             sha = base64.b64encode(hashlib.sha256(code).digest()).decode()
             exists = _exists(lam, name)
             # An existing function keeps its handler/runtime unless the seed sets them
