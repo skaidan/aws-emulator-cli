@@ -6,7 +6,16 @@ Always start with:
 awsemu doctor
 ```
 
-It checks Python, the binary, Docker and the image, the AWS CLI, boto3, the emulator's state, whether you have real credentials in your shell, whether `AWS_ENDPOINT_URL` uses `localhost`, and telemetry. Every problem comes with its fix.
+It checks Python, the binary, Docker and the image, the AWS CLI, boto3, the emulator's state and telemetry. It also looks for the setup traps that quietly break SDK calls in your own shell. Every problem comes with its fix.
+
+| Trap | Why it breaks |
+| --- | --- |
+| Real credentials or `AWS_PROFILE` in the shell | Your scripts sign with them. `awsemu env`/`exec` unset them, but your own scripts must too. |
+| `AWS_ENDPOINT_URL` with `localhost` | The JavaScript, Java and Go SDKs then put the S3 bucket in the host name, which the emulator doesn't serve. Use `127.0.0.1`. |
+| `AWS_ENDPOINT_URL` pointing where nothing answers | Usually left from an earlier start on another port. |
+| `AWS_CA_BUNDLE` missing, for another port, or not the emulator's | The emulator makes a new certificate on every start, and each port has its own. |
+| `HTTPS_PROXY` without `127.0.0.1` in `NO_PROXY` | The SDKs send the emulator's calls to your company proxy. `awsemu env`/`exec` add `127.0.0.1,localhost` to `NO_PROXY` for you. |
+| Settings in your `~/.aws/config` (`retry_mode`, `max_attempts`, `s3`…) | While `AWS_CONFIG_FILE` points at the emulator's config, the SDKs don't read yours. `doctor` gives the environment variables that do the same (`AWS_RETRY_MODE`, `AWS_MAX_ATTEMPTS`…), which still apply. |
 
 ## Errors when starting
 

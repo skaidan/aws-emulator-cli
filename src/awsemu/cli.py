@@ -473,7 +473,9 @@ def env(c: Ctx, shell: str | None, extras: tuple[str, ...], unset: bool, keep_re
     if not unset:
         variables.update(_proxy_env(c.port, use_proxy, _sdk(extras)))
     if unset:
-        names = list(variables) + ["NODE_EXTRA_CA_CERTS", "JAVA_TOOL_OPTIONS", "SSL_CERT_FILE"]
+        # NO_PROXY was yours before (awsemu only adds to it): keep it
+        names = [n for n in variables if n not in ("NO_PROXY", "no_proxy")]
+        names += ["NODE_EXTRA_CA_CERTS", "JAVA_TOOL_OPTIONS", "SSL_CERT_FILE"]
         click.echo(envvars.render_unset(dict.fromkeys(names), shell), nl=False)
         return
     if not InstanceFiles(c.port).exists():
@@ -707,11 +709,13 @@ def doctor(c: Ctx, as_json: bool):
             "awsemu env/exec/aws unset them for you; your own scripts must too")
 
     endpoint = os.environ.get("AWS_ENDPOINT_URL")
-    if endpoint and "127.0.0.1" not in endpoint and "localhost" not in endpoint:
-        add("endpoint", None, f"AWS_ENDPOINT_URL={endpoint}")
-    elif endpoint and "localhost" in endpoint:
-        add("endpoint", None, "AWS_ENDPOINT_URL uses 'localhost'",
-            "use 127.0.0.1 so S3 SDKs use path-style requests")
+    if endpoint and not any(h in endpoint for h in ("127.0.0.1", "localhost", "[::1]")):
+        add("endpoint", None, f"AWS_ENDPOINT_URL={endpoint}", "not the emulator: unset it, or use awsemu exec")
+
+    from . import traps
+
+    for finding in traps.all_findings(c.port):
+        add(finding.check, None, finding.detail, finding.fix)
 
     tele = settings.telemetry_enabled()
     env_tele = os.environ.get("EMULATOR_TELEMETRY")

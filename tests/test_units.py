@@ -318,3 +318,100 @@ def test_every_command_and_option_has_help():
                 walk(cmd.get_command(ctx, n), path + [n])
     walk(cli, [])
     assert missing == []
+
+
+# --------------------------------------------------------------------------- setup traps
+
+
+def _answers(mapping):
+    return lambda port: mapping.get(port)
+
+
+def test_trap_endpoint():
+    from awsemu import traps
+
+    assert traps.endpoint({}, _answers({})) == []
+    assert traps.endpoint({"AWS_ENDPOINT_URL": "https://s3.amazonaws.com"}, _answers({})) == []
+    found = traps.endpoint({"AWS_ENDPOINT_URL": "https://localhost:9297"}, _answers({9297: "emulator"}))
+    assert [f.detail for f in found] == ["AWS_ENDPOINT_URL uses 'localhost'"]
+    stale = traps.endpoint({"AWS_ENDPOINT_URL": "https://127.0.0.1:9400"}, _answers({}))
+    assert "nothing answers there" in stale[0].detail and "awsemu env" in stale[0].fix
+    http = traps.endpoint({"AWS_ENDPOINT_URL": "http://127.0.0.1:9297"}, _answers({9297: "emulator"}))
+    assert "only speaks HTTPS" in http[0].detail
+    assert traps.endpoint({"AWS_ENDPOINT_URL": "http://127.0.0.1:9298"}, _answers({9298: "proxy"})) == []
+
+
+def test_trap_ca_bundle(isolated_home, tmp_path):
+    from awsemu import traps
+
+    for port in (9297, 9400):
+        files = InstanceFiles(port)
+        files.dir.mkdir(parents=True)
+        files.ca.write_text("cert")
+    up = _answers({9297: "emulator"})
+    ok = {"AWS_ENDPOINT_URL": "https://127.0.0.1:9297", "AWS_CA_BUNDLE": str(InstanceFiles(9297).ca)}
+    assert traps.ca_bundle(ok, up) == []
+    other = {**ok, "AWS_CA_BUNDLE": str(InstanceFiles(9400).ca)}
+    assert "certificate of port 9400" in traps.ca_bundle(other, up)[0].detail
+    missing = {**ok, "AWS_CA_BUNDLE": str(tmp_path / "gone.pem")}
+    assert "doesn't exist" in traps.ca_bundle(missing, up)[0].detail
+    corporate = tmp_path / "corp.pem"
+    corporate.write_text("x")
+    assert "isn't the emulator's certificate" in traps.ca_bundle({**ok, "AWS_CA_BUNDLE": str(corporate)}, up)[0].detail
+    assert traps.ca_bundle({"AWS_CA_BUNDLE": str(corporate)}, up) == []  # not using the emulator here
+
+
+def test_trap_proxies_and_no_proxy(isolated_home, monkeypatch):
+    from awsemu import traps
+
+    assert traps.proxies({}) == [] and traps.no_proxy_value({}) is None
+    env = {"HTTPS_PROXY": "http://corp:3128", "NO_PROXY": ".internal"}
+    assert "NO_PROXY doesn't include 127.0.0.1" in traps.proxies(env)[0].detail
+    assert traps.no_proxy_value(env) == ".internal,127.0.0.1,localhost"
+    assert traps.proxies({"https_proxy": "x", "no_proxy": "127.0.0.1"}) == []
+    assert traps.proxies({"HTTP_PROXY": "x", "NO_PROXY": "*"}) == []
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://corp:3128")
+    monkeypatch.setenv("NO_PROXY", ".internal")
+    monkeypatch.delenv("no_proxy", raising=False)
+    variables = envvars.emulator_env(9297)
+    assert variables["NO_PROXY"] == variables["no_proxy"] == ".internal,127.0.0.1,localhost"
+
+
+def test_env_unset_keeps_your_no_proxy(runner, monkeypatch):
+    from awsemu.cli import cli
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://corp:3128")
+    out = runner.invoke(cli, ["env", "--unset", "--shell", "bash"]).output
+    assert "NO_PROXY" not in out and "AWS_ENDPOINT_URL" in out
+
+
+def test_trap_hidden_config(isolated_home, tmp_path):
+    from awsemu import traps
+
+    home = tmp_path / "me"
+    (home / ".aws").mkdir(parents=True)
+    assert traps.hidden_config({}, home) == []
+    (home / ".aws" / "config").write_text(
+        "[default]\nregion = eu-west-1\nretry_mode = standard\nmax_attempts = 7\n"
+        "s3 =\n  addressing_style = virtual\n[profile prod]\nretry_mode = adaptive\n")
+    (finding,) = traps.hidden_config({}, home)
+    assert "sets retry_mode, max_attempts, s3" in finding.detail
+    assert "export AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=7" in finding.fix
+    assert "s3 have no environment variable" in finding.fix
+    emulator_cfg = str(InstanceFiles(9297).config)
+    assert traps.hidden_config({"AWS_CONFIG_FILE": emulator_cfg}, home)[0].detail.startswith(str(home))
+
+
+def test_doctor_reports_traps(runner, monkeypatch):
+    from awsemu.cli import cli
+
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "https://localhost:9")
+    monkeypatch.setenv("HTTPS_PROXY", "http://corp:3128")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("no_proxy", raising=False)
+    data = json.loads(runner.invoke(cli, ["doctor", "--json"]).output)
+    checks = {(c["check"], c["detail"]) for c in data["checks"]}
+    assert ("endpoint", "AWS_ENDPOINT_URL uses 'localhost'") in checks
+    assert any(c == "http proxy" for c, _ in checks)
+    assert any("nothing answers there" in d for _, d in checks)

@@ -4,6 +4,8 @@
 
 Towards 0.10.0.
 
+- `awsemu doctor` finds the setup traps that quietly break SDK calls in your shell: an `AWS_ENDPOINT_URL` where nothing answers (or with `http://`), an `AWS_CA_BUNDLE` that's missing, for another port or not the emulator's, an HTTP(S) proxy without `127.0.0.1` in `NO_PROXY`, and settings of your own `~/.aws/config` that the emulator's `AWS_CONFIG_FILE` hides (with the environment variables that do the same). The `localhost` warning now says why.
+- `awsemu env`, `exec` and `shell` add `127.0.0.1,localhost` to `NO_PROXY` when `HTTPS_PROXY`/`HTTP_PROXY` is set, so a company proxy never gets the emulator's calls. `env --unset` leaves your `NO_PROXY` alone.
 - Fixed: with the emulator's auth off (`--no-auth`, `auth = false`), `awsemu env`, `exec`, `shell` and the pytest plugin set no credentials, because the emulator writes no credentials file then. The SDKs failed with "unable to locate credentials", or signed with your real default profile from `~/.aws/credentials`. They now set placeholder keys (`EMULATORAUTHOFF00000`), as awsemu's own clients already did.
 - CI: a daily `Emulator watch` workflow tests every new AWS Emulator release as soon as it's published (installed with `awsemu install`, signature checked). A failure opens an `emulator-compat` issue, and the next release that passes closes it.
 - `awsemu check` explains each known difference. `↳ fixed in vX` means the test passes in the latest release (one more scores download). `↳ known issue (SEVERITY): …` links to the emulator's own issue file that explains it (`issues/` in aws/aws-emulator). The summary counts both. `--no-explain` skips these lookups. JSON: each difference gains `issues` and `fixed_in`; the summary gains `explained_by_issues`, `fixed_in_latest` and `latest`.

@@ -36,6 +36,8 @@ def emulator_env(port: int, extras: Iterable[str] = ()) -> dict[str, str]:
     ``extras`` adds the certificate setting for SDKs that don't read
     ``AWS_CA_BUNDLE`` (node, java, rust, dotnet).
     """
+    from .traps import no_proxy_value
+
     files = InstanceFiles(port)
     env = {
         "AWS_ENDPOINT_URL": files.endpoint_url,
@@ -66,6 +68,9 @@ def emulator_env(port: int, extras: Iterable[str] = ()) -> dict[str, str]:
         )
     if "rust" in extras or "dotnet" in extras:
         env["SSL_CERT_FILE"] = str(files.ca)
+    bypass = no_proxy_value(os.environ)  # an HTTP(S) proxy must not get the emulator's calls
+    if bypass:
+        env["NO_PROXY"] = env["no_proxy"] = bypass
     return env
 
 
