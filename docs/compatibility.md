@@ -165,6 +165,36 @@ Open issues: sqs
 - `--show` takes the row number of the last listing, a file name or its first characters, or its GitHub URL. It prints the whole issue (rendered Markdown in a terminal).
 - The list of files is cached for 6 hours (`--refresh` reads it again). The files are read once and cached by their content. Listing uses two GitHub API calls, so with many runs from one IP, set `GITHUB_TOKEN`.
 
+## `awsemu fidelity run`
+
+The scores are what AWS measured. `awsemu fidelity run` runs the same tests on your machine, against the emulator you have installed: to reproduce a known difference, to check a new emulator version before its scores are published, or to confirm a fix.
+
+```bash
+awsemu fidelity run --test dynamodb.update-item-set-list-preserves-element-order
+awsemu fidelity run sqs --failing          # the SQS tests that fail in the published scores
+awsemu fidelity run s3 --limit 20
+awsemu fidelity run lambda --json
+```
+
+```
+evaluation suite v1.0.1 (scores of v1.0.611)
+[1/2] ✓ dynamodb.update-item-set-list-preserves-element-order  passed
+[2/2] ✗ sqs.add-permission-over-limit-rejected  failed  (published: pass)
+      expected OverLimit, got 200
+
+1 passed, 1 failed, 0 error(s) against your emulator (v1.0.611).
+⚠ 1 differ from the published scores of v1.0.611: sqs.add-permission-over-limit-rejected
+```
+
+How it runs them, as the [evaluation suite](https://github.com/aws/aws-emulator-evaluation-suite) says to:
+
+- It fetches the suite at the version your release was scored with (a shallow `git clone`, cached in `~/.aws/emulator-cli/fidelity/suite/<version>`), or uses yours with `--suite PATH`.
+- It prepares the suite's environment with `uv sync --locked`, the first time; when a selected test imports one of the heavier test packages (CDK, Kafka, OpenSearch…), it adds the suite's `checks` extra, once.
+- Each test runs against **its own, fresh emulator** (its own `HOME` and a free port), started from the installed binary and stopped afterwards, with the suite's runner. The runner accepts only a loopback endpoint, signs with the keys that emulator minted and leaves your AWS credentials out; awsemu removes them from its environment too.
+- Each verdict is compared with the published score for that test. `(published: pass)` next to a failure means your emulator or your machine differs from AWS's run.
+
+It needs `git`, [`uv`](https://docs.astral.sh/uv/) and the emulator binary (`awsemu install`; Docker isn't supported here). Name services or `--test` ids: the whole suite has tens of thousands of tests and takes hours. Some tests start tools or containers of their own; the runner reports a missing tool as an `error`. The exit code is 1 if a test fails or errors.
+
 ## `awsemu fidelity --compare`
 
 What changes between two releases, test by test:

@@ -932,6 +932,30 @@ awsemu proxy calls [OPTIONS]
 | `--errors` | Only calls that failed (including injected faults). |
 | `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
+### `awsemu proxy cost`
+
+An estimate of what the logged calls would cost on AWS (requests only).
+
+\b
+```bash
+awsemu proxy cost                 # this run
+awsemu proxy cost --runs 3000     # 100 CI runs a day, for a month
+awsemu proxy cost --json
+```
+From AWS's public us-east-1 list prices: no free tier, storage, data
+transfer or discounts. An order of magnitude, not a quote. Guide: docs/proxy.md.
+
+```
+awsemu proxy cost [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--runs N` | As if the logged calls happened N times (say, CI runs a month).  [default: 1; x>=1] |
+| `--calls-file FILE` | A calls log (default: the proxy's, for --port). |
+| `--prices FILE` | JSON with your own prices (USD per unit), like {"dynamodb.write": 0.0000007}. |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
 ### `awsemu proxy faults`
 
 List the fault rules of the running proxy (add, set, clear them).

@@ -97,6 +97,7 @@ awsemu proxy calls --json          # for scripts; with --follow, one JSON object
 awsemu watch --calls               # = awsemu proxy calls --follow
 awsemu proxy har -o calls.har      # the calls as a HAR file, for a browser's developer tools
 awsemu report CALL                 # a draft emulator issue from one call (below)
+awsemu proxy cost [--runs N]       # what the logged calls would cost on AWS (an estimate)
 ```
 
 `awsemu --port N proxy …` works with the emulator on port N; the proxy follows it (port N + 1). Calls are also kept in `~/.aws/emulator-cli/proxy/<emulator port>/calls.jsonl`, which rotates at 20 MB, so you can read them after the proxy stops. `awsemu ui` shows them too: press `c`.
@@ -214,6 +215,37 @@ With `proxy = true`:
 - `awsemu env`, `exec`, `shell` and `aws` go through it whenever it's running (`--no-proxy` to skip it);
 - `awsemu down` and `awsemu stop` stop both;
 - the pytest plugin sends every test through a proxy with these faults.
+
+## What it would cost on AWS
+
+`awsemu proxy cost` estimates the request charges the logged calls would have on AWS:
+
+```bash
+awsemu proxy cost                    # this test run
+awsemu proxy cost --runs 3000        # 100 CI runs a day, for a month
+awsemu proxy cost --prices mine.json # your Region or your discounts
+awsemu proxy cost --json
+```
+
+```
+calls   1,240 in calls.jsonl, × 3,000 runs
+prices  AWS list prices, us-east-1, as of 2026-11
+
+ service   unit                         units      per unit    cost
+ dynamodb  write request unit           1.8e+06    $0.000001   $1.13
+ s3        PUT/COPY/POST/LIST request   3.6e+05    $0.000005   $1.80
+ sqs       request                      9e+05      $0.0000004  $0.36
+Estimated total: $3.29 ($0.001097 per run)
+```
+
+It's an order of magnitude, and says so:
+
+- **Requests only**, at on-demand list prices for us-east-1: no free tier, storage, data transfer, provisioned capacity or discounts.
+- Some units are approximations: a DynamoDB call counts one read or write unit (two for transactions), whatever the item's size; Lambda duration is the call's latency through the proxy at 128 MB, which includes the emulator's overhead; Step Functions counts one transition per execution; CloudWatch Logs ingestion comes from the request's size.
+- Services without a price in the table are listed as "not priced"; STS, IAM and standard SSM parameters have no request charge.
+- `--prices FILE` replaces prices with yours: a JSON object of `"service.item": USD per unit`, with the keys `--json` shows (`dynamodb.write`, `sqs.standard`, `s3.put`, `lambda.gb_second`…).
+
+Check AWS's pricing pages, or the AWS Pricing Calculator, before you rely on a number.
 
 ## Reporting a difference to the emulator
 

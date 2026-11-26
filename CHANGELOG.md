@@ -5,6 +5,8 @@
 Towards 0.12.0.
 
 - `awsemu iam policy`: the least-privilege IAM policy for the calls in the proxy's log: actions (with S3, Lambda and batch exceptions mapped) and resource ARNs where the calls name them; `--account`, `--region`, `--service`, `--format terraform`.
+- `awsemu fidelity run SERVICES|--test ID [--failing] [--limit N]`: AWS's fidelity tests against your installed emulator, each with its own fresh emulator and the suite's own runner (fetched at the version your release was scored with, prepared with uv), with the verdicts compared to the published scores. `awsemu fidelity` is now a group: `fidelity [SERVICES]` still shows the scores (`fidelity show`). Tested in CI against the real emulator.
+- `awsemu proxy cost [--runs N] [--prices FILE]`: an estimate of the request charges the logged calls would have on AWS (us-east-1 list prices, no free tier or storage), clearly labelled as one.
 - `awsemu check --iam`: the IAM actions your code needs (from the static scan, or `--from-calls`) that no `Allow` in your Terraform, CloudFormation/SAM or synthesized CDK policies grants; managed policies and SAM templates are listed as not expanded. `--strict` for CI. Guide: `docs/iam.md`.
 
 ## 0.11.0 — 2026-11-26

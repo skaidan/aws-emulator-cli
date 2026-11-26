@@ -385,3 +385,60 @@ def har_cmd(c: Ctx, output, last, services, errors_only):
     with_bodies = sum(1 for x in calls if "request" in x)
     ui.success(f"{len(calls)} call(s) in {output}"
                + ("" if with_bodies or not calls else " (no headers or bodies: start the proxy with --bodies)"))
+
+
+def _usd(value: float) -> str:
+    if value == 0:
+        return "$0"
+    return f"${value:,.2f}" if value >= 0.01 else f"${value:.6f}".rstrip("0")
+
+
+@proxy.command(name="cost")
+@click.option("--runs", type=click.IntRange(1), default=1, show_default=True, metavar="N",
+              help="As if the logged calls happened N times (say, CI runs a month).")
+@click.option("--calls-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), metavar="FILE",
+              help="A calls log (default: the proxy's, for --port).")
+@click.option("--prices", "prices_file", type=click.Path(exists=True, dir_okay=False, path_type=Path), metavar="FILE",
+              help="JSON with your own prices (USD per unit), like {\"dynamodb.write\": 0.0000007}.")
+@json_option
+@pass_ctx
+@handle_errors
+def cost_cmd(c: Ctx, runs, calls_file, prices_file, as_json):
+    """An estimate of what the logged calls would cost on AWS (requests only).
+
+    \\b
+      awsemu proxy cost                 # this run
+      awsemu proxy cost --runs 3000     # 100 CI runs a day, for a month
+      awsemu proxy cost --json
+
+    From AWS's public us-east-1 list prices: no free tier, storage, data
+    transfer or discounts. An order of magnitude, not a quote. Guide: docs/proxy.md.
+    """
+    from .. import cost as cs
+    from .iam import load_calls
+
+    calls, log = load_calls(c.port, calls_file)
+    try:
+        prices = cs.load_prices(prices_file)
+    except (ValueError, OSError) as exc:
+        raise click.BadParameter(f"{prices_file}: {exc}", param_hint="--prices") from exc
+    est = cs.estimate(calls, prices)
+    if as_json:
+        ui.print_json(est.as_dict(runs))
+        return
+    ui.kv([("calls", f"{est.calls} in {log.name}" + (f", × {runs:,} runs" if runs > 1 else "")),
+           ("prices", f"AWS list prices, {cs.REGION}, as of {cs.PRICES_AS_OF}" + (" + yours" if prices_file else ""))])
+    ui.echo()
+    if not est.lines:
+        ui.echo("None of these calls has a request charge in the price list.", "muted")
+    else:
+        rows = [[x.service, x.unit_label, f"{x.units * runs:,.4g}", _usd(x.price), _usd(x.cost * runs)]
+                for x in est.lines]
+        ui.table(["service", "unit", "units", "per unit", "cost"], rows, title="Estimated request charges")
+        ui.echo(f"Estimated total: {_usd(est.total * runs)}"
+                + (f" ({_usd(est.total)} per run)" if runs > 1 else ""))
+    if est.unpriced:
+        ui.echo("Not priced here: " + ", ".join(f"{s} ({n} call(s))" for s, n in sorted(est.unpriced.items())),
+                "muted")
+    ui.echo("An estimate: no free tier, storage, data transfer or discounts; some units are approximations "
+            "(docs/proxy.md).", "muted")
