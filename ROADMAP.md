@@ -323,6 +323,13 @@ Goal: make the daily loop (edit, run, look, fix) faster than against a real acco
 - ⬜ **DynamoDB**: `ddb import/export` (CSV and JSON lines), `ddb query` with key conditions written in a simple syntax, and an item editor in the UI.
 - ⬜ **A web UI**: `awsemu ui --web` serves the same views as the terminal UI on localhost (resources, calls, logs, faults), for people who prefer a browser.
 - ⬜ **Infrastructure as code**: `awsemu tf` and `awsemu cdk` wrappers that point Terraform and CDK at the emulator (provider and endpoint overrides, bootstrap), and `seed from-terraform STATE`, `seed from-cdk cdk.out` and `seed from-sam template.yaml` to start from what your IaC describes.
+- ⬜ **Examples when something goes wrong**. Today an error is one line plus a hint, and only `call`, settings and seeds suggest close names. Built on the error hierarchy of v0.14:
+  - **Usage errors** (a missing argument, an unknown option, a bad value) print two or three examples of that command right under the error. The examples live once, in each command's docstring, and are also shown in `--help` and the generated reference; CI runs them against the real emulator so they never go stale.
+  - **Runtime errors** come with an example that fixes them: emulator not running → `awsemu start`; a missing bucket, queue or table → the `ls` that shows what exists and the command that creates it; a wrong seed section → a correct YAML snippet for that section; a bad fault rule → valid rules close to what was typed; an AWS validation error from `call` → a skeleton of the right parameters built from the service model (also as `awsemu call SERVICE OPERATION --example`).
+  - **"Did you mean"** everywhere: commands, options, service names, and the names of resources that exist in the emulator ("no queue 'order', did you mean 'orders'?").
+  - **`awsemu examples [COMMAND|TOPIC]`**: browse examples and short recipes from the terminal ("seed a table", "inject throttling", "test a Lambda").
+  - **For scripts and agents**: errors in `--json` mode carry an `examples` field (in the JSON Schema) and a stable error code (`AWSEMU-E012`) that links to its entry in `docs/troubleshooting.md`; the MCP server returns the same, so an agent can fix its own call.
+  - Examples go to standard error, never mix with `--json` output, and can be turned off (`AWSEMU_NO_HINTS=1` or `hints = false` in the settings). A test checks every error type has at least one example.
 - ⬜ **Other ways to run it**: Podman as well as Docker; a remote emulator (`awsemu connect HOST:PORT` for one running on another machine or in a cluster); a Helm chart and a `kind` guide for Kubernetes.
 
 ## v0.20 — Features: testing, CI and safety
