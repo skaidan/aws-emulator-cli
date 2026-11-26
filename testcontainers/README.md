@@ -59,11 +59,11 @@ try (AwsEmulatorContainer emulator = new AwsEmulatorContainer()) {   // new AwsE
 }
 ```
 
-Also `getSslContext()` and `getTrustManagers()` for other HTTP clients, `getCaCertificatePem()`, and `getAwsEnv()` for a child process. With JUnit 5, `@Testcontainers` and `@Container static AwsEmulatorContainer emulator = new AwsEmulatorContainer();` work as with any container.
+Also `getSslContext()` and `getTrustManagers()` for other HTTP clients, `getCaCertificatePem()`, and `getAwsEnv()` for a child process. With JUnit 5 or 6, `@Testcontainers` and `@Container static AwsEmulatorContainer emulator = new AwsEmulatorContainer();` work as with any container.
 
 ## Node
 
-[`node/`](node): an ES module (Testcontainers 11, Node 20+), with types.
+[`node/`](node): an ES module (Testcontainers 12, Node 22.22+), with types.
 
 ```js
 import { AwsEmulatorContainer } from "aws-emulator-testcontainers";

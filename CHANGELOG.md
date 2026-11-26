@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Dependencies
+
+- Testcontainers module for Node: Testcontainers 12, which needs **Node 22.22 or later** (was Node 20). The module sets its own wait strategy, so Testcontainers 12's new default doesn't change it.
+- Testcontainers module for Java: Testcontainers 2.0.5 and AWS SDK 2.59.7; its own tests run on JUnit 6 (test scope only: your project can keep JUnit 5).
+- CI and release workflows: `actions/checkout` 7, `actions/setup-python` 7, `actions/cache` 6, `hashicorp/setup-terraform` 4.
+
 ## 0.13.0 — 2026-11-26
 
 Everything planned for 0.12 and 0.13. Going from local to AWS: the IAM policy your calls need and what your infrastructure misses (`awsemu iam policy`, `awsemu check --iam`), AWS's fidelity tests run on your machine (`awsemu fidelity run`), a cost estimate, and read-only bridges to a real account (`awsemu seed import`, the proxy's shadow mode). Hardening before 1.0: a tested minimum emulator version (1.0.290), update notices, JSON Schemas for every `--json` output, a deprecation policy, and the first release with signed provenance, an SBOM and checksums.
