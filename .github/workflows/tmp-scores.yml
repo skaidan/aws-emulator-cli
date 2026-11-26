@@ -1,0 +1,27 @@
+name: tmp fidelity scores
+on:
+  push:
+    branches: [tmp-fidelity-scores]
+permissions:
+  contents: read
+jobs:
+  scores:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          awsemu fidelity --release latest --json > scores.json
+          python - <<'PY'
+          import json
+          d = json.load(open("scores.json"))
+          print("RELEASE", d["release"])
+          rows = sorted(d["services"].items(), key=lambda kv: -kv[1]["total"])
+          for name, s in rows:
+              print(f"SCORE {name} {s['passed']} {s['total']} {s['multi_service_passed']} {s['multi_service_total']}")
+          PY
