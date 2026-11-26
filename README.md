@@ -38,6 +38,7 @@ DynamoDB tables  1      users
 
 - [Getting started](docs/getting-started.md): install, start the emulator and connect your tools.
 - [Exploring the emulator](docs/explore.md): `ui`, `watch`, `fidelity` and shell completion.
+- [Other languages and IaC tools](docs/languages.md): JavaScript, Java, Go, Terraform and CDK, with examples tested in CI.
 - [The proxy](docs/proxy.md): every call logged, fault injection, `aws_faults` in pytest.
 - [Will my project work?](docs/compatibility.md): `check`, `fidelity --compare`, `install` and the version pin.
 - [Project settings](docs/project-config.md): `awsemu.toml`, `init`, `up` and `down`.

@@ -1,0 +1,12 @@
+{
+  "name": "awsemu-example-cdk",
+  "private": true,
+  "description": "AWS CDK against AWS Emulator. Run: awsemu exec --sdk node -- npx cdk deploy --require-approval never",
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.4.0"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.1000.0"
+  }
+}

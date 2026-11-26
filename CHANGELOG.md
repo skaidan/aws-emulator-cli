@@ -4,6 +4,9 @@
 
 Towards 0.10.0.
 
+- Other languages and infrastructure tools, tested in CI against the real emulator: `examples/sdks/node` (AWS SDK for JavaScript v3), `examples/sdks/java` (SDK for Java v2), `examples/sdks/go` (SDK for Go v2), `examples/terraform` and `examples/cdk`, and a guide, `docs/languages.md`, with what each needs.
+- Fixed: `awsemu env/exec --sdk java` replaced your whole `JAVA_TOOL_OPTIONS` (proxy settings, memory…). It now only swaps the truststore.
+- GitHub Action: new `sdk` input (`node`, `java`…) to export the certificate settings those SDKs need.
 - `awsemu snapshot save NAME`, `restore NAME [--no-reset]`, `ls [--json]`, `rm NAME`: save everything in the emulator and come back to it later. A snapshot is a seed export of every section with the files it needs, kept in `~/.aws/emulator-cli/snapshots/` (or `--dir`). `restore` empties the emulator and applies it, and warns when it was saved with another emulator version.
 - Seeds: four new sections. `streams` (Kinesis: shards, retention), `functions` (Lambda from local code: handler and runtime guessed as in `lambda deploy`, `env`, `timeout`, `memory`, and `triggers` from SQS queues and Kinesis streams), `state_machines` (Step Functions, a definition file or inline) and `rules` (EventBridge: a pattern or a schedule, any bus, up to 5 targets among SQS, Lambda, SNS, Step Functions and Kinesis, with the permissions they need). `apply` is still repeatable: a function is only redeployed when its code changed. `seed export` writes them too, and saves functions' code with `--objects-dir`.
 - `awsemu lambda deploy` builds reproducible packages (same files, same zip), so the code's SHA-256 says whether it changed.

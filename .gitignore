@@ -9,3 +9,13 @@ dist/
 .coverage
 htmlcov/
 .env.emulator
+
+# Example projects (examples/sdks, examples/terraform, examples/cdk)
+node_modules/
+package-lock.json
+examples/sdks/java/target/
+examples/sdks/go/go.sum
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate*
+cdk.out/

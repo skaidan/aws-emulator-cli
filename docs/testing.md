@@ -105,6 +105,7 @@ The Action:
 | Input | Default | |
 | --- | --- | --- |
 | `emulator-version` | — | Emulator version, like `1.0.385`. Empty: `emulator_version` from `awsemu.toml`, else the latest |
+| `sdk` | — | Also trust the emulator's certificate in these SDKs, which ignore `AWS_CA_BUNDLE`: `node`, `java` (comma-separated). See [languages.md](languages.md) |
 | `seed` | — | Path of the seed in your repository |
 | `port` | `9297` | |
 | `auth` | `true` | `false` accepts unsigned requests |

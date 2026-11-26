@@ -62,6 +62,94 @@ jobs:
       - name: Integration tests
         run: AWSEMU_REAL_TESTS=1 pytest -m real -v -s
 
+  languages:
+    name: ${{ matrix.tool }} against the real AWS Emulator
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [node, java, go, terraform, cdk]
+    env:
+      AWSEMU_PLAIN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - if: matrix.tool == 'node' || matrix.tool == 'cdk'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - if: matrix.tool == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - if: matrix.tool == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: false
+      - if: matrix.tool == 'terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Start the emulator (the GitHub Action of this repository)
+        uses: ./
+        with:
+          export-env: "false"
+
+      - name: AWS SDK for JavaScript v3
+        if: matrix.tool == 'node'
+        working-directory: examples/sdks/node
+        run: |
+          npm install --no-audit --no-fund
+          awsemu exec --sdk node -- node smoke.mjs
+          awsemu s3 ls node-example | grep hello.txt
+
+      - name: AWS SDK for Java v2
+        if: matrix.tool == 'java'
+        working-directory: examples/sdks/java
+        run: |
+          # Download and compile first: with --sdk java the JVM trusts only the emulator,
+          # so Maven couldn't reach Maven Central inside 'awsemu exec'.
+          mvn -q -B compile dependency:resolve-plugins
+          awsemu exec --sdk java -- mvn -q -B -o exec:java
+          awsemu s3 ls java-example | grep hello.txt
+
+      - name: AWS SDK for Go v2
+        if: matrix.tool == 'go'
+        working-directory: examples/sdks/go
+        run: |
+          go mod tidy
+          awsemu exec -- go run .
+          awsemu s3 ls go-example | grep hello.txt
+
+      - name: Terraform
+        if: matrix.tool == 'terraform'
+        working-directory: examples/terraform
+        run: |
+          terraform init -input=false
+          awsemu exec -- terraform apply -auto-approve -input=false
+          awsemu sqs ls | grep tf-example-jobs
+          awsemu ddb ls | grep tf-example-orders
+          awsemu ssm get /tf-example/queue-url | grep tf-example-jobs
+          awsemu exec -- terraform plan -detailed-exitcode -input=false   # 0 = no changes left
+          awsemu exec -- terraform destroy -auto-approve -input=false
+          ! awsemu sqs ls | grep tf-example-jobs
+
+      - name: AWS CDK
+        if: matrix.tool == 'cdk'
+        working-directory: examples/cdk
+        run: |
+          npm install --no-audit --no-fund
+          awsemu exec --sdk node -- npx cdk deploy --require-approval never
+          awsemu sqs ls | grep cdk-example-jobs
+          awsemu ddb ls | grep cdk-example-orders
+          awsemu ssm get /cdk-example/queue-url | grep cdk-example-jobs
+          awsemu exec --sdk node -- npx cdk destroy --force
+          ! awsemu ddb ls | grep cdk-example-orders
+
+      - if: always()
+        run: awsemu logs -n 80 || true
+
   docker:
     name: Docker mode and compose (real emulator)
     runs-on: ubuntu-latest

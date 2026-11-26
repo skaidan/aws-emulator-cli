@@ -4,6 +4,7 @@
 | --- | --- |
 | [Getting started](getting-started.md) | Install, start the emulator (native or Docker) and connect your tools. |
 | [Exploring the emulator](explore.md) | `ui`, `watch`, `fidelity` and shell completion. |
+| [Other languages and IaC tools](languages.md) | JavaScript, Java, Go, Terraform and CDK against the emulator: what each needs, with examples tested in CI. |
 | [The proxy](proxy.md) | Every API call logged, and fault injection (throttling, errors, latency): `awsemu proxy`, `watch --calls`, pytest `aws_faults`. |
 | [Will my project work?](compatibility.md) | `check`, `issues`, `fidelity --compare`, `install` and pinning the emulator version. |
 | [Project settings](project-config.md) | `awsemu.toml`, `init`, `up` and `down`. |

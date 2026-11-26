@@ -416,3 +416,16 @@ def test_doctor_reports_traps(runner, monkeypatch):
     assert ("endpoint", "AWS_ENDPOINT_URL uses 'localhost'") in checks
     assert any(c == "http proxy" for c, _ in checks)
     assert any("nothing answers there" in d for _, d in checks)
+
+
+def test_java_tool_options_keeps_yours():
+    out = envvars.java_tool_options("-Xmx512m -Dhttps.proxyHost=corp -Djavax.net.ssl.trustStore=/etc/cacerts "
+                                    "-Djavax.net.ssl.trustStoreType=JKS", "/home/me/.aws/emulator/9297/truststore.p12")
+    assert out == ("-Xmx512m -Dhttps.proxyHost=corp -Djavax.net.ssl.trustStore=/home/me/.aws/emulator/9297/truststore.p12 "
+                   "-Djavax.net.ssl.trustStoreType=PKCS12")
+    assert envvars.java_tool_options("", "/t.p12") == "-Djavax.net.ssl.trustStore=/t.p12 -Djavax.net.ssl.trustStoreType=PKCS12"
+
+
+def test_java_tool_options_quotes_only_spaces():
+    out = envvars.java_tool_options('-Dhttp.nonProxyHosts=localhost|127.* "-Dname=a b"', "/t.p12")
+    assert out.startswith('-Dhttp.nonProxyHosts=localhost|127.* "-Dname=a b" -Djavax.net.ssl.trustStore=/t.p12')

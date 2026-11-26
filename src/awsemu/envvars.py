@@ -30,6 +30,14 @@ SHELLS = ("bash", "zsh", "fish", "powershell", "dotenv")
 EXTRAS = ("node", "java", "rust", "dotnet")
 
 
+def java_tool_options(current: str, truststore) -> str:
+    """Your JAVA_TOOL_OPTIONS (proxy settings, memory...) with the emulator's truststore
+    instead of any other one."""
+    kept = [o for o in shlex.split(current) if not o.startswith("-Djavax.net.ssl.trustStore")]
+    ours = [f"-Djavax.net.ssl.trustStore={truststore}", "-Djavax.net.ssl.trustStoreType=PKCS12"]
+    return " ".join(f'"{o}"' if any(c.isspace() for c in o) else o for o in [*kept, *ours])
+
+
 def emulator_env(port: int, extras: Iterable[str] = ()) -> dict[str, str]:
     """Variables to set for an emulator on ``port``.
 
@@ -62,10 +70,7 @@ def emulator_env(port: int, extras: Iterable[str] = ()) -> dict[str, str]:
     if "node" in extras:
         env["NODE_EXTRA_CA_CERTS"] = str(files.ca)
     if "java" in extras:
-        env["JAVA_TOOL_OPTIONS"] = (
-            f"-Djavax.net.ssl.trustStore={files.truststore} "
-            "-Djavax.net.ssl.trustStoreType=PKCS12"
-        )
+        env["JAVA_TOOL_OPTIONS"] = java_tool_options(os.environ.get("JAVA_TOOL_OPTIONS", ""), files.truststore)
     if "rust" in extras or "dotnet" in extras:
         env["SSL_CERT_FILE"] = str(files.ca)
     bypass = no_proxy_value(os.environ)  # an HTTP(S) proxy must not get the emulator's calls

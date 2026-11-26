@@ -14,6 +14,12 @@ inputs:
       awsemu.toml in the repository if it has one, else the latest release.
     required: false
     default: ""
+  sdk:
+    description: >
+      Also trust the emulator's certificate in these SDKs, which ignore AWS_CA_BUNDLE:
+      node, java, rust, dotnet (comma-separated). Only with export-env.
+    required: false
+    default: ""
   seed:
     description: Seed file to apply (path in your repository).
     required: false
@@ -125,6 +131,7 @@ runs:
         INPUT_TELEMETRY: ${{ inputs.telemetry }}
         INPUT_IDLE: ${{ inputs.idle-timeout }}
         INPUT_EXPORT: ${{ inputs.export-env }}
+        INPUT_SDK: ${{ inputs.sdk }}
       run: |
         set -euo pipefail
         AWSEMU="$(python3 -m site --user-base)/bin/awsemu"
@@ -138,7 +145,9 @@ runs:
         echo "ca-bundle=$HOME/.aws/emulator/$INPUT_PORT/ca.pem" >> "$GITHUB_OUTPUT"
         echo "AWSEMU_PORT=$INPUT_PORT" >> "$GITHUB_ENV"
         if [ "$INPUT_EXPORT" = "true" ]; then
-          "$AWSEMU" --port "$INPUT_PORT" env --shell dotenv >> "$GITHUB_ENV"
+          sdk_args=()
+          for s in ${INPUT_SDK//,/ }; do sdk_args+=(--sdk "$s"); done
+          "$AWSEMU" --port "$INPUT_PORT" env --shell dotenv "${sdk_args[@]}" >> "$GITHUB_ENV"
           if [ -n "${AWS_ACCESS_KEY_ID:-}${AWS_PROFILE:-}" ]; then
             echo "::warning::Real AWS credentials are set in this job. They take precedence over the emulator's credentials file; remove them or run your commands with 'awsemu exec --'."
           fi
