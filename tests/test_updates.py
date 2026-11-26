@@ -11,7 +11,7 @@ from awsemu.cli import cli
 
 def test_versions():
     assert updates.parse("v1.0.250") == (1, 0, 250) and updates.parse("nope") is None
-    assert updates.older("1.0.99", "1.0.250") and not updates.older("1.0.250", "1.0.250")
+    assert updates.older("1.0.99", "1.0.290") and not updates.older("1.0.290", "1.0.290")
     assert not updates.older(None, "1.0.1")
 
 
@@ -60,7 +60,7 @@ def test_doctor_shows_support_and_newer_releases(runner, online, monkeypatch, fa
     out = json.loads(runner.invoke(cli, ["doctor", "--json"]).output)
     checks = {c["check"]: c for c in out["checks"]}
     assert (
-        checks["emulator support"]["result"] == "fail" and "older than 1.0.250" in checks["emulator support"]["detail"]
+        checks["emulator support"]["result"] == "fail" and "older than 1.0.290" in checks["emulator support"]["detail"]
     )
     assert checks["awsemu"]["result"] == "warn" and "99.0.0 is out" in checks["awsemu"]["detail"]
     monkeypatch.setattr("awsemu.fidelity.installed_version", lambda binary=None: "1.0.700")

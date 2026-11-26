@@ -229,12 +229,12 @@ AWS's advice: compare scores only between releases measured with the same versio
 
 ## Supported emulator versions
 
-Each awsemu release works with emulator releases from `MIN_EMULATOR` on (today **1.0.250**, the first public one). A CI job installs exactly that release with `awsemu install` and runs the tests of what awsemu does itself against it (lifecycle, environment, services, proxy, seeds), so the minimum is tested, not guessed. The `real-emulator` job does the same with the latest release.
+Each awsemu release works with emulator releases from `MIN_EMULATOR` on: today **1.0.290**. Earlier ones, back to the first public release (1.0.250), work too except for one thing: they don't log the `emulator server information` line, which `awsemu start --port 0` (a free port) and the pytest plugin's random ports rely on. A CI job installs exactly that release with `awsemu install` and runs the tests of what awsemu does itself against it (lifecycle, environment, services, proxy, seeds), so the minimum is tested, not guessed. The `real-emulator` job does the same with the latest release.
 
 `awsemu doctor` shows where you stand:
 
 ```
-emulator support  warn  1.0.400 (supported from 1.0.250); 1.0.629 is out
+emulator support  warn  1.0.400 (supported from 1.0.290); 1.0.629 is out
                         → awsemu install latest
 awsemu            ok    0.12.0, the latest
 ```

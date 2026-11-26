@@ -19,7 +19,8 @@ from . import __version__, _meta
 from .paths import cli_root
 
 # The oldest emulator release this awsemu is tested with (the "oldest supported" CI job).
-MIN_EMULATOR = "1.0.250"
+# 1.0.290 is the first that logs "emulator server information", which random ports rely on.
+MIN_EMULATOR = "1.0.290"
 CACHE_SECONDS = 24 * 3600
 TIMEOUT = 3.0
 
