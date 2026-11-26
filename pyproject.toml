@@ -29,6 +29,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 ui = ["textual>=0.80"]
+testcontainers = ["testcontainers>=4.8"]
 
 [project.scripts]
 awsemu = "awsemu.cli:main"

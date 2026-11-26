@@ -19,3 +19,4 @@ examples/sdks/go/go.sum
 .terraform.lock.hcl
 terraform.tfstate*
 cdk.out/
+testcontainers/java/target/

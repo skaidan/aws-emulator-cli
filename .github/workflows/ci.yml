@@ -191,6 +191,47 @@ jobs:
           awsemu --port 9302 sqs ls | grep from-compose
           docker compose -f compose.emulator.yaml down
 
+  testcontainers:
+    name: Testcontainers module, ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, java, node]
+    env:
+      EMULATOR_TELEMETRY: "off"
+      AWSEMU_PLAIN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - if: matrix.language == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - if: matrix.language == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -e ".[dev,testcontainers]"
+      - name: The image (awsemu image build)
+        run: awsemu image build
+      - name: Python
+        if: matrix.language == 'python'
+        run: AWSEMU_TESTCONTAINERS=1 pytest tests/test_containers.py -v
+      - name: Java
+        if: matrix.language == 'java'
+        working-directory: testcontainers/java
+        run: mvn -q -B test
+      - name: Node
+        if: matrix.language == 'node'
+        working-directory: testcontainers/node
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+
   action:
     name: GitHub Action (uses ./)
     runs-on: ubuntu-latest
