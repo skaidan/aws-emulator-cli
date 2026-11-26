@@ -7,14 +7,10 @@ text so comments and unknown keys in the user's file are kept.
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # pragma: no cover
-    import tomli as tomllib
+import tomllib
 
 from .paths import emulator_settings_file
 

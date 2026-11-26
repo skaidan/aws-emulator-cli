@@ -196,7 +196,7 @@ class Shadow:
                 return
             entry = {
                 "id": job.call.get("id"),
-                "time": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+                "time": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
                 "service": job.call.get("service"),
                 "operation": job.call.get("operation"),
                 "resource": job.call.get("resource"),

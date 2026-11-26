@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking
+
+- **Python 3.11 or later** is now required: Python 3.10 reached its end of life in October 2026. pip keeps installing awsemu 0.13.0 on Python 3.10. `tomli` is no longer a dependency (awsemu uses the standard library's `tomllib`). The policy for Python versions is now in [docs/deprecations.md](docs/deprecations.md).
+
 ### Dependencies
 
 - Testcontainers module for Node: Testcontainers 12, which needs **Node 22.22 or later** (was Node 20). The module sets its own wait strategy, so Testcontainers 12's new default doesn't change it.

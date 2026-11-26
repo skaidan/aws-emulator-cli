@@ -5,7 +5,7 @@ CHANGELOG.md (as a breaking change) together with the test.
 
 import gzip
 import json
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -19,7 +19,7 @@ from awsemu.commands import sqs as sqs_mod
 from tests.schema_check import schema_for, validate
 from tests.test_services import FakeClient
 
-NOW = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
 
 
 def run_json(runner, *args):

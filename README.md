@@ -54,7 +54,7 @@ DynamoDB tables  1      users
 
 ## Installation
 
-Requirements: Python 3.10+ and **one** of these two ways to run the emulator:
+Requirements: Python 3.11+ and **one** of these two ways to run the emulator:
 
 - **Linux**: the AWS Emulator `.rpm` or `.deb` package (puts `aws-emulator` on your `PATH`). Once `awsemu` is installed, `awsemu install` installs it for you, signature checked.
 - **macOS, Windows or Linux**: Docker. AWS doesn't publish an image, but `awsemu image build` (or `awsemu install --docker`) builds one with the official recipe.

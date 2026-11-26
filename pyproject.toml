@@ -7,7 +7,7 @@ name = "aws-emulator-cli"
 version = "0.13.0"
 description = "A friendly CLI for AWS Emulator: start/stop it, wire your shell to it and browse what's inside."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "skaidan" }]
 keywords = ["aws", "emulator", "cli", "local", "testing", "s3", "sqs", "dynamodb"]
@@ -15,6 +15,10 @@ classifiers = [
   "Environment :: Console",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Software Development :: Testing",
 ]
 dependencies = [
@@ -23,7 +27,6 @@ dependencies = [
   "boto3>=1.34",
   "pyyaml>=6.0",
   "cryptography>=42",
-  "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.optional-dependencies]
@@ -46,7 +49,7 @@ packages = ["src/awsemu"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 extend-exclude = ["examples", "testcontainers"]
 
 [tool.ruff.lint]
@@ -65,7 +68,7 @@ ignore = [
 # defaults: double quotes, spaces
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = ["src/awsemu"]
 ignore_missing_imports = true
 check_untyped_defs = true

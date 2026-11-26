@@ -22,15 +22,11 @@ from __future__ import annotations
 import difflib
 import os
 import re
-import sys
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # pragma: no cover
-    import tomli as tomllib
+import tomllib
 
 FILE_NAME = "awsemu.toml"
 VERSION_RE = re.compile(r"^v?\d+\.\d+\.\d+$")

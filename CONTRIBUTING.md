@@ -46,7 +46,7 @@ Imports inside functions are deliberate: they keep `awsemu` quick to start, so t
 
 Real tests need the `aws-emulator` binary on your `PATH` (or `AWSEMU_BINARY`) and boto3. In CI they run in the `real-emulator` job, which installs the official `.deb` and verifies its signature.
 
-CI jobs: `tests` (Linux, macOS and Windows; Python 3.10 and 3.13), `real-emulator`, `docker` (Docker mode and `compose` with the real emulator) and `action` (the GitHub Action in `action.yml`).
+CI jobs: `tests` (Linux, macOS and Windows; Python 3.11 and 3.13), `real-emulator`, `docker` (Docker mode and `compose` with the real emulator) and `action` (the GitHub Action in `action.yml`).
 
 The `Emulator watch` workflow (`.github/workflows/emulator-watch.yml`) runs every day: when AWS has published an emulator release we haven't tested, it installs it with `awsemu install` and runs the real-emulator tests. A failure opens an issue labelled `emulator-compat` (or comments on the open one), and the next release that passes closes it. Run it by hand from the Actions tab to test the latest release now.
 

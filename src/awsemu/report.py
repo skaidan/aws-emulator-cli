@@ -150,7 +150,7 @@ def _when(text: str | None):
         when = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
-    return when if when.tzinfo else when.replace(tzinfo=dt.timezone.utc)
+    return when if when.tzinfo else when.replace(tzinfo=dt.UTC)
 
 
 def log_around(call: dict, lines: list[str], seconds: float = 2.0, limit: int = 30) -> list[str]:

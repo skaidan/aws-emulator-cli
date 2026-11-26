@@ -111,7 +111,7 @@ def save(c: Ctx, name: str, base: Path | None, no_secrets: bool, force: bool):
         secrets = bool(data.get("secrets")) or any(p.get("type") == "SecureString" for p in data.get("parameters", []))
         meta = {
             "name": name,
-            "created_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+            "created_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
             "port": c.port,
             "emulator_version": _installed_version(),
             "awsemu_version": __version__,

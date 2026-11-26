@@ -175,7 +175,7 @@ def ensure_certs(files: ProxyFiles, extra_names: tuple[str, ...] = ()) -> None:
     except ImportError as exc:  # pragma: no cover - cryptography is a dependency
         raise ProxyError("the proxy needs the 'cryptography' package for its certificate") from exc
 
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     files.ca.parent.mkdir(parents=True, exist_ok=True)
 
     def write_key(path: Path, key) -> None:
@@ -237,7 +237,7 @@ def ensure_certs(files: ProxyFiles, extra_names: tuple[str, ...] = ()) -> None:
     wanted = _san_entries(x509, names)
     if files.cert.exists() and files.key.exists():
         cert = x509.load_pem_x509_certificate(files.cert.read_bytes())
-        expires = getattr(cert, "not_valid_after_utc", None) or cert.not_valid_after.replace(tzinfo=dt.timezone.utc)
+        expires = getattr(cert, "not_valid_after_utc", None) or cert.not_valid_after.replace(tzinfo=dt.UTC)
         try:
             have = set(cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value)
         except x509.ExtensionNotFound:
@@ -602,7 +602,7 @@ class ProxyServer(ThreadingHTTPServer):
         """Log one call. ``bodies`` is ``(request body, response headers, response body)``,
         kept (masked) only when the proxy runs with --bodies."""
         call = awscalls.Call(
-            time=dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds"),
+            time=dt.datetime.now(dt.UTC).isoformat(timespec="milliseconds"),
             service=ident.service,
             operation=ident.operation,
             resource=ident.resource,
@@ -767,7 +767,7 @@ def serve(
             else None
         ),
         "calls": str(files.calls),
-        "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "started_at": dt.datetime.now(dt.UTC).isoformat(),
     }
     _write_private(files.state, json.dumps(state))
 

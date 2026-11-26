@@ -27,6 +27,10 @@ What happens when awsemu renames or removes something you may depend on: a comma
 
 Warnings go to standard error, so they never mix with `--json` output on standard output. To find deprecated uses in CI, look for `is deprecated` in the job's output.
 
+## Python versions
+
+awsemu supports the Python versions that still get security fixes from the Python core team. When a version reaches its end of life, the next minor release of awsemu stops supporting it, listed under **Breaking** in the changelog; pip then keeps installing the last release that supported it, so nothing breaks for those who don't upgrade Python. Today: Python 3.11 and later (3.10 reached its end of life in October 2026).
+
 ## Deprecated today
 
 Nothing.

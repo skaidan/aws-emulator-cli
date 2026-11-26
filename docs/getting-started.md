@@ -2,7 +2,7 @@
 
 ## 1. Install `awsemu`
 
-You need Python 3.10 or later.
+You need Python 3.11 or later.
 
 ```bash
 pipx install git+https://github.com/skaidan/aws-emulator-cli
@@ -29,7 +29,6 @@ Most of awsemu's size is the AWS SDK for Python (`boto3`, whose `botocore` is ov
 
 ```bash
 pip install --no-deps 'aws-emulator-cli @ git+https://github.com/skaidan/aws-emulator-cli' click rich pyyaml
-# Python 3.10 also needs: tomli
 ```
 
 What works then (tested with those packages blocked): `start`, `stop`, `restart`, `status`, `up`, `down`, `env`, `exec`, `logs`, `compose`, `doctor` and `config`. Commands that call AWS APIs (`s3`, `sqs`, `overview`, `seed`, `call`…) or run the proxy say what's missing and how to install it. `awsemu doctor` lists `boto3` as missing.
