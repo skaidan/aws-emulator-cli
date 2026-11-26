@@ -12,14 +12,12 @@ from awsemu.commands import events as events_mod
 from awsemu.commands import kinesis as kinesis_mod
 from awsemu.commands import secrets as secrets_mod
 from awsemu.commands import sfn as sfn_mod
+from tests.conftest import aws_error
 from tests.test_services import FakeClient
 
 
 def err(code):
-    cls = type(code, (Exception,), {})
-    exc = cls(code)
-    exc.response = {"Error": {"Code": code, "Message": code}}
-    return exc
+    return aws_error(code)
 
 
 def raises(code):

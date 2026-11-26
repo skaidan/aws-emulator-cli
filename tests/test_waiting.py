@@ -29,7 +29,7 @@ def test_returns_the_first_answer():
 
 def test_falsy_answers_other_than_none_count():
     assert poll(lambda: 0, timeout=1) == 0
-    assert poll(lambda: {}, timeout=1) == {}
+    assert poll(dict, timeout=1) == {}
 
 
 def test_times_out_with_none_after_a_last_try_at_the_deadline():

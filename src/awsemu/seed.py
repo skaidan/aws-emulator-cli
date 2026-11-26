@@ -50,6 +50,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from . import errors
 
 VERSION = 1
 SECTIONS = (
@@ -98,7 +99,7 @@ class Problem:
         return f"{where}  {self.path}: {self.message}" if self.path else f"{where}  {self.message}"
 
 
-class SeedError(Exception):
+class SeedError(errors.UsageError):
     def __init__(self, source: str, problems: list[Problem]):
         self.source = source
         self.problems = problems

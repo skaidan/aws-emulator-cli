@@ -39,7 +39,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
-from . import awscalls, faults, redact, waiting
+from . import awscalls, errors, faults, redact, waiting
 from .paths import DEFAULT_HOST, InstanceFiles, cli_root
 
 ADMIN = "/__awsemu/proxy"
@@ -96,7 +96,7 @@ def exchange(method: str, path: str, req_headers, req_body: bytes, status: int, 
     }
 
 
-class ProxyError(Exception):
+class ProxyError(errors.AwsemuError):
     pass
 
 

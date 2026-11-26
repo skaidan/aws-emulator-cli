@@ -21,7 +21,7 @@ from .. import ui
 from ..clients import client
 from ..context import Ctx, handle_errors, pass_ctx
 from ..runtime import RuntimeErrorWithHint
-from ._common import allow_lambda, allow_queue, arn, ensure_service_role, is_error
+from ._common import allow_lambda, allow_queue, arn, client_error, ensure_service_role, is_error
 from .dynamodb import from_item, to_item
 
 INLINE_LIMIT = 64 * 1024
@@ -50,7 +50,7 @@ def _apply_buckets(seed, port, report):
             try:
                 s3.head_bucket(Bucket=name)
                 result = "unchanged"
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "404", "NoSuchBucket", "NotFound"):
                     raise
                 s3.create_bucket(Bucket=name)
@@ -98,7 +98,7 @@ def _apply_queues(seed, port, report):
                 if changes:
                     sqs.set_queue_attributes(QueueUrl=url, Attributes=changes)
                 results[name] = "updated" if changes else "unchanged"
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "NonExistentQueue", "QueueDoesNotExist"):
                     raise
                 url = sqs.create_queue(QueueName=name, Attributes=attrs)["QueueUrl"]
@@ -153,7 +153,7 @@ def _apply_tables(seed, port, report):
                 result = "unchanged"
             except RuntimeErrorWithHint:
                 raise
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "ResourceNotFound"):
                     raise
                 ddb.create_table(
@@ -246,7 +246,7 @@ def _apply_secrets(seed, port, report):
                     result = "updated"
                 if s.get("description"):
                     sm.update_secret(SecretId=name, Description=s["description"])
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "ResourceNotFound"):
                     raise
                 kwargs = {"Name": name, "SecretString": value}
@@ -271,7 +271,7 @@ def _apply_parameters(seed, port, report):
                     report.add("parameter", name, "unchanged")
                     continue
                 result = "updated"
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "ParameterNotFound"):
                     raise
                 result = "created"
@@ -293,7 +293,7 @@ def _apply_streams(seed, port, report):
             try:
                 summary = k.describe_stream_summary(StreamName=name)["StreamDescriptionSummary"]
                 result = "unchanged"
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "ResourceNotFound"):
                     raise
                 k.create_stream(StreamName=name, ShardCount=shards)
@@ -478,7 +478,7 @@ def _apply_state_machines(seed, port, report):
             target = arn("states", f"stateMachine:{name}")
             try:
                 current = sf.describe_state_machine(stateMachineArn=target)
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "StateMachineDoesNotExist", "ResourceNotFound"):
                     raise
                 role = ensure_service_role(
@@ -532,7 +532,7 @@ def _apply_rules(seed, port, report):
             if bus != "default":
                 try:
                     ev.describe_event_bus(Name=bus)
-                except Exception as exc:
+                except client_error() as exc:
                     if not is_error(exc, "ResourceNotFound"):
                         raise
                     ev.create_event_bus(Name=bus)
@@ -557,7 +557,7 @@ def _apply_rules(seed, port, report):
                     ev.put_rule(**wanted)
                     result = "updated"
                 rule_arn = current["Arn"]
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "ResourceNotFound"):
                     raise
                 rule_arn = ev.put_rule(**wanted)["RuleArn"]

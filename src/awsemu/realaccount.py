@@ -14,6 +14,7 @@ Everything that touches a real account goes through :func:`session`, which:
 from __future__ import annotations
 
 import re
+from . import errors
 
 READ_PREFIXES = ("Describe", "List", "Get", "Head")
 DATA_READS = {
@@ -56,7 +57,7 @@ DATA_READS = {
 ARN_RE = re.compile(r"arn:aws:([a-z0-9-]+):([a-z0-9-]*):(\d{12}):")
 
 
-class NotReadOnly(Exception):
+class NotReadOnly(errors.AwsemuError):
     pass
 
 

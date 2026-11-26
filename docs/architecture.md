@@ -33,6 +33,7 @@
 src/awsemu/
   _meta.py          project identity (package, repository, command): the one place to rename
   exitcodes.py      exit codes 0-3, part of the stable interface
+  errors.py         AwsemuError (message, hint, exit code) and its subclasses; context.handle_errors prints them
   cli.py            the root command: global options, aliases and prefixes, and the list of
                     commands (LAZY_COMMANDS), each imported only when it runs or --help lists it
   context.py        global --port and error handling (botocore → message + hint)
@@ -40,7 +41,8 @@ src/awsemu/
   health.py         /__admin/health check with the instance's ca.pem; waiting for health or a closed port
   waiting.py        poll(check, timeout=...): the one polling loop with a deadline
   envvars.py        environment variables and their syntax per shell
-  clients.py        explicit boto3 clients per port; error hints (hint_for)
+  clients.py        explicit boto3 clients per port; the client configuration for the emulator and for
+                    real accounts; error hints (hint_for)
   logs.py           parsing of the emulator's JSON log
   settings.py       editing config.toml while keeping comments
   seed.py           seed format: YAML parsing with a line map, and validation (no AWS calls)

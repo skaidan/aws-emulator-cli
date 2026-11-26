@@ -30,6 +30,7 @@ from urllib.parse import urlsplit
 
 from . import __version__
 from .paths import InstanceFiles
+from . import errors
 
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
@@ -77,7 +78,7 @@ def scrubbed_env(base: dict[str, str] | None = None) -> dict[str, str]:
     return env
 
 
-class GuardError(Exception):
+class GuardError(errors.AwsemuError):
     pass
 
 

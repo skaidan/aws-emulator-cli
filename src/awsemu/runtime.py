@@ -22,7 +22,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from . import health, logs, waiting
+from . import errors, health, logs, waiting
 from .paths import CliFiles, InstanceFiles, cli_root, emulator_root
 
 BINARY = "aws-emulator"
@@ -43,10 +43,8 @@ ENTRYPOINT ["aws-emulator", "-b", "0.0.0.0"]
 """
 
 
-class RuntimeErrorWithHint(RuntimeError):
-    def __init__(self, message: str, hint: str | None = None):
-        super().__init__(message)
-        self.hint = hint
+# Defined in errors.py; imported from here by much of the code (and by users' tests).
+RuntimeErrorWithHint = errors.RuntimeErrorWithHint
 
 
 def default_binary() -> str:

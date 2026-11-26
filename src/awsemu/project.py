@@ -27,6 +27,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import tomllib
+from . import errors
 
 FILE_NAME = "awsemu.toml"
 VERSION_RE = re.compile(r"^v?\d+\.\d+\.\d+$")
@@ -70,7 +71,7 @@ idle_timeout = 3600        # stop after an hour without API calls
 """
 
 
-class ProjectError(Exception):
+class ProjectError(errors.UsageError):
     pass
 
 

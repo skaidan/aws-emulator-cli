@@ -13,7 +13,7 @@ from .. import ui, waiting
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
-from ._common import arn, ensure_service_role, is_error, load_json_arg
+from ._common import arn, client_error, ensure_service_role, is_error, load_json_arg
 
 DEFAULT_ROLE_NAME = "awsemu-sfn-role"
 FINAL = {"SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"}
@@ -80,7 +80,7 @@ def deploy(c: Ctx, name: str, definition: str, express: bool, role: str | None):
     try:
         s.describe_state_machine(stateMachineArn=target)
         exists = True
-    except Exception as exc:
+    except client_error() as exc:
         if not is_error(exc, "StateMachineDoesNotExist", "ResourceNotFound"):
             raise
         exists = False

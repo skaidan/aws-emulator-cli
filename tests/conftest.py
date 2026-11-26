@@ -114,3 +114,11 @@ def profile(tmp_path, monkeypatch):
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "x")
     monkeypatch.setenv("AWS_ENDPOINT_URL", "https://127.0.0.1:9")  # must be ignored
     return "dev"
+
+
+def aws_error(code: str, message: str | None = None):
+    """A real botocore ``ClientError`` (as AWS raises it), named after ``code`` like botocore's modeled errors."""
+    from botocore.exceptions import ClientError
+
+    cls = type(code, (ClientError,), {})
+    return cls({"Error": {"Code": code, "Message": message or code}}, "Operation")

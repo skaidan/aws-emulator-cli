@@ -11,6 +11,7 @@ import click
 import pytest
 
 from awsemu.cli import cli
+from tests.conftest import aws_error
 from awsemu.commands import lambda_ as lam_mod
 from awsemu.commands import sns as sns_mod
 from tests.test_services import FakeClient
@@ -112,17 +113,10 @@ def test_guess_handler(tmp_path, filename, code, expected):
 # ---------------------------------------------------------------- Lambda commands
 
 
-class NotFound(Exception):
-    pass
-
-
-NotFound.__name__ = "ResourceNotFoundException"
-
-
 def _lambda_client(exists: bool):
     def get_function(**_):
         if not exists:
-            raise NotFound("missing")
+            raise aws_error("ResourceNotFoundException", "missing")
         return {"Configuration": {"FunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:hi"}}
 
     fake = FakeClient(
@@ -136,13 +130,8 @@ def test_deploy_creates_function_and_role(runner, monkeypatch, running, tmp_path
     (tmp_path / "hi.py").write_text("def handler(event, context):\n    return {'ok': True}\n")
     lam = _lambda_client(exists=False)
 
-    class NoSuchEntity(Exception):
-        pass
-
-    NoSuchEntity.__name__ = "NoSuchEntityException"
-
     def get_role(**_):
-        raise NoSuchEntity("no role")
+        raise aws_error("NoSuchEntity", "no role")
 
     iam = FakeClient(
         get_role=get_role, create_role={"Role": {"Arn": "arn:aws:iam::000000000000:role/awsemu-lambda-role"}}

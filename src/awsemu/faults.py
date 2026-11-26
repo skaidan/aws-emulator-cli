@@ -41,6 +41,7 @@ import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass
+from . import errors
 
 STATUS_BY_CODE = {
     "SlowDown": 503,
@@ -75,7 +76,7 @@ DURATION_RE = re.compile(r"^(?:latency:|delay:)?(?P<n>\d+(?:\.\d+)?)(?P<unit>ms|
 CODE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9.]*$")
 
 
-class FaultError(ValueError):
+class FaultError(errors.UsageError, ValueError):
     pass
 
 
