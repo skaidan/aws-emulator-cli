@@ -200,6 +200,61 @@ Evidence: the emulator has 438 service models, and the public fidelity suite has
 - ⬜ Real-emulator tests for each command in CI, like the existing services.
 - ⬜ A `docs/services.md` section per service, with what the emulator does not support yet and a link to the score.
 
+## v0.15 — More services: APIs, search, streaming and AI
+
+Goal: the next group of services, taken from the "ideas" list, with the same treatment as v0.14 (commands, seeds, `overview`, `describe`, `watch`, the UI, completion, `check`, IAM, cost, `seed import`, MCP, real-emulator tests and docs). Scores are single-service tests passed for emulator v1.0.629.
+
+- ⬜ **AppSync** (88.4%): `awsemu appsync ls` and `appsync query API 'GRAPHQL' [--vars JSON]` to run a query or mutation against the local API, with the API key or a Cognito token from v0.14. APIs, schemas and resolvers in seeds.
+- ⬜ **OpenSearch** (83.8%) and **OpenSearch Serverless** (97.6%): domains and collections in seeds and `overview`. Find out whether the emulator serves the search data plane (index, search) or only the control plane, and say so; only then add `awsemu search query`.
+- ⬜ **MSK (Kafka)** (80.3%) and **MSK Connect** (100%): clusters in `overview`/`describe`. Find out whether brokers really run (bootstrap brokers you can connect to); if they do, `awsemu kafka produce/consume`.
+- ⬜ **IoT Core** (69.2%; data plane 96.2%, jobs 94.4%): things, policies and certificates in seeds, and `awsemu iot publish TOPIC` / `iot subscribe TOPIC --follow` on the data plane. The low control-plane score goes into `check`.
+- ⬜ **Step Functions activities** (sfn is 93.9%, already covered): `awsemu sfn activity work ARN --run CMD`, a local activity worker that runs a command per task, to test activity-based state machines without writing a worker.
+- ⬜ **Lex v2** (models 84.6%, runtime 100%): `awsemu lex say BOT 'text'` to talk to a bot from the terminal.
+- ⬜ **AI services**: Polly (96.9%), Comprehend (81.0%), Rekognition (77.4%), Textract (66.7%), Translate (60.0%). No real models run locally, so first document what each answers (fixed or shaped responses, errors) and what you can test with it (request shapes, error handling, retries with proxy faults). Commands only if there's demand.
+
+## v0.16 — More services: the rest of a typical account
+
+Goal: the services found in a typical AWS account that v0.14 and v0.15 don't cover, mostly as seed sections and `overview`/`describe`/`check` support, with new commands only where awsemu adds something over `call`. Same evidence as above.
+
+**Cross-service views (most value first)**
+
+- ⬜ **Cloud Control API** (94.1%): try using it as a generic backend for `describe` and `overview`, so any resource type it knows gets listed without per-service code.
+- ⬜ **Resource Groups Tagging API** (85.2%) and **Resource Groups** (100%): `awsemu tags [KEY=VALUE]`, every resource with a tag across services, and tags checked by `seed apply`.
+- ⬜ **STS** (90.9%): `awsemu whoami`, and `awsemu assume ROLE` that exports temporary credentials, to test code that assumes roles (the emulator doesn't enforce IAM, so say what that does and doesn't prove).
+- ⬜ **CloudTrail** (95.0%): `awsemu trail` to show the management events the emulator records, next to the proxy's calls.
+
+**Networking, compute and edge**
+
+- ⬜ **EC2 networking** (EC2 70.9%): VPCs, subnets, security groups and endpoints in seeds, because Terraform and CDK projects create them before anything else. Instances only in `overview`; the low score goes into `check`.
+- ⬜ **Elastic Load Balancing v2** (90.7%), **Auto Scaling** (88.3%), **EKS** (84.3%), **Batch** (92.3%), **Elastic Beanstalk** (83.0%): `overview`/`describe` and seeds.
+- ⬜ **CloudFront** (88.8%; KeyValueStore 0%), **WAFv2** (93.1%), **Route 53 Resolver** (96.1%), **Cloud Map** (98.9%): seeds and `describe`; `awsemu dns ls` for Route 53 (v0.14) and Cloud Map together.
+
+**CI/CD**
+
+- ⬜ **CodeBuild** (95.3%), **CodePipeline** (95.1%), **CodeDeploy** (96.9%), **CodeCommit** (85.9%), **CodeArtifact** (86.0%): seeds and `describe`, and `awsemu pipeline runs NAME` with the stage status. Check first whether builds and pipeline runs actually execute.
+
+**Identity and authorization**
+
+- ⬜ **Verified Permissions** (100%): `awsemu avp check --principal --action --resource`, to test Cedar policies locally. Policy stores and policies in seeds.
+- ⬜ **IAM Identity Center** (SSO admin 92.1%, Identity Store 100%) and **Private CA** (99.3%): seeds and `describe`.
+
+**Data, analytics and databases**
+
+- ⬜ **DynamoDB Streams** (93.3%): `awsemu ddb stream TABLE --follow`, to see the change records a table emits (part of the existing `ddb` group).
+- ⬜ **Redshift** (94.9%) and the **Redshift Data API** (100%): `awsemu redshift query SQL`, like Athena's in v0.14.
+- ⬜ **EMR** (90.2%), **EMR Serverless** (90.6%; job runs are recorded but not executed), **Managed Flink** (96.9%), **MWAA** (100%), **Kinesis Video** (100%): `overview`/`describe` and seeds.
+- ⬜ **Keyspaces** (83.3%), **DocumentDB Elastic** (95.7%), **Neptune Analytics** (97.7%), **MemoryDB** (73.0%), **Amazon MQ** (77.1%): `overview`/`describe`; find out which of them run a real data plane.
+- ⬜ **SageMaker** (85.1%): `overview`/`describe` only.
+
+**Storage, governance and observability**
+
+- ⬜ **EFS** (94.9%), **EBS direct APIs** (100%), **Backup** (69.4%), **Data Lifecycle Manager** (97.1%): seeds and `describe`.
+- ⬜ **Config** (90.9%), **GuardDuty** (96.4%), **Security Hub** (82.8%), **CloudWatch Synthetics** (87.1%), **RUM** (90.8%), **Budgets** (94.4%): `overview`/`describe`.
+
+**Wait until the scores improve**
+
+- ⬜ Service Quotas (25.3%), Lake Formation (31.2%), Database Migration Service (35.0%), Redshift Serverless (46.7%), CloudFront KeyValueStore (0%): no commands yet; `check` warns when a project uses them. Look again with each new scores release (`awsemu fidelity --compare`).
+
 ## v1.0 — Stable distribution
 
 Goal: install and upgrade anywhere with one command.
@@ -225,7 +280,7 @@ Goal: install and upgrade anywhere with one command.
 - **Load and timing**: `awsemu bench` to measure the emulator's latency and throughput on your machine, to size test suites and timeouts.
 - **Editor integration**: a VS Code extension (start/stop, resources, calls) on top of the JSON output and the MCP server.
 - **A dev container feature** that installs the emulator and awsemu, for Codespaces and dev containers.
-- **More services beyond v0.14**, by demand: AppSync, Step Functions activities, OpenSearch, MSK (Kafka), IoT Core, Lex and the AI services (Comprehend, Textract, Translate, Polly, Rekognition), with scores from the fidelity suite to decide.
+- **More services after v0.16**, by demand, with the fidelity scores to decide.
 - **Plugins**: let other packages add `awsemu` commands (entry points), for company-specific workflows.
 - **Docs in other languages**, starting with Spanish, once the English docs are stable.
 - **Tests from your calls**: `awsemu proxy calls --as-pytest` writes a regression test that replays a recorded session (the calls and the answers they got) and checks the emulator still answers the same way, to catch behaviour changes when upgrading.
