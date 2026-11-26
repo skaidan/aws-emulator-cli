@@ -851,6 +851,7 @@ from .commands import fidelity as _fidelity  # noqa: E402
 from .commands import install as _install  # noqa: E402
 from .commands import issues as _issues  # noqa: E402
 from .commands import proxy as _proxy  # noqa: E402
+from .commands import report as _report  # noqa: E402
 from .commands import snapshot as _snapshot  # noqa: E402
 from .commands import kinesis as _kinesis  # noqa: E402
 from .commands import overview as _overview  # noqa: E402
@@ -883,6 +884,7 @@ cli.add_command(_check.check)
 cli.add_command(_install.install)
 cli.add_command(_issues.issues)
 cli.add_command(_proxy.proxy)
+cli.add_command(_report.report)
 cli.add_command(_snapshot.snapshot)
 cli.add_command(_watch.watch)
 

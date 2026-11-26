@@ -123,14 +123,14 @@ Goal: close the known gaps in what's already done.
 - ✅ **A fast Lambda loop**: `awsemu lambda deploy PATH [--watch]` packages local code (Python, Node), creates or updates the function and redeploys on save, so changing a function doesn't mean a zip and three commands. Done, with `--invoke JSON` to run it after each deploy and `requirements.txt` installed into the package.
 - ✅ **`awsemu call SERVICE OPERATION [--params JSON]`**: any API call through boto3, for the services without their own commands and for machines without the AWS CLI (`awsemu aws` needs it). Done, with `-p Key=value`, `--paginate`, `--query` and `--out`.
 - ✅ **Testcontainers modules** (Python, Java, Node): an `AwsEmulatorContainer` built on the Docker image, for teams that start their dependencies with Testcontainers rather than pytest fixtures. Done, in `awsemu.containers`, `testcontainers/java` and `testcontainers/node`, tested in CI; they're published with the rest at v1.0.
-- ⬜ **Proxy, the next step**:
-  - fault rules per resource (`dynamodb:PutItem[orders]=throttle`) and over time (`s3=503 for 30s`, an outage that recovers);
-  - optional request and response bodies in the calls log (`--bodies`), with secrets and credentials masked;
-  - export the calls as HAR, to open them in a browser's developer tools;
-  - `awsemu check --from-calls`: check the operations your tests really called (the proxy's log) instead of the static scan, which can miss calls or match a method by its name;
-  - `--host 0.0.0.0` and `awsemu compose --proxy`, so containers can go through it too;
-  - a token for the admin API (today any local process can change the faults), and a Java truststore for the proxy's certificate;
-  - `awsemu report CALL_ID`: a draft GitHub issue for the emulator with what AWS asks for (the request, the emulator's response and what AWS answers), built from the proxy's log, with credentials removed.
+- ✅ **Proxy, the next step**:
+  - ✅ fault rules per resource (`dynamodb:PutItem[orders]=throttle`) and over time (`s3=503 for 30s`, an outage that recovers);
+  - ✅ optional request and response bodies in the calls log (`--bodies`), with secrets and credentials masked;
+  - ✅ export the calls as HAR, to open them in a browser's developer tools;
+  - ✅ `awsemu check --from-calls`: check the operations your tests really called (the proxy's log) instead of the static scan, which can miss calls or match a method by its name;
+  - ✅ `--host 0.0.0.0` and `awsemu compose --proxy`, so containers can go through it too;
+  - ✅ a token for the admin API (before it, any local process could change the faults), and a Java truststore for the proxy's certificate;
+  - ✅ `awsemu report CALL_ID`: a draft GitHub issue for the emulator with what AWS asks for (the request, the emulator's response and what AWS answers), built from the proxy's log, with credentials removed. What AWS answers is left for whoever files it, with a link to the operation's reference: awsemu doesn't call AWS.
 
 ## v0.11 — AI agents
 

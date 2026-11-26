@@ -203,6 +203,10 @@ jobs:
           awsemu --port 9302 proxy calls --json | grep -q 'host.docker.internal'
           awsemu --port 9302 proxy har -o calls.har && grep -q CreateQueue calls.har
           awsemu --port 9302 check --from-calls --no-explain
+          ! docker compose -f compose.proxy.yaml run --rm app sqs get-queue-url --queue-name does-not-exist
+          awsemu --port 9302 report last | tee report.md
+          grep -q "## Steps to reproduce" report.md && grep -q "GetQueueUrl" report.md
+          ! grep -qi "authorization" report.md
           awsemu --port 9302 proxy stop
           docker compose -f compose.emulator.yaml down
 

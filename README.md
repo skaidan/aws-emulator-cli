@@ -124,6 +124,7 @@ If you'd rather not touch your current shell:
 awsemu exec -- pytest -k integration       # any command, already pointed at the emulator
 awsemu aws s3 ls                           # the AWS CLI, pointed at the emulator
 awsemu call s3 list-buckets                # any operation, without the AWS CLI
+awsemu report last                         # a draft emulator issue from the last failed call (proxy)
 awsemu shell                               # a connected sub-shell ('exit' to leave)
 awsemu whoami                              # checks you're talking to account 000000000000
 ```

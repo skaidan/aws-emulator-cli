@@ -96,6 +96,7 @@ awsemu proxy calls --errors --service dynamodb
 awsemu proxy calls --json          # for scripts; with --follow, one JSON object per line
 awsemu watch --calls               # = awsemu proxy calls --follow
 awsemu proxy har -o calls.har      # the calls as a HAR file, for a browser's developer tools
+awsemu report CALL                 # a draft emulator issue from one call (below)
 ```
 
 `awsemu --port N proxy …` works with the emulator on port N; the proxy follows it (port N + 1). Calls are also kept in `~/.aws/emulator-cli/proxy/<emulator port>/calls.jsonl`, which rotates at 20 MB, so you can read them after the proxy stops. `awsemu ui` shows them too: press `c`.
@@ -213,6 +214,22 @@ With `proxy = true`:
 - `awsemu env`, `exec`, `shell` and `aws` go through it whenever it's running (`--no-proxy` to skip it);
 - `awsemu down` and `awsemu stop` stop both;
 - the pytest plugin sends every test through a proxy with these faults.
+
+## Reporting a difference to the emulator
+
+When the emulator answers something AWS wouldn't, `awsemu report` drafts the issue from the call in the proxy's log, following the emulator's ["Behavior differs from AWS" form](https://github.com/aws/aws-emulator/issues/new?template=behavior-differs.yml):
+
+```bash
+awsemu proxy start -d --bodies              # so the draft has the request and the response
+awsemu exec --proxy -- pytest               # the failing test
+awsemu proxy calls --errors --json | jq '.[] | {id, operation, error}'
+awsemu report 42                            # the draft, in Markdown (-o draft.md for a file)
+awsemu report last --open                   # the last failed call, in the issue form in your browser
+```
+
+The draft has what the emulator answered (status, headers, body, and its log around the call), the request with the signing headers removed, the earlier calls on the same resource, an `awsemu call` line that sends the same request again (for JSON APIs, when nothing in it was masked), the client's `User-Agent`, and the emulator version. "What you expected" links to the operation's AWS reference and is left for you: awsemu doesn't know what AWS answers, so check it against AWS or the documentation before filing. `last` skips injected faults, and reporting one is refused: those errors are the proxy's, not the emulator's.
+
+Secrets and credentials are masked in the log already ([above](#headers-and-bodies)), but read the draft before you file it: the form asks to remove account IDs, personal data and anything else sensitive.
 
 ## The admin API
 

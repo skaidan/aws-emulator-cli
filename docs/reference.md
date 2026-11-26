@@ -30,6 +30,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`logs`](#awsemu-logs) — Show the emulator's log, prettified (also after it stopped).
 - [`overview`](#awsemu-overview) — What's inside the emulator, across common services.
 - [`proxy`](#awsemu-proxy) — See every API call, and inject faults (throttling, errors, latency).
+- [`report`](#awsemu-report) — Draft an issue for the emulator from a call the proxy logged.
 - [`restart`](#awsemu-restart) — Restart the emulator, which empties its state (it's all in memory).
 - [`s3`](#awsemu-s3) — S3: buckets and objects.
 - [`secrets`](#awsemu-secrets) — Secrets Manager: store and read secrets.
@@ -903,6 +904,32 @@ Stop the background proxy.
 ```
 awsemu proxy stop [OPTIONS]
 ```
+
+## `awsemu report`
+
+Draft an issue for the emulator from a call the proxy logged.
+
+```bash
+awsemu proxy calls --errors          # find the call's id (first column with --json)
+awsemu report 42                     # the draft, in Markdown
+awsemu report last --open            # the last failed call, in the issue form
+```
+CALL is a call id, or 'last' for the last call that failed (injected faults
+aren't the emulator's, so they're skipped). It follows the emulator's
+"Behavior differs from AWS" form: what it answered, the request, the
+version and its log around the call. Credentials are removed. What AWS
+answers is for you to fill in. Start the proxy with --bodies so the draft
+has the request and response.
+
+```
+awsemu report [OPTIONS] CALL
+```
+
+| Option | Description |
+| --- | --- |
+| `-o, --output FILE` | Write the draft (Markdown) to this file instead of printing it. |
+| `--url` | Print a link to the emulator's issue form with the draft filled in, instead. |
+| `--open` | Open that link in your browser. |
 
 ## `awsemu restart`
 
