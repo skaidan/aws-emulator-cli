@@ -4,6 +4,7 @@
 
 Towards 0.12.0.
 
+- A minimal install, documented and tested: without `boto3` and `cryptography`, the emulator's lifecycle and the environment commands work; commands that need them say what to install instead of failing with an import error. They stay dependencies of the package (see `docs/getting-started.md`).
 - A deprecation policy (`docs/deprecations.md`): renamed options, settings and JSON fields keep working for at least two minor releases and three months, with a warning; the code has the helpers to do it (`awsemu.deprecation`).
 - JSON Schemas for every `--json` output in `docs/schemas/` (generated from `src/awsemu/schemas.py`; the contract tests validate real outputs against them).
 - `awsemu doctor` shows whether your emulator is supported (from 1.0.250, the oldest release CI tests awsemu with) and whether a newer emulator or awsemu is out; `awsemu start` mentions newer releases at most once a day, on a terminal, never in CI or with `AWSEMU_NO_UPDATE_CHECK=1`.

@@ -23,6 +23,19 @@ Check what you have and what's missing:
 awsemu doctor
 ```
 
+### A minimal install
+
+Most of awsemu's size is the AWS SDK for Python (`boto3`, whose `botocore` is over 100 MB installed) and `cryptography`. If a machine or a CI image only needs to **start and stop the emulator and point other programs at it** (Node, Java, Go or Terraform code that brings its own SDK), it can do without them:
+
+```bash
+pip install --no-deps 'aws-emulator-cli @ git+https://github.com/skaidan/aws-emulator-cli' click rich pyyaml
+# Python 3.10 also needs: tomli
+```
+
+What works then: `start`, `stop`, `restart`, `status`, `up`, `down`, `env`, `exec`, `shell`, `logs`, `compose`, `install`, `doctor`, `config` (tested in CI with those packages blocked). Commands that call AWS APIs (`s3`, `sqs`, `overview`, `seed`, `call`…) or run the proxy say what's missing and how to install it. `awsemu doctor` lists `boto3` as missing.
+
+They stay regular dependencies of the package: pip can't install "optional by default" extras yet, and making them opt-in would leave the usual `pip install` without the service commands, seeds, the proxy and the pytest plugin's fault injection.
+
 ## 2. Choose how to run the emulator
 
 `awsemu` doesn't include the emulator: it runs it. There are two ways, and `awsemu start` picks one by itself (the native binary first, otherwise Docker).

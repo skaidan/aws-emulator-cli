@@ -152,7 +152,7 @@ Goal: what works locally should work on AWS too. The emulator can't promise that
 - ✅ **Shadow mode** in the proxy: send read-only calls to both the emulator and a real AWS account you name explicitly, and report where the answers differ. That's your own fidelity test, built from your traffic. Opt-in and read-only, with great care for credentials and costs.
 - ✅ **A seed from a real account**: `awsemu seed import --profile NAME` reads the configuration of an account (tables, queues, topics, buckets without their objects, parameters without SecureString values), read-only and only with a profile you name, and writes a seed, to start locally from something close to your environment.
 
-## v0.13 — Hardening before 1.0 🚧
+## v0.13 — Hardening before 1.0 ✅
 
 Goal: what a project people depend on needs, beyond features.
 
@@ -163,7 +163,7 @@ Goal: what a project people depend on needs, beyond features.
 - ✅ **Project health**: `SECURITY.md` (how to report a vulnerability, e.g. in the proxy), issue and pull request templates, a code of conduct, and labels for "good first issue".
 - ✅ **JSON Schemas** for every `--json` output (generated from the contract tests and published with the docs), so scripts can validate what they read.
 - ✅ **A deprecation policy**: how long a flag, setting or JSON field keeps working after it's replaced, and warnings when it's used, written down before 1.0 promises stability.
-- ⬜ **Lighter installs**: check whether `boto3` and `cryptography` can become extras (for example, `awsemu start`/`env` without them) without making the common case worse.
+- ✅ **Lighter installs**: check whether `boto3` and `cryptography` can become extras (for example, `awsemu start`/`env` without them) without making the common case worse. Checked: they stay dependencies (pip has no default extras, so making them optional would make the usual install worse); a minimal install without them is documented and tested, and commands that need them say what to install. Revisit if default extras (PEP 771) land.
 
 ## v1.0 — Stable distribution
 

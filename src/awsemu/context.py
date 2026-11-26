@@ -40,6 +40,17 @@ def _is_botocore_error(exc: Exception) -> bool:
     )
 
 
+# Packages some commands need, and what for (a minimal install can leave them out).
+OPTIONAL_PACKAGES = {
+    "boto3": "the AWS SDK for Python",
+    "botocore": "the AWS SDK for Python",
+    "s3transfer": "the AWS SDK for Python",
+    "cryptography": "cryptography (the proxy's certificate)",
+    "textual": "Textual (the terminal UI)",
+    "testcontainers": "Testcontainers",
+}
+
+
 def handle_errors(fn):
     """Turn expected failures into a one-line message plus a hint, exit code 1."""
 
@@ -49,6 +60,18 @@ def handle_errors(fn):
             return fn(*args, **kwargs)
         except RuntimeErrorWithHint as exc:
             ui.error(str(exc), exc.hint)
+            sys.exit(exitcodes.FAILED)
+        except ImportError as exc:
+            missing = (exc.name or "").split(".")[0]
+            if missing not in OPTIONAL_PACKAGES:
+                raise
+            from . import _meta
+
+            ui.error(
+                f"this command needs {OPTIONAL_PACKAGES[missing]}, which isn't installed ({missing})",
+                f"pip install {'boto3' if missing in ('botocore', 's3transfer') else missing}, "
+                f"or reinstall awsemu with its dependencies: {_meta.install_hint()}",
+            )
             sys.exit(exitcodes.FAILED)
         except Exception as exc:  # botocore errors without importing botocore here
             if _is_botocore_error(exc):
