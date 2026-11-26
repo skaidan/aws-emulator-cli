@@ -76,11 +76,14 @@ def load_index(release: str | None, manifest_ref: str | None = None, refresh: bo
               help="Check the operations the proxy saw your code call (its calls log), instead of reading the code.")
 @click.option("--calls-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), metavar="FILE",
               help="A calls log to read with --from-calls (default: the proxy's, for --port).")
+@click.option("--iam", "iam_mode", is_flag=True,
+              help="Instead: the IAM actions your code needs that your Terraform/CloudFormation/CDK policies "
+                   "don't grant.")
 @json_option
 @pass_ctx
 @handle_errors
 def check(c: Ctx, paths, release, manifest_ref, show_all, strict, refresh, no_explain, from_calls, calls_file,
-          as_json):
+          iam_mode, as_json):
     """Find the AWS operations your project uses and the known emulator differences for them.
 
     \b
@@ -89,6 +92,7 @@ def check(c: Ctx, paths, release, manifest_ref, show_all, strict, refresh, no_ex
       awsemu check --release latest   # would upgrading help?
       awsemu check --strict           # exit 1 on known differences (CI)
       awsemu check --from-calls       # what your tests really called, via the proxy
+      awsemu check --iam              # permissions your infrastructure doesn't grant
 
     Reads code that uses boto3, the AWS SDKs for JavaScript, Java and Go, and
     Terraform, CloudFormation/SAM and CDK files; nothing is run. Then it looks
@@ -101,6 +105,8 @@ def check(c: Ctx, paths, release, manifest_ref, show_all, strict, refresh, no_ex
     """
     if calls_file and not from_calls:
         from_calls = True
+    if iam_mode:
+        return _check_iam(c, list(paths) or [Path(".")], from_calls, calls_file, strict, as_json)
     if from_calls and paths:
         raise click.UsageError("--from-calls reads the proxy's log, not files: drop the paths")
     tag, suite, index, installed = load_index(release, manifest_ref, refresh)
@@ -215,5 +221,57 @@ def check(c: Ctx, paths, release, manifest_ref, show_all, strict, refresh, no_ex
         ui.success(f"No known differences for the {summary['operations']} operation(s) you use.")
     ui.echo(f"Tests: {chk.SUITE_URL} · details: awsemu fidelity SERVICE --failures"
             + ("" if show_all else " · every difference: --all"), "muted")
+    if failed:
+        raise SystemExit(exitcodes.FAILED)
+
+
+def _check_iam(c: Ctx, paths: list[Path], from_calls: bool, calls_file, strict: bool, as_json: bool) -> None:
+    """``check --iam``: needed actions (calls or code) against the policies in the infrastructure."""
+    from .. import iamcheck as ic
+
+    if from_calls:
+        from .iam import load_calls
+
+        calls, log = load_calls(c.port, calls_file)
+        needed, source = ic.needed_from_calls(calls, log.name), f"{len(calls)} call(s) in {log.name}"
+    else:
+        needed, source = ic.needed_from_code(paths), "the code (static scan)"
+    grants = ic.granted(paths)
+    result = ic.compare(needed, grants)
+    failed = strict and bool(result.missing)
+    if as_json:
+        ui.print_json(result.as_dict())
+        if failed:
+            raise SystemExit(exitcodes.FAILED)
+        return
+    ui.kv([("actions from", source), ("policies", f"{grants.files} file(s), {len(grants.actions)} allowed action(s)")])
+    ui.echo()
+    if not needed:
+        ui.warn("found no AWS calls that need a permission")
+        return
+    if not grants.actions and not grants.unexpanded:
+        ui.warn("found no IAM policies here (Terraform, CloudFormation/SAM, or cdk.out after 'cdk synth')")
+        ui.echo("Point it at your infrastructure: awsemu check --iam infra/", "muted")
+        return
+    rows = []
+    for act, where in sorted(needed.items()):
+        allowed = grants.allows(act)
+        rows.append([act, ui.styled("missing", "error") if not allowed else ui.styled(allowed[0].pattern, "ok"),
+                     where[0] + (f" (+{len(where) - 1})" if len(where) > 1 else "")])
+    ui.table(["action", "granted by", "used in"], rows, title="Actions your code needs")
+    if grants.unexpanded:
+        ui.echo("Not expanded (they may grant more): "
+                + ", ".join(sorted({p for p, _ in grants.unexpanded})), "muted")
+    if result.unused:
+        ui.echo(f"Granted but not used by these calls: {', '.join(sorted({g.pattern for g in result.unused}))}",
+                "muted")
+    ui.echo()
+    if result.missing:
+        ui.warn(f"{len(result.missing)} action(s) your code needs aren't allowed by any policy here: "
+                + ", ".join(result.missing))
+        ui.echo("It compares actions only, across every policy in the project (not per role); see docs/iam.md.",
+                "muted")
+    else:
+        ui.success(f"Every one of the {len(needed)} action(s) is allowed by a policy here.")
     if failed:
         raise SystemExit(exitcodes.FAILED)

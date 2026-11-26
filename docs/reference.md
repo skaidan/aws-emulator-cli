@@ -22,6 +22,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`exec`](#awsemu-exec) — Run COMMAND with the environment pointed at the emulator.
 - [`explain`](#awsemu-explain) — Say whether a failed call is a known emulator difference or likely your code.
 - [`fidelity`](#awsemu-fidelity) — Fidelity scores published with each emulator release: tests passed per service.
+- [`iam`](#awsemu-iam) — IAM permissions your code needs, from the calls it made (the proxy's log).
 - [`image`](#awsemu-image) — Build the Docker image (AWS doesn't publish a prebuilt one).
 - [`init`](#awsemu-init) — Create awsemu.toml in this folder.
 - [`install`](#awsemu-install) — Install a given emulator version: the Linux package, or a Docker image.
@@ -98,6 +99,7 @@ awsemu check src infra          # just these
 awsemu check --release latest   # would upgrading help?
 awsemu check --strict           # exit 1 on known differences (CI)
 awsemu check --from-calls       # what your tests really called, via the proxy
+awsemu check --iam              # permissions your infrastructure doesn't grant
 ```
 Reads code that uses boto3, the AWS SDKs for JavaScript, Java and Go, and
 Terraform, CloudFormation/SAM and CDK files; nothing is run. Then it looks
@@ -122,6 +124,7 @@ awsemu check [OPTIONS] [PATHS]...
 | `--no-explain` | Don't look up what explains each difference: the emulator's issue files and whether the latest release fixes it (no extra downloads). |
 | `--from-calls` | Check the operations the proxy saw your code call (its calls log), instead of reading the code. |
 | `--calls-file FILE` | A calls log to read with --from-calls (default: the proxy's, for --port). |
+| `--iam` | Instead: the IAM actions your code needs that your Terraform/CloudFormation/CDK policies don't grant. |
 | `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu completion`
@@ -499,6 +502,39 @@ awsemu fidelity [OPTIONS] [SERVICES]...
 | `--mine` | Only the services this project uses (found like 'awsemu check' does). |
 | `--refresh` | Download again instead of using the cache. |
 | `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
+## `awsemu iam`
+
+IAM permissions your code needs, from the calls it made (the proxy's log).
+
+### `awsemu iam policy`
+
+The least-privilege IAM policy for the calls your code made.
+
+\b
+```bash
+awsemu proxy start -d && awsemu exec --proxy -- pytest
+awsemu iam policy                                # JSON policy document
+awsemu iam policy --account 123456789012 --region eu-west-1
+awsemu iam policy --format terraform -o policy.tf
+```
+Each call becomes an action and, where the call names a resource, its ARN
+(region and account '*' unless you give them). Review it: it covers only
+the calls the proxy saw, and some calls need more (kms for encrypted data,
+iam:PassRole). Guide: docs/iam.md.
+
+```
+awsemu iam policy [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--calls-file FILE` | A calls log (default: the proxy's, for --port). |
+| `--region TEXT` | Region in the ARNs.  [default: *] |
+| `--account TEXT` | Account ID in the ARNs.  [default: *] |
+| `--service NAME` | Only this service. Repeatable. |
+| `--format [json|terraform]` | A policy document, or a Terraform aws_iam_policy_document.  [default: json] |
+| `-o, --output FILE` | Write it to this file. |
 
 ## `awsemu image`
 

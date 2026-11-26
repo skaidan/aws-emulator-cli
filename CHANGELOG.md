@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+Towards 0.12.0.
+
+- `awsemu iam policy`: the least-privilege IAM policy for the calls in the proxy's log: actions (with S3, Lambda and batch exceptions mapped) and resource ARNs where the calls name them; `--account`, `--region`, `--service`, `--format terraform`.
+- `awsemu check --iam`: the IAM actions your code needs (from the static scan, or `--from-calls`) that no `Allow` in your Terraform, CloudFormation/SAM or synthesized CDK policies grants; managed policies and SAM templates are listed as not expanded. `--strict` for CI. Guide: `docs/iam.md`.
+
 ## 0.11.0 — 2026-11-26
 
 Everything planned for 0.10 and 0.11, in one release. Coding agents get an MCP server with guard rails (`awsemu mcp`, guide: `docs/agents.md`) and can ask whether a failure is the emulator or the code (`awsemu explain`). The proxy logs bodies, exports HAR, takes faults per resource and over time, serves containers and drafts emulator issues (`awsemu report`). Node, Java, Go, Terraform and CDK are tested in CI, with Testcontainers modules for Python, Java and Node. Plus `awsemu call`, `lambda deploy --watch`, snapshots, four new seed sections, `awsemu issues` and setup-trap detection in `doctor`.

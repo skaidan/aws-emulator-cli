@@ -21,6 +21,7 @@ awsemu check --all              # every known difference, not the first 3 per op
 awsemu check --strict           # exit code 1 if there are known differences (CI)
 awsemu check --json             # for scripts (format: scripting.md)
 awsemu check --from-calls       # what your tests really called, from the proxy's log
+awsemu check --iam              # IAM actions your code needs that your policies don't grant (iam.md)
 ```
 
 Try it with the example in this repository: `awsemu check examples/check-demo`. Real output, for release v1.0.471, the fidelity tests v1.0.0, and v1.0.611 as the latest release (the tests and numbers change with each release):

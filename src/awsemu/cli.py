@@ -849,6 +849,7 @@ from .commands import dynamodb as _dynamodb  # noqa: E402
 from .commands import events as _events  # noqa: E402
 from .commands import explain as _explain  # noqa: E402
 from .commands import fidelity as _fidelity  # noqa: E402
+from .commands import iam as _iam  # noqa: E402
 from .commands import install as _install  # noqa: E402
 from .commands import issues as _issues  # noqa: E402
 from .commands import proxy as _proxy  # noqa: E402
@@ -889,6 +890,7 @@ cli.add_command(_proxy.proxy)
 cli.add_command(_report.report)
 cli.add_command(_explain.explain)
 cli.add_command(_mcp.mcp)
+cli.add_command(_iam.iam)
 cli.add_command(_snapshot.snapshot)
 cli.add_command(_watch.watch)
 

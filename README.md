@@ -45,6 +45,7 @@ DynamoDB tables  1      users
 - [Seeds](docs/seeds.md): reproducible starting data (format, validation, `apply` and `export`), and snapshots.
 - [Services guide](docs/services.md): S3, SQS, DynamoDB, SNS, Lambda, Secrets Manager, SSM, EventBridge, Kinesis, Step Functions and `describe`, with examples.
 - [Testing and CI](docs/testing.md): pytest plugin, GitHub Action, Testcontainers (Python, Java, Node), scripts and Docker Compose.
+- [IAM](docs/iam.md): the least-privilege policy your calls need, and what your infrastructure doesn't grant.
 - [AI coding agents](docs/agents.md): an MCP server (`awsemu mcp`) so agents test against the emulator, never AWS.
 - [Scripting](docs/scripting.md): stable JSON output and exit codes.
 - [Troubleshooting](docs/troubleshooting.md): what each error means.
