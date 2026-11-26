@@ -47,7 +47,7 @@ def test_s3_and_sqs(emulator):
 def test_env_points_a_child_process_at_it(emulator):
     code = "import boto3; print(boto3.client('sts').get_caller_identity()['Account'])"
     env = {k: v for k, v in os.environ.items() if not k.startswith("AWS_")}
-    out = subprocess.run([sys.executable, "-c", code], env={**env, **emulator.env()},
+    out = subprocess.run([sys.executable, "-c", code], env={**env, **emulator.aws_env()},
                          capture_output=True, text=True, check=True).stdout
     assert out.strip() == "000000000000"
 

@@ -211,6 +211,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          cache: maven
+          cache-dependency-path: testcontainers/java/pom.xml
       - if: matrix.language == 'node'
         uses: actions/setup-node@v4
         with:
@@ -224,7 +226,7 @@ jobs:
       - name: Java
         if: matrix.language == 'java'
         working-directory: testcontainers/java
-        run: mvn -q -B test
+        run: mvn -q -B test || (sleep 30 && mvn -q -B test)   # Maven Central answers 429 at times
       - name: Node
         if: matrix.language == 'node'
         working-directory: testcontainers/node

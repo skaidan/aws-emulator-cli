@@ -130,7 +130,7 @@ class AwsEmulatorContainer(DockerContainer):
             raise RuntimeError("the container isn't started")
         return self._keys
 
-    def env(self) -> dict[str, str]:
+    def aws_env(self) -> dict[str, str]:
         """The variables that point an SDK, the AWS CLI or Terraform at this container."""
         return {
             "AWS_ENDPOINT_URL": self.endpoint_url,
