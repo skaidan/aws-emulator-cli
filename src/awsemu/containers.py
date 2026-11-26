@@ -153,16 +153,11 @@ class AwsEmulatorContainer(DockerContainer):
     def client(self, service: str, **kwargs):
         """A boto3 client for this container."""
         import boto3
-        from botocore.config import Config
 
-        kwargs.setdefault(
-            "config",
-            Config(
-                inject_host_prefix=False,
-                s3={"addressing_style": "path"},
-                retries={"max_attempts": 2, "mode": "standard"},
-            ),
-        )
+        from .clients import emulator_config
+
+        # botocore's own timeouts (60 s), as before: a container may be slower than a local process.
+        kwargs.setdefault("config", emulator_config(connect_timeout=60, read_timeout=60))
         return boto3.client(
             service,
             endpoint_url=self.endpoint_url,

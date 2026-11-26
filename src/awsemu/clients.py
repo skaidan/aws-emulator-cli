@@ -54,21 +54,41 @@ def _session(port: int):
     return _session_for(*read_credentials(port))
 
 
+# The one place that says how a client talks to an emulator (or the proxy in front of
+# it) and to a real account. Every boto3 client awsemu makes uses one of these two.
+EMULATOR_CONFIG = {
+    "inject_host_prefix": False,  # the emulator answers on one host, not api.<service>...
+    "s3": {"addressing_style": "path", "signature_version": "s3v4"},
+    "retries": {"max_attempts": 2, "mode": "standard"},
+    "connect_timeout": 3,
+    "read_timeout": 30,
+}
+REAL_ACCOUNT_CONFIG = {
+    "ignore_configured_endpoint_urls": True,  # never let AWS_ENDPOINT_URL point a real read elsewhere
+    "retries": {"max_attempts": 3, "mode": "standard"},
+}
+
+
+def emulator_config(**overrides):
+    """The botocore ``Config`` for clients of an emulator, with ``overrides`` on top."""
+    from botocore.config import Config
+
+    return Config(**{**EMULATOR_CONFIG, **overrides})
+
+
+def real_account_config(**overrides):
+    """The botocore ``Config`` for read-only clients of a real account."""
+    from botocore.config import Config
+
+    return Config(**{**REAL_ACCOUNT_CONFIG, **overrides})
+
+
 def client(service: str, port: int, endpoint_url: str | None = None, ca: str | None = None):
     """A boto3 client for the emulator on ``port`` (or, with ``endpoint_url``/``ca``, the
     proxy in front of it: same credentials, another address and certificate)."""
     files = ensure_running(port)
-    from botocore.config import Config
-
-    config = Config(
-        inject_host_prefix=False,
-        s3={"addressing_style": "path", "signature_version": "s3v4"},
-        retries={"max_attempts": 2, "mode": "standard"},
-        connect_timeout=3,
-        read_timeout=30,
-    )
     return _session(port).client(
-        service, endpoint_url=endpoint_url or files.endpoint_url, verify=ca or str(files.ca), config=config
+        service, endpoint_url=endpoint_url or files.endpoint_url, verify=ca or str(files.ca), config=emulator_config()
     )
 
 

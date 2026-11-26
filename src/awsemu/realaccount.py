@@ -98,11 +98,9 @@ def session(profile: str, region: str | None = None, data_reads: bool = False):
 
 
 def client(sess, service: str):
-    from botocore.config import Config
+    from .clients import real_account_config
 
-    return sess.client(
-        service, config=Config(ignore_configured_endpoint_urls=True, retries={"max_attempts": 3, "mode": "standard"})
-    )
+    return sess.client(service, config=real_account_config())
 
 
 def localize(value, account: str, emulator_account: str = "000000000000", emulator_region: str = "us-east-1"):
