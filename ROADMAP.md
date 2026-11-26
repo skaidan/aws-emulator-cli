@@ -343,6 +343,15 @@ Goal: tests that catch more, CI that explains failures, and fewer surprises when
 - ⬜ **Observability**: export proxy calls as OpenTelemetry spans, a Prometheus endpoint with per-operation counts and latencies, and `awsemu top` for live rates.
 - ⬜ **More for agents**: MCP resources (seeds, snapshots, the call log) and prompts ("why does this call fail?"), and one emulator per agent session so agents don't step on each other.
 
+## v0.21 — Coming from LocalStack
+
+Goal: someone with a LocalStack setup moves to AWS Emulator in minutes, without rewriting scripts.
+
+- ⬜ **Drop-in commands**: `awslocal`, `tflocal` and `cdklocal` equivalents (installed as `awsemu-awslocal` and friends, or as the original names with `awsemu shims install`) that point the AWS CLI, Terraform and CDK at the emulator.
+- ⬜ **`awsemu migrate localstack`**: reads `docker-compose.yml`, `LOCALSTACK_*` and `SERVICES`/`PERSISTENCE` variables and init hooks (`/etc/localstack/init/ready.d`), and writes `awsemu.toml`, a seed and the matching `compose` service; it prints what has no equivalent.
+- ⬜ **Compatible environment**: honour `LOCALSTACK_HOST`, `AWS_ENDPOINT_URL` and `localhost.localstack.cloud`-style hostnames where it is cheap to do, with a warning that says the awsemu way.
+- ⬜ **A migration guide** in the docs: a table of services and features with their equivalent (or "not yet"), from the fidelity scores, and the differences in behaviour that matter (ports, TLS, persistence, IAM).
+
 ## v1.0 — Stable distribution
 
 Goal: install and upgrade anywhere with one command.
@@ -356,6 +365,9 @@ Goal: install and upgrade anywhere with one command.
 - ⬜ **Upgrade notes** for each release in the docs, and a "what changed for me" summary when upgrading awsemu itself.
 - ⬜ Semantic versioning and a stability promise (the output is fixed in v0.7).
 - ✅ Documentation in `docs/`: getting started, services, testing and CI, troubleshooting, architecture and a reference generated from the code.
+- ⬜ **Security of awsemu itself**: a threat model for the proxy, its admin token, `--host`, shadow mode and `seed import` against real accounts (in SECURITY.md); fuzzing of the parsers and of requests to the proxy; `pip-audit`/OSV in CI; releases signed with Sigstore on top of the build attestation.
+- ⬜ **Hard environments**: install without network from a downloaded bundle (wheels plus the emulator), corporate proxies with their own CA (`HTTPS_PROXY`, `SSL_CERT_FILE`, `--ca-bundle`), Linux ARM and Windows ARM in the CI matrix, and rootless containers (Docker rootless, Podman).
+- ⬜ **Performance budgets in CI**: fail the build when startup, `awsemu --version`, `env` or the proxy's added latency get more than 10% worse than the last release, so what v0.14 gains isn't lost.
 - ⬜ A documentation website (MkDocs) with guides: "integration tests with pytest", "CI with GitHub Actions" and "Node and Java against the emulator".
 
 ---
@@ -371,6 +383,10 @@ Goal: install and upgrade anywhere with one command.
 - **Output formats**: `--output yaml|csv` next to the table and `--json`.
 - **Time travel**: a fake clock (if the emulator gets one) to test TTLs, schedules, retention and expirations without waiting.
 - **Teams**: shared presets in a company repository (`awsemu preset use acme/web`) with seeds, settings and fault profiles.
+- **Example apps**: a repository of small apps tested with awsemu in CI (a serverless API with Cognito, an S3 → Lambda → SQS event pipeline, a Terraform project), and short recipes in the docs ("test an SQS consumer", "test a Lambda fed by DynamoDB Streams").
+- **After 1.0**: a fixed release rhythm, how long each minor gets fixes, which emulator versions are supported and for how long, and a written privacy promise (awsemu sends no telemetry).
+- **Community**: a maintainers' guide, "good first issue" labels tied to the service registry (adding a service as the typical first contribution), roadmap voting with issue reactions, and GitHub Discussions.
+- **Accessibility of the terminal UI**: a high-contrast theme, full use without colours (`NO_COLOR`), and checking it with screen readers.
 - **Plugins**: let other packages add `awsemu` commands (entry points), for company-specific workflows.
 - **Docs in other languages**, starting with Spanish, once the English docs are stable.
 - **Other local emulators as backends**: run the same commands, seeds, proxy and pytest fixtures against LocalStack, Floci, MiniStack or moto, and compare how they answer your own calls. It would only be worth it if people ask; the project is built around AWS Emulator.
