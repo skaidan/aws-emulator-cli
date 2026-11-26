@@ -165,6 +165,41 @@ Goal: what a project people depend on needs, beyond features.
 - ✅ **A deprecation policy**: how long a flag, setting or JSON field keeps working after it's replaced, and warnings when it's used, written down before 1.0 promises stability.
 - ✅ **Lighter installs**: check whether `boto3` and `cryptography` can become extras (for example, `awsemu start`/`env` without them) without making the common case worse. Checked: they stay dependencies (pip has no default extras, so making them optional would make the usual install worse); a minimal install without them is documented and tested, and commands that need them say what to install. Revisit if default extras (PEP 771) land.
 
+## v0.14 — More services
+
+Goal: the services people use next to the ten awsemu already covers get the same treatment (their own commands, seed sections, `overview`, `describe`, `watch`, the UI, completion and `check`). Today they only work through `awsemu call` and `describe`.
+
+Evidence: the emulator has 438 service models, and the public fidelity suite has behavioural tests for 351. The scores below are single-service tests passed for emulator v1.0.629 (the "open" count is the emulator repository's own `issues/things-that-do-not-work` for that service, as of 2026-11-26). Order is by how often the service sits next to the ones we cover, and by how much awsemu can add over `call`.
+
+**First: the web and auth layer of a serverless app**
+
+- ⬜ **API Gateway** (REST 97.0%, HTTP APIs 75.6%; WebSocket data plane not served yet): `awsemu api ls` (APIs, stages, routes and their integrations), `awsemu api invoke API [STAGE] METHOD PATH` (call a deployed stage locally without working out the invoke host by hand; the emulator routes `{api}.execute-api.{region}.amazonaws.com`, so awsemu sets that host), the invoke URL in `env`/`overview`, and APIs in seeds. Pairs with `lambda deploy --watch` for a local edit-and-call loop.
+- ⬜ **Cognito user pools** (94.4%, 53 open; Lambda triggers are among the known gaps): `awsemu cognito pool create`, `user add EMAIL --password` (confirmed, no email step), `token USER` (InitiateAuth, printing ID/access tokens, or `--export` as variables for curl and tests), and pools, clients and users in seeds. A pytest fixture that returns a signed-in user. Say clearly which triggers the emulator does not invoke yet.
+- ⬜ **CloudWatch Logs** (95.1%, 190 open): `awsemu logs ls`, `awsemu logs tail GROUP [--follow] [--filter PATTERN]`, and `awsemu lambda logs NAME` on top of it. Also a "logs" pane in the UI and log groups in `overview`.
+
+**Next: services that are configuration people seed**
+
+- ⬜ **KMS** (95.8%) keys and aliases in seeds (so `alias/my-app` exists before the app starts), and `awsemu kms ls`. `seed import --profile` reads aliases and key policies (never key material).
+- ⬜ **EventBridge Scheduler** (94.6%) and **Pipes** (93.9%) under `awsemu events`: `schedules ls`, `pipes ls`, and both in seeds, `describe` and `check`.
+- ⬜ **SES v2** (81.0%) and **SES** (93.0%): verified identities in seeds, and `awsemu ses sent [--to ADDR] [--follow]` to see the mail your code sent, if the emulator keeps sent messages in a readable form (check first; otherwise the proxy log can show them).
+- ⬜ **AppConfig** (98.1%, data plane 100%): applications, profiles and hosted versions in seeds, and `awsemu appconfig get APP ENV PROFILE` to read what the app would see.
+- ⬜ **Firehose** (95.3%): delivery streams in seeds and `overview`, and `awsemu firehose put` with `--file`, like `kinesis put`.
+
+**Then: data, containers and infrastructure, by demand**
+
+- ⬜ **CloudFormation**: `awsemu stack deploy TEMPLATE`, `stack events NAME --follow`, `stack outputs NAME`. Its score is low (18.9% single-service, 715 open issues, and several "stack reports completion but provisions nothing" cases), so the command must check what a stack really created and say so, and `check` should warn about resource types known to be missing. Until it's better, seeds stay the recommended way to create state.
+- ⬜ **ECR** (90.4%) and **ECS** (86.2%): `awsemu ecr login` (Docker credentials for the local registry, if the emulator serves the registry API) and `ecs ls`.
+- ⬜ **Athena** (91.5%) and **Glue** (86.1%): `awsemu athena query SQL` with results as a table, and Glue databases and tables in seeds.
+- ⬜ **RDS** (73.8%) and **RDS Data API** (82.2%), **ElastiCache** (85.7%): only `overview`/`describe` support until the scores improve; say in `check` what doesn't work.
+- ⬜ **ACM** (97.3%), **Route 53** (90.0%), **CloudWatch metrics and alarms** (95.8%), **X-Ray** (93.4%), **S3 Tables** (98.5%) and **S3 Vectors** (98.8%): seed sections and `overview`/`describe`, no new commands unless asked.
+- ⬜ **Bedrock runtime** (64.7%) and **Bedrock Agent runtime** (94.3%): find out what the emulator answers to InvokeModel and Converse (no real model runs locally), and document what you can test with it (request shapes, errors, throttling via proxy faults) and what you can't.
+
+**For every new service**
+
+- ⬜ `check` knows its operations' fidelity, the proxy's cost estimate has its prices, `iam policy` covers it, `seed import --profile` reads it (read-only, with the same care for secrets), and the MCP server exposes it.
+- ⬜ Real-emulator tests for each command in CI, like the existing services.
+- ⬜ A `docs/services.md` section per service, with what the emulator does not support yet and a link to the score.
+
 ## v1.0 — Stable distribution
 
 Goal: install and upgrade anywhere with one command.
@@ -190,7 +225,7 @@ Goal: install and upgrade anywhere with one command.
 - **Load and timing**: `awsemu bench` to measure the emulator's latency and throughput on your machine, to size test suites and timeouts.
 - **Editor integration**: a VS Code extension (start/stop, resources, calls) on top of the JSON output and the MCP server.
 - **A dev container feature** that installs the emulator and awsemu, for Codespaces and dev containers.
-- **More services with their own commands**, by demand: API Gateway (call an API locally), Cognito (create test users and tokens), ECS/ECR.
+- **More services beyond v0.14**, by demand: AppSync, Step Functions activities, OpenSearch, MSK (Kafka), IoT Core, Lex and the AI services (Comprehend, Textract, Translate, Polly, Rekognition), with scores from the fidelity suite to decide.
 - **Plugins**: let other packages add `awsemu` commands (entry points), for company-specific workflows.
 - **Docs in other languages**, starting with Spanish, once the English docs are stable.
 - **Tests from your calls**: `awsemu proxy calls --as-pytest` writes a regression test that replays a recorded session (the calls and the answers they got) and checks the emulator still answers the same way, to catch behaviour changes when upgrading.
