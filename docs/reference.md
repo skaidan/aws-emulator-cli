@@ -21,7 +21,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`events`](#awsemu-events) — EventBridge: buses, rules and events.
 - [`exec`](#awsemu-exec) — Run COMMAND with the environment pointed at the emulator.
 - [`explain`](#awsemu-explain) — Say whether a failed call is a known emulator difference or likely your code.
-- [`fidelity`](#awsemu-fidelity) — Fidelity scores published with each emulator release: tests passed per service.
+- [`fidelity`](#awsemu-fidelity) — How closely the emulator matches AWS: published scores, or the tests run here.
 - [`iam`](#awsemu-iam) — IAM permissions your code needs, from the calls it made (the proxy's log).
 - [`image`](#awsemu-image) — Build the Docker image (AWS doesn't publish a prebuilt one).
 - [`init`](#awsemu-init) — Create awsemu.toml in this folder.
@@ -477,6 +477,46 @@ awsemu explain [OPTIONS] CALL
 
 ## `awsemu fidelity`
 
+How closely the emulator matches AWS: published scores, or the tests run here.
+
+```bash
+awsemu fidelity [SERVICES]...       # the published scores ('fidelity show')
+awsemu fidelity s3 --failures       # which tests fail, and how
+awsemu fidelity run dynamodb        # run AWS's fidelity tests against your emulator
+```
+
+### `awsemu fidelity run`
+
+Run AWS's fidelity tests against the emulator installed here.
+
+\b
+```bash
+awsemu fidelity run --test dynamodb.update-item-set-list-preserves-element-order
+awsemu fidelity run sqs --failing          # reproduce the known differences
+awsemu fidelity run s3 --limit 20
+awsemu fidelity run lambda --json
+```
+Each test runs against its own fresh emulator, with the runner of the public
+suite (https://github.com/aws/aws-emulator-evaluation-suite), fetched at the
+version your release was scored with. Needs git, uv and the emulator binary
+('awsemu install'). Exit code 1 if a test fails. Guide: docs/compatibility.md.
+
+```
+awsemu fidelity run [OPTIONS] [SERVICES]...
+```
+
+| Option | Description |
+| --- | --- |
+| `--test ID` | A test id (like dynamodb.update-item-...). Repeatable. |
+| `--failing` | Only the tests that fail in the published scores (to reproduce them). |
+| `--limit N` | Run at most N tests.  [x>=1] |
+| `--release VERSION` | Compare with this release's scores (default: your installed one). |
+| `--suite DIRECTORY` | A local clone of the evaluation suite to use instead of fetching it. |
+| `--refresh` | Download the scores again (and the suite, if it's 'main'). |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
+
+### `awsemu fidelity show`
+
 Fidelity scores published with each emulator release: tests passed per service.
 
 ```bash
@@ -490,7 +530,7 @@ A score counts the tests that call only that service ("k of n", as AWS
 publishes it). Data from https://github.com/aws/aws-emulator/releases.
 
 ```
-awsemu fidelity [OPTIONS] [SERVICES]...
+awsemu fidelity show [OPTIONS] [SERVICES]...
 ```
 
 | Option | Description |
