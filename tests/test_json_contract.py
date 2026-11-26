@@ -261,7 +261,8 @@ def test_proxy(runner, monkeypatch):
     assert set(data) == {"running", "emulator_port", "port", "endpoint_url", "pid", "ca", "calls", "faults",
                          "calls_file"}
     assert data["faults"] == ["s3=503"]
-    assert run_json(runner, "--port", "9297", "proxy", "faults", "--json") == [{"rule": "s3=503", "hits": 2}]
+    assert run_json(runner, "--port", "9297", "proxy", "faults", "--json") == [{"rule": "s3=503", "hits": 2, "active": True,
+                                                                                      "remaining_s": None}]
 
 
 def test_snapshot_ls(runner, monkeypatch):

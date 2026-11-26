@@ -304,6 +304,34 @@ def find_operations(result: sc.ScanResult, index: Index) -> dict[str, list[sc.Lo
     return used
 
 
+CALLS_SOURCE = "proxy calls"
+
+
+def scan_from_calls(calls: list[dict], index: Index, label: str = "calls.jsonl") -> tuple[sc.ScanResult, list[str]]:
+    """The operations the proxy saw, as if a scan had found them (one "file" per service).
+
+    Also returns the operations that have no fidelity tests (they were called, so they're
+    real, but the tests don't know them)."""
+    result = sc.ScanResult(root=Path(label))
+    result.files = len(calls)
+    unknown: set[str] = set()
+    for call in calls:
+        service, operation = call.get("service"), call.get("operation")
+        if not service or not operation:
+            continue
+        svc = index.names.resolve(service) or service
+        usage = result.by_file.setdefault(f"{label} ({service})", sc.Usage())
+        loc = sc.Location(file=label, line=int(call.get("id") or 0), source=CALLS_SOURCE)
+        usage.services.setdefault(svc, []).append(loc)
+        if not any(candidate == operation for candidate, _ in usage.calls):
+            usage.calls.append((operation, loc))
+        if not index.resolve_call(operation, {svc}):
+            unknown.add(f"{svc}:{operation}")
+    if result.by_file:
+        result.sources.add(CALLS_SOURCE)
+    return result, sorted(unknown)
+
+
 def analyze(result: sc.ScanResult, index: Index, release: str, suite: str) -> Report:
     used = find_operations(result, index)
     used_ops = set(used)

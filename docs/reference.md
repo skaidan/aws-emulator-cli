@@ -94,12 +94,16 @@ awsemu check                    # this folder
 awsemu check src infra          # just these
 awsemu check --release latest   # would upgrading help?
 awsemu check --strict           # exit 1 on known differences (CI)
+awsemu check --from-calls       # what your tests really called, via the proxy
 ```
 Reads code that uses boto3, the AWS SDKs for JavaScript, Java and Go, and
 Terraform, CloudFormation/SAM and CDK files; nothing is run. Then it looks
 the operations up in the fidelity tests of the release
 (https://github.com/aws/aws-emulator-evaluation-suite): a test is listed when
 it fails at an operation you call, or calls only operations you call.
+
+With --from-calls it reads the proxy's calls log instead: only operations
+your code really called (run your tests through 'awsemu exec --proxy' first).
 
 ```
 awsemu check [OPTIONS] [PATHS]...
@@ -113,6 +117,8 @@ awsemu check [OPTIONS] [PATHS]...
 | `--strict` | Exit with code 1 when an operation you use has known differences (for CI). |
 | `--refresh` | Download scores and manifest again instead of using the cache. |
 | `--no-explain` | Don't look up what explains each difference: the emulator's issue files and whether the latest release fixes it (no extra downloads). |
+| `--from-calls` | Check the operations the proxy saw your code call (its calls log), instead of reading the code. |
+| `--calls-file FILE` | A calls log to read with --from-calls (default: the proxy's, for --port). |
 | `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ## `awsemu completion`
@@ -807,7 +813,8 @@ awsemu proxy faults add 'dynamodb=throttle@10%' 's3=latency:500ms'
 awsemu proxy faults set 'sqs:SendMessage=503@50%'   # replace them all
 awsemu proxy faults clear
 ```
-Rule syntax: TARGET=EFFECT[,EFFECT][@RATE][xTIMES]; see docs/proxy.md.
+Rule syntax: TARGET[RESOURCE]=EFFECT[,EFFECT][@RATE][xTIMES][for DURATION];
+see docs/proxy.md.
 
 #### `awsemu proxy faults add`
 
@@ -833,6 +840,27 @@ Replace every fault rule with these.
 awsemu proxy faults set [OPTIONS] [RULES]...
 ```
 
+### `awsemu proxy har`
+
+The logged calls as a HAR file, to open in a browser's developer tools.
+
+```bash
+awsemu proxy har -o calls.har     # then: DevTools > Network > Import HAR
+awsemu proxy har --errors --service dynamodb -o -
+```
+Headers and bodies are in it when the proxy ran with --bodies (masked).
+
+```
+awsemu proxy har [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `-o, --output FILE` | The file to write ('-' for stdout).  [default: awsemu-calls.har] |
+| `-n, --last INTEGER` | Only the latest N calls (default: all logged). |
+| `--service NAME` | Only this service. Repeatable. |
+| `--errors` | Only calls that failed. |
+
 ### `awsemu proxy start`
 
 Start the proxy in front of the emulator on --port.
@@ -851,6 +879,7 @@ awsemu proxy start [OPTIONS]
 | `-d, --detach` | Run in the background ('awsemu proxy stop' stops it). |
 | `--quiet` | Don't print each call (they're still logged). |
 | `--no-tls` | Plain HTTP instead of HTTPS (no certificate to trust). |
+| `--bodies` | Also log headers and bodies (up to 64 KB each), with secrets and credentials masked. |
 
 ### `awsemu proxy status`
 

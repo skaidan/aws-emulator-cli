@@ -1,6 +1,6 @@
 """Fault injection rules for the proxy, and AWS-shaped error responses.
 
-A rule is written ``TARGET=EFFECT[,EFFECT]...[@RATE][xTIMES]``::
+A rule is written ``TARGET=EFFECT[,EFFECT]...[@RATE][xTIMES][for DURATION]``::
 
     dynamodb=throttle@10%              # 10% of DynamoDB calls are throttled
     s3=latency:500ms                   # every S3 call waits 500 ms more
@@ -8,9 +8,13 @@ A rule is written ``TARGET=EFFECT[,EFFECT]...[@RATE][xTIMES]``::
     sqs:Send*=reset@5%                 # 5% of SendMessage/SendMessageBatch lose the connection
     lambda:Invoke=latency:2s,TooManyRequestsException@20%x3   # at most 3 times
     *=InternalFailure:500@1%           # 1% of everything fails
+    dynamodb:PutItem[orders]=throttle  # only on the table "orders"
+    s3[uploads-*]=503 for 30s          # an outage of 30 s on those buckets, then it recovers
 
-TARGET is ``service`` or ``service:Operation`` (boto3 service names; ``*`` and ``?`` globs,
-case-insensitive). EFFECTs:
+TARGET is ``service``, ``service:Operation``, and optionally ``[resource]`` (boto3 service
+names; ``*`` and ``?`` globs; service and operation case-insensitive). The resource is the
+table, queue, bucket, function… the call names (an S3 rule's resource matches the bucket
+or ``bucket/key``). EFFECTs:
 
 * ``latency:500ms`` / ``latency:2s`` (or just ``500ms``): wait before forwarding the call;
 * ``throttle``: the throttling error that service's SDKs retry (``ThrottlingException``,
@@ -20,7 +24,8 @@ case-insensitive). EFFECTs:
 * ``reset``: close the connection without answering.
 
 RATE is a percentage (``10%``) or a fraction (``0.1``); default 100%. ``xTIMES`` stops the
-rule after it has fired that many times.
+rule after it has fired that many times; ``for 30s`` (``ms``, ``s``, ``m``) after that long,
+counted from when the rule is added.
 
 Errors are written in the protocol of the API (JSON, REST-JSON, query, EC2, REST-XML,
 Smithy RPC v2 CBOR) so the SDK parses them as the real error, retries included.
@@ -33,6 +38,7 @@ import json
 import random
 import re
 import threading
+import time
 import uuid
 from dataclasses import asdict, dataclass
 
@@ -49,7 +55,9 @@ CODE_BY_STATUS = {
 }
 REST_XML_CODE_BY_STATUS = {500: "InternalError", 503: "SlowDown"}
 
-RULE_RE = re.compile(r"^(?P<target>[^=]+)=(?P<effects>[^@]+?)(?:@(?P<rate>[0-9.]+%?))?(?:x(?P<times>\d+))?$")
+RULE_RE = re.compile(r"^(?P<target>[^=]+)=(?P<effects>.+?)(?P<mods>(?:@[0-9.]+%?|x\d+|for\d+(?:\.\d+)?(?:ms|s|m))*)$")
+MOD_RE = re.compile(r"@(?P<rate>[0-9.]+%?)|x(?P<times>\d+)|for(?P<for>\d+(?:\.\d+)?)(?P<unit>ms|s|m)")
+TARGET_RE = re.compile(r"^(?P<service>[^:\[\]]*)(?::(?P<operation>[^\[\]]*))?(?:\[(?P<resource>[^\]]+)\])?$")
 DURATION_RE = re.compile(r"^(?:latency:|delay:)?(?P<n>\d+(?:\.\d+)?)(?P<unit>ms|s)$")
 CODE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9.]*$")
 
@@ -62,6 +70,7 @@ class FaultError(ValueError):
 class Fault:
     service: str = "*"
     operation: str = "*"
+    resource: str = "*"
     latency_ms: int = 0
     error: str | None = None  # error code, or "throttle"
     status: int | None = None
@@ -70,17 +79,37 @@ class Fault:
     times: int | None = None
     hits: int = 0
     spec: str = ""
+    duration_s: float | None = None  # "for 30s"
+    added_at: float = 0.0  # time.time() when parsed (the window starts then)
 
-    def matches(self, service: str, operation: str) -> bool:
-        return (fnmatch.fnmatch((service or "").lower(), self.service.lower())
-                and fnmatch.fnmatch((operation or "").lower(), self.operation.lower()))
+    def matches(self, service: str, operation: str, resource: str = "") -> bool:
+        if not (fnmatch.fnmatch((service or "").lower(), self.service.lower())
+                and fnmatch.fnmatch((operation or "").lower(), self.operation.lower())):
+            return False
+        if self.resource == "*":
+            return True
+        resource = resource or ""
+        return (fnmatch.fnmatchcase(resource, self.resource)
+                or fnmatch.fnmatchcase(resource.split("/", 1)[0], self.resource))  # S3: the bucket
+
+    def remaining_s(self, now: float | None = None) -> float | None:
+        if self.duration_s is None:
+            return None
+        return max(0.0, self.added_at + self.duration_s - (time.time() if now is None else now))
+
+    @property
+    def expired(self) -> bool:
+        return self.duration_s is not None and self.remaining_s() == 0
 
     @property
     def exhausted(self) -> bool:
-        return self.times is not None and self.hits >= self.times
+        return (self.times is not None and self.hits >= self.times) or self.expired
 
     def as_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        data["remaining_s"] = None if self.duration_s is None else round(self.remaining_s(), 1)
+        data["active"] = not self.exhausted
+        return data
 
 
 def parse(spec: str) -> Fault:
@@ -90,9 +119,12 @@ def parse(spec: str) -> Fault:
     if not m:
         raise FaultError(f"'{spec}' isn't a fault rule; expected TARGET=EFFECT[@RATE], "
                          "like dynamodb=throttle@10% or s3=latency:500ms")
-    target = m.group("target")
-    service, _, operation = target.partition(":")
-    fault = Fault(service=service or "*", operation=operation or "*", spec=text)
+    t = TARGET_RE.match(m.group("target"))
+    if not t:
+        raise FaultError(f"'{m.group('target')}' in '{spec}' isn't a target: use service, "
+                         "service:Operation or service:Operation[resource]")
+    fault = Fault(service=t.group("service") or "*", operation=t.group("operation") or "*",
+                  resource=t.group("resource") or "*", spec=text, added_at=time.time())
     for effect in m.group("effects").split(","):
         if not effect:
             continue
@@ -120,14 +152,20 @@ def parse(spec: str) -> Fault:
                 fault.status = int(status)
     if not (fault.latency_ms or fault.error or fault.status or fault.reset):
         raise FaultError(f"'{spec}' has no effect")
-    if m.group("rate"):
-        raw = m.group("rate")
-        rate = float(raw[:-1]) / 100 if raw.endswith("%") else float(raw)
-        if not 0 < rate <= 1:
-            raise FaultError(f"rate in '{spec}' must be between 0% and 100%")
-        fault.rate = rate
-    if m.group("times"):
-        fault.times = int(m.group("times"))
+    for mod in MOD_RE.finditer(m.group("mods")):
+        if mod.group("rate"):
+            raw = mod.group("rate")
+            rate = float(raw[:-1]) / 100 if raw.endswith("%") else float(raw)
+            if not 0 < rate <= 1:
+                raise FaultError(f"rate in '{spec}' must be between 0% and 100%")
+            fault.rate = rate
+        elif mod.group("times"):
+            fault.times = int(mod.group("times"))
+        else:
+            n = float(mod.group("for"))
+            fault.duration_s = n / 1000 if mod.group("unit") == "ms" else n * 60 if mod.group("unit") == "m" else n
+            if fault.duration_s <= 0:
+                raise FaultError(f"'for' in '{spec}' must be longer than 0")
     return fault
 
 
@@ -167,12 +205,12 @@ class FaultSet:
         with self._lock:
             return list(self._rules)
 
-    def decide(self, service: str, operation: str) -> Decision:
+    def decide(self, service: str, operation: str, resource: str = "") -> Decision:
         decision = Decision()
         fired = []
         with self._lock:
             for rule in self._rules:
-                if rule.exhausted or not rule.matches(service, operation):
+                if rule.exhausted or not rule.matches(service, operation, resource):
                     continue
                 if rule.rate < 1 and self._rng.random() >= rule.rate:
                     continue

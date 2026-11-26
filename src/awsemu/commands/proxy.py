@@ -85,10 +85,12 @@ def proxy():
 @click.option("-d", "--detach", is_flag=True, help="Run in the background ('awsemu proxy stop' stops it).")
 @click.option("--quiet", is_flag=True, help="Don't print each call (they're still logged).")
 @click.option("--no-tls", is_flag=True, help="Plain HTTP instead of HTTPS (no certificate to trust).")
+@click.option("--bodies", is_flag=True,
+              help="Also log headers and bodies (up to 64 KB each), with secrets and credentials masked.")
 @click.option("--foreground", is_flag=True, hidden=True)
 @pass_ctx
 @handle_errors
-def start(c: Ctx, listen, specs, detach, quiet, no_tls, foreground):
+def start(c: Ctx, listen, specs, detach, quiet, no_tls, bodies, foreground):
     """Start the proxy in front of the emulator on --port.
 
     In the foreground it prints each call until Ctrl-C; with -d it runs in the
@@ -96,6 +98,7 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, foreground):
     """
     proj = _project()
     specs = list(specs) or (proj.faults if proj else [])
+    bodies = bodies or bool(proj and proj.proxy_bodies)
     rules = _parse_rules(specs)
     listen = default_listen(c.port) if listen is None else listen
     if px.running(c.port):
@@ -105,7 +108,7 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, foreground):
     if not foreground and not health.check(c.port).healthy:
         ui.warn(f"no emulator answers on port {c.port} yet; calls will get a 502 until it does")
     if detach:
-        state = px.start_detached(c.port, listen, specs, tls=not no_tls)
+        state = px.start_detached(c.port, listen, specs, tls=not no_tls, bodies=bodies)
         _started(state, rules)
         return
 
@@ -116,7 +119,8 @@ def start(c: Ctx, listen, specs, detach, quiet, no_tls, foreground):
         ui.echo("Calls (Ctrl-C to stop):", "muted")
 
     try:
-        px.serve(c.port, listen, rules, tls=not no_tls, on_call=None if quiet else print_call, on_ready=ready)
+        px.serve(c.port, listen, rules, tls=not no_tls, on_call=None if quiet else print_call, on_ready=ready,
+                 bodies=bodies)
     except OSError as exc:
         raise RuntimeErrorWithHint(f"the proxy can't listen on port {listen}: {exc}",
                                    "Pick another with --listen PORT (0 = any free port).") from exc
@@ -183,21 +187,32 @@ def faults_(ctx, c: Ctx, as_json):
       awsemu proxy faults set 'sqs:SendMessage=503@50%'   # replace them all
       awsemu proxy faults clear
 
-    Rule syntax: TARGET=EFFECT[,EFFECT][@RATE][xTIMES]; see docs/proxy.md.
+    Rule syntax: TARGET[RESOURCE]=EFFECT[,EFFECT][@RATE][xTIMES][for DURATION];
+    see docs/proxy.md.
     """
     if ctx.invoked_subcommand:
         return
     _show_rules(px.admin(_need(c.port), "GET", "faults")["rules"], as_json)
 
 
+def _rule_state(r: dict) -> str:
+    if r.get("times") is not None and r["hits"] >= r["times"]:
+        return "used up"
+    remaining = r.get("remaining_s")
+    if remaining is None:
+        return "active"
+    return "ended" if remaining == 0 else f"active, {ui.human_duration(remaining)} left"
+
+
 def _show_rules(rules: list[dict], as_json: bool) -> None:
     if as_json:
-        ui.print_json([{"rule": r["spec"], "hits": r["hits"]} for r in rules])
+        ui.print_json([{"rule": r["spec"], "hits": r["hits"], "active": r.get("active", True),
+                        "remaining_s": r.get("remaining_s")} for r in rules])
         return
     if not rules:
         ui.echo("No fault rules: every call goes through unchanged.", "muted")
         return
-    ui.table(["rule", "fired"], [[r["spec"], r["hits"]] for r in rules])
+    ui.table(["rule", "fired", "state"], [[r["spec"], r["hits"], _rule_state(r)] for r in rules])
 
 
 @faults_.command(name="add")
@@ -330,3 +345,37 @@ def calls(c: Ctx, last, follow, services, errors_only, as_json):
     With --json: a list; with --follow --json, one JSON object per line.
     """
     show_calls(c.port, last, follow, set(services), errors_only, as_json)
+
+
+@proxy.command(name="har")
+@click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default="awsemu-calls.har",
+              show_default=True, help="The file to write ('-' for stdout).")
+@click.option("-n", "--last", type=int, default=0, help="Only the latest N calls (default: all logged).")
+@click.option("--service", "services", multiple=True, metavar="NAME", help="Only this service. Repeatable.")
+@click.option("--errors", "errors_only", is_flag=True, help="Only calls that failed.")
+@pass_ctx
+@handle_errors
+def har_cmd(c: Ctx, output, last, services, errors_only):
+    """The logged calls as a HAR file, to open in a browser's developer tools.
+
+    \b
+      awsemu proxy har -o calls.har     # then: DevTools > Network > Import HAR
+      awsemu proxy har --errors --service dynamodb -o -
+
+    Headers and bodies are in it when the proxy ran with --bodies (masked).
+    """
+    from .. import har
+
+    calls = [x for x in read_calls(px.ProxyFiles(c.port).calls) if _keep(x, set(services), errors_only)]
+    if last:
+        calls = calls[-last:]
+    state = px.read_state(c.port)
+    base = state["endpoint_url"] if state else f"https://127.0.0.1:{default_listen(c.port)}"
+    text = json.dumps(har.har(calls, base), indent=2)
+    if str(output) == "-":
+        click.echo(text)
+        return
+    output.write_text(text, encoding="utf-8")
+    with_bodies = sum(1 for x in calls if "request" in x)
+    ui.success(f"{len(calls)} call(s) in {output}"
+               + ("" if with_bodies or not calls else " (no headers or bodies: start the proxy with --bodies)"))

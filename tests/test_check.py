@@ -387,3 +387,39 @@ def test_fidelity_compare(runner, cached, project, monkeypatch):
     assert set(json.loads(mine.output)["services"]) == {"kinesis", "sns"}
 
     assert runner.invoke(cli, ["fidelity", "sqs", "--failures", "--compare", "1.0.390"]).exit_code == 2
+
+
+def _calls_log(path, *calls):
+    path.write_text("".join(json.dumps({"id": i + 1, "service": s, "operation": op, "resource": "",
+                                        "status": 200, "error": None}) + "\n"
+                            for i, (s, op) in enumerate(calls)))
+    return path
+
+
+def test_scan_from_calls(index, tmp_path):
+    calls = [json.loads(line) for line in _calls_log(
+        tmp_path / "calls.jsonl", ("dynamodb", "TransactWriteItems"), ("dynamodb", "TransactWriteItems"),
+        ("logs", "PutLogEvents"), ("dynamodb", "DescribeLimits"), ("", "")).read_text().splitlines()]
+    result, unknown = chk.scan_from_calls(calls, index)
+    report = chk.analyze(result, index, "v1.0.385", "v1.0.0")
+    ops = {o.operation: o for o in report.operations}
+    assert set(ops) == {"dynamodb:TransactWriteItems", "logs:PutLogEvents"}  # what was really called
+    assert ops["dynamodb:TransactWriteItems"].locations[0].file == "calls.jsonl"
+    assert unknown == ["dynamodb:DescribeLimits"]  # called, but no fidelity test knows it
+    assert result.sources == {"proxy calls"} and result.files == 5
+
+
+def test_command_from_calls(runner, cached, tmp_path, monkeypatch):
+    from awsemu import proxy as px
+
+    px.ProxyFiles(9297).dir.mkdir(parents=True)
+    log = _calls_log(px.ProxyFiles(9297).calls, ("dynamodb", "TransactWriteItems"), ("sqs", "SendMessage"))
+    result = runner.invoke(cli, ["check", "--from-calls", "--no-explain"])
+    assert result.exit_code == 0, result.output
+    assert "2 call(s) in calls.jsonl" in result.output and "dynamodb:TransactWriteItems" in result.output
+    data = json.loads(runner.invoke(cli, ["check", "--calls-file", str(log), "--json", "--no-explain"]).output)
+    assert {o["operation"] for o in data["operations"]} == {"dynamodb:TransactWriteItems", "sqs:SendMessage"}
+    assert runner.invoke(cli, ["check", "--from-calls", str(tmp_path)]).exit_code == 2
+    log.write_text("")
+    empty = runner.invoke(cli, ["check", "--from-calls", "--no-explain"])
+    assert empty.exit_code == 1 and "no calls" in empty.output

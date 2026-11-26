@@ -20,6 +20,7 @@ awsemu check --release latest   # would the latest release be better?
 awsemu check --all              # every known difference, not the first 3 per operation
 awsemu check --strict           # exit code 1 if there are known differences (CI)
 awsemu check --json             # for scripts (format: scripting.md)
+awsemu check --from-calls       # what your tests really called, from the proxy's log
 ```
 
 Try it with the example in this repository: `awsemu check examples/check-demo`. Real output, for release v1.0.471, the fidelity tests v1.0.0, and v1.0.611 as the latest release (the tests and numbers change with each release):
@@ -83,6 +84,19 @@ Nothing is run: it reads the files.
 It skips `node_modules`, virtual environments, `.terraform`, `cdk.out`, build folders and files over 2 MB.
 
 A method name only counts when it's a real operation of a service the file uses. If a file calls methods on a client created somewhere else (`self.table.put_item(...)`), it's matched against the services the rest of your code in that language uses. That's a heuristic: it can miss a call made in an unusual way, or count a method that happens to share its name with an operation. `--json` gives the file and line of each one, so you can check.
+
+### From the calls your tests made
+
+`--from-calls` skips the scan and reads what the [proxy](proxy.md) logged instead: only the operations your code really sent, whatever language made them and however it built the client. Run the tests through the proxy first, then check:
+
+```bash
+awsemu proxy start -d
+awsemu exec --proxy -- pytest            # or npm test, mvn test… (or proxy = true in awsemu.toml)
+awsemu check --from-calls                # the proxy's log for --port
+awsemu check --calls-file calls.jsonl    # a log copied from elsewhere (a CI artifact, say)
+```
+
+Each operation's "used in" says `calls.jsonl:<id>`, the first call to it in the log. Operations that were called but that no fidelity test knows are listed as having no tests. It finds only what the tests exercised: a code path they don't run isn't checked, which the static scan would have found. Infrastructure (Terraform, CloudFormation) is seen as the API calls it makes, if it went through the proxy.
 
 ### What counts as a known difference
 

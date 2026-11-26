@@ -144,6 +144,54 @@ def test_calls_are_forwarded_and_recorded(aws, proxy):
     assert proxy.calls_after(4) == [calls[4]]
 
 
+def test_bodies_are_logged_masked_only_when_asked(aws, proxy):
+    client(proxy, "dynamodb").put_item(TableName="orders", Item={"id": {"S": "1"}, "Password": {"S": "p"}})
+    assert "request" not in proxy.calls_after(0)[0]  # off by default
+    proxy.bodies = True
+    client(proxy, "dynamodb").put_item(TableName="orders", Item={"id": {"S": "2"}, "Password": {"S": "p"}})
+    assert client(proxy, "s3").get_object(Bucket="b1", Key="k")["Body"].read() == b"hello"
+    put, get = proxy.calls_after(1)
+    assert dict(put["request"]["headers"])["Authorization"] == "***"
+    sent = json.loads(put["request"]["body"]["text"])
+    assert sent["Item"]["id"] == {"S": "2"} and sent["Item"]["Password"] == "***"
+    assert put["response"] == {"status": 200, "headers": put["response"]["headers"], "body": {"size": 2, "text": "{}"}}
+    assert get["response"]["body"] == {"size": 5, "text": "hello"}
+    logged = json.loads(px.ProxyFiles(aws.port).calls.read_text().splitlines()[-1])
+    assert logged["response"]["body"]["text"] == "hello"
+
+
+def test_har_export(runner, aws, proxy, tmp_path):
+    from awsemu.cli import cli
+
+    proxy.bodies = True
+    client(proxy, "dynamodb").put_item(TableName="orders", Item={"id": {"S": "1"}})
+    assert client(proxy, "s3").get_object(Bucket="b1", Key="k")["Body"].read() == b"hello"
+    proxy.bodies = False
+    with pytest.raises(ClientError):
+        client(proxy, "dynamodb").put_item(TableName="missing", Item={"id": {"S": "1"}})
+    out = tmp_path / "calls.har"
+    result = runner.invoke(cli, ["--port", str(aws.port), "proxy", "har", "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    log = json.loads(out.read_text())["log"]
+    assert log["version"] == "1.2" and len(log["entries"]) == 3
+    put, get, missing = log["entries"]
+    assert put["request"]["method"] == "POST" and put["request"]["url"].startswith("https://127.0.0.1:")
+    assert {"name": "Authorization", "value": "***"} in put["request"]["headers"]
+    assert json.loads(put["request"]["postData"]["text"])["TableName"] == "orders"
+    assert get["response"]["content"] == {"size": 5, "mimeType": "text/plain", "text": "hello"}
+    assert get["_awsemu"]["operation"] == "GetObject" and get["comment"] == "s3 GetObject b1/k"
+    assert missing["response"]["status"] == 400 and missing["request"]["headers"] == []  # logged without --bodies
+    only = json.loads(runner.invoke(cli, ["--port", str(aws.port), "proxy", "har", "--errors", "-o", "-"]).output)
+    assert [e["_awsemu"]["error"] for e in only["log"]["entries"]] == ["ResourceNotFoundException"]
+
+
+def test_big_and_binary_bodies():
+    rec = px.body_record(b"x" * (px.MAX_BODY + 10), "text/plain")
+    assert rec["truncated"] and rec["size"] == px.MAX_BODY + 10 and len(rec["text"]) == px.MAX_BODY
+    assert px.body_record(b"\xff\x00", "") == {"size": 2, "base64": "/wA="}
+    assert px.body_record(b"", "") == {"size": 0}
+
+
 def test_host_header_and_signature_go_through(aws, proxy):
     sqs = client(proxy, "sqs")
     url = sqs.create_queue(QueueName="jobs")["QueueUrl"]
@@ -176,6 +224,14 @@ def test_errors_reach_the_code_when_retries_run_out(aws, proxy):
         client(proxy, "dynamodb").put_item(TableName="orders", Item={"id": {"S": "1"}})
     assert exc.value.response["Error"]["Code"] == "ConditionalCheckFailedException"
     assert "Injected by awsemu proxy" in exc.value.response["Error"]["Message"]
+
+
+def test_a_rule_for_one_resource_leaves_the_others_alone(aws, proxy):
+    proxy.faults.add(px.faults.parse("dynamodb:PutItem[orders]=ConditionalCheckFailedException"))
+    ddb = client(proxy, "dynamodb")
+    with pytest.raises(ClientError):
+        ddb.put_item(TableName="orders", Item={"id": {"S": "1"}})
+    ddb.put_item(TableName="users", Item={"id": {"S": "1"}})  # not injected
 
 
 def test_latency(aws, proxy):
@@ -282,8 +338,9 @@ def test_commands(runner, aws, monkeypatch):
         faults_out = runner.invoke(cli, ["--port", port, "proxy", "faults", "add", "s3=latency:5ms"]).output
         assert "s3=latency:5ms" in faults_out
         listed = json.loads(runner.invoke(cli, ["--port", port, "proxy", "faults", "--json"]).output)
-        assert listed == [{"rule": "dynamodb:PutItem=ConditionalCheckFailedException x1", "hits": 1},
-                          {"rule": "s3=latency:5ms", "hits": 0}]
+        assert listed == [{"rule": "dynamodb:PutItem=ConditionalCheckFailedException x1", "hits": 1,
+                           "active": False, "remaining_s": None},
+                          {"rule": "s3=latency:5ms", "hits": 0, "active": True, "remaining_s": None}]
         bad = runner.invoke(cli, ["--port", port, "proxy", "faults", "add", "nonsense"])
         assert bad.exit_code == 2
         runner.invoke(cli, ["--port", port, "proxy", "faults", "set", "sqs=503"])

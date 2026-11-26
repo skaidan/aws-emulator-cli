@@ -41,6 +41,7 @@ Every key is optional.
 | `memory` | text | Docker memory limit | `2g` |
 | `proxy` | true/false | `awsemu up` also starts [the proxy](proxy.md) (calls log, faults); `env`, `exec`, `shell` and `aws` go through it when it's running; `down`/`stop` stop it; pytest sends every test through one | `false` |
 | `proxy_port` | number | The proxy's port (0 = any free one) | the emulator's + 1 |
+| `proxy_bodies` | true/false | The proxy also logs headers and bodies, with secrets masked (like `awsemu proxy start --bodies`) | `false` |
 | `faults` | list of rules | [Fault rules](proxy.md#fault-rules) for that proxy and for pytest with `proxy = true` | none |
 | `emulator_version` | text (`1.0.385`) | The emulator version for this project: `start`/`up` warn if the installed one differs, Docker mode uses `aws-emulator:<version>`, `check`/`fidelity` use its data, the GitHub Action installs it. Set it with `awsemu install VERSION --pin`; see [compatibility.md](compatibility.md#awsemu-install-and-emulator_version) | none |
 

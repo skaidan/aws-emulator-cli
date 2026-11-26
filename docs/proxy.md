@@ -59,6 +59,7 @@ awsemu proxy start -d              # in the background
 awsemu proxy start --listen 0      # any free port (or --listen PORT)
 awsemu proxy start --fault 's3=latency:500ms' --fault 'sqs=503@5%'
 awsemu proxy start --no-tls        # plain HTTP
+awsemu proxy start -d --bodies     # also log headers and bodies (secrets masked)
 awsemu proxy status [--json]       # where, how many calls, which faults (exit code 3 if not running)
 awsemu proxy stop                  # (awsemu stop and awsemu down stop it too)
 
@@ -71,13 +72,14 @@ awsemu proxy calls                 # the last 20 calls (-n 100 for more)
 awsemu proxy calls --errors --service dynamodb
 awsemu proxy calls --json          # for scripts; with --follow, one JSON object per line
 awsemu watch --calls               # = awsemu proxy calls --follow
+awsemu proxy har -o calls.har      # the calls as a HAR file, for a browser's developer tools
 ```
 
 `awsemu --port N proxy …` works with the emulator on port N; the proxy follows it (port N + 1). Calls are also kept in `~/.aws/emulator-cli/proxy/<emulator port>/calls.jsonl`, which rotates at 20 MB, so you can read them after the proxy stops. `awsemu ui` shows them too: press `c`.
 
 ## Fault rules
 
-A rule is `TARGET=EFFECT[,EFFECT][@RATE][xTIMES]`:
+A rule is `TARGET[RESOURCE]=EFFECT[,EFFECT][@RATE][xTIMES][for DURATION]`:
 
 | Rule | Means |
 | --- | --- |
@@ -88,8 +90,13 @@ A rule is `TARGET=EFFECT[,EFFECT][@RATE][xTIMES]`:
 | `lambda:Invoke=latency:2s,TooManyRequestsException@20%x3` | 20% of invocations wait 2 s and fail, 3 times at most |
 | `dynamodb:PutItem=ConditionalCheckFailedException x1` | the next PutItem fails with that error, once |
 | `*=InternalFailure:500@1%` | 1% of everything fails with a 500 |
+| `dynamodb:PutItem[orders]=throttle` | PutItem on the table `orders` is throttled; other tables aren't |
+| `s3[uploads-*]=503 for 30s` | an outage of the `uploads-…` buckets for 30 s, then they recover |
+| `sqs[jobs]=throttle@50% for 2m` | half the calls to the queue `jobs` are throttled for 2 minutes |
 
 **TARGET**: `service` or `service:Operation`, with boto3 service names (`dynamodb`, `s3`, `stepfunctions`, `logs`…). It's case-insensitive, and `*` and `?` work as wildcards.
+
+**RESOURCE** (optional, in brackets): the table, queue, topic, bucket, function, stream… the call names, as `awsemu proxy calls` shows it (`orders`, `jobs`, `photos/cat.jpg`). Wildcards work, and it's case-sensitive, like the names. For S3 it matches the bucket (`s3[photos]=503` for every object in it) or `bucket/key` (`s3[photos/raw/*]=503`). A call without a resource (`ListTables`, `ListBuckets`) never matches a rule with one.
 
 **EFFECT**:
 
@@ -99,7 +106,7 @@ A rule is `TARGET=EFFECT[,EFFECT][@RATE][xTIMES]`:
 - An HTTP status from 400 to 599: `500`, `503`, with a matching code.
 - `reset`: close the connection without answering. SDKs see a connection error and retry.
 
-**RATE**: `10%` or `0.1`; 100% if omitted. Each matching rule rolls its own dice. **xTIMES** stops a rule after it has fired that many times.
+**RATE**: `10%` or `0.1`; 100% if omitted. Each matching rule rolls its own dice. **xTIMES** stops a rule after it has fired that many times. **for DURATION** (`500ms`, `30s`, `2m`) stops it that long after it was added (with `--fault`, after the proxy started): an outage that recovers on its own, to test that your code comes back. `awsemu proxy faults` shows how long each one has left, and the ones that ended or were used up.
 
 When several rules match a call, their latencies add up and the first error wins. An injected error never reaches the emulator.
 
@@ -108,6 +115,35 @@ When several rules match a call, their latencies add up and the first error wins
 Each error is written in the API's own protocol: JSON (`__type`), REST-JSON (`x-amzn-ErrorType`), query and EC2 XML, S3's XML, and Smithy RPC v2 CBOR. So the SDK raises the same exception it would raise for AWS (`ClientError` with that code in boto3, `ThrottlingException` in the JavaScript SDK…), and applies the same retry rules. The message says it was injected: `Injected by awsemu proxy (dynamodb=throttle@10%)`.
 
 This is checked against botocore for every protocol in the tests: it reads each injected error with the right code, and counts throttling and 5xx errors as retryable.
+
+## Headers and bodies
+
+By default the log has what each call was (service, operation, resource, status, error, latency, sizes), not what it carried. With `awsemu proxy start --bodies` (or `proxy_bodies = true` in `awsemu.toml`), each call also gets a `request` (method, path, headers, body) and a `response` (status, headers, body):
+
+```bash
+awsemu proxy start -d --bodies
+awsemu proxy calls -n 1 --json | jq '.[0].request.body.text'
+```
+
+A body is kept as text up to 64 KB (`truncated: true` beyond that), or as `base64` when it isn't text. Before anything is written, secrets and credentials are masked with `***`:
+
+- the `Authorization`, `X-Amz-Security-Token` and cookie headers, and the signature and credential of presigned URLs (also in the `path` of every call, with or without `--bodies`);
+- in JSON, XML and form bodies, the values of keys that hold a secret: names with `secret`, `password`, `token`, `credential`, `private key` or `access key` in them (`SecretString`, `Password`, `SessionToken`, `SecretAccessKey`…), but not names that only point at one (`SecretId`, `SecretArn`) or pagination tokens (`NextToken`);
+- the value of SSM `SecureString` parameters.
+
+It recognises secrets by their key, so a secret stored under another name (an environment variable `DB_URL`, a DynamoDB attribute `pwd`, the contents of an S3 object) is logged as is. Use `--bodies` with test data.
+
+## HAR files
+
+`awsemu proxy har` writes the logged calls as a [HAR](https://w3c.github.io/web-performance/specs/HAR/Overview.html) file, which browsers' developer tools open (Network tab, import), as do Charles, Fiddler and Insomnia:
+
+```bash
+awsemu proxy har -o calls.har                 # every logged call
+awsemu proxy har -n 50 --errors -o -          # the latest 50 that failed, to stdout
+awsemu proxy har --service dynamodb -o ddb.har
+```
+
+Each entry has the method, URL, status and timing, and the headers and bodies if the proxy ran with `--bodies` (already masked). The AWS service, operation, resource, error and injected fault are in each entry's comment and in a `_awsemu` field.
 
 ## In pytest
 
@@ -158,6 +194,6 @@ With `proxy = true`:
 ## Limits
 
 - The proxy only sees calls that are sent to it. Anything the emulator does inside, like an S3 event that triggers a Lambda function or a Lambda function calling DynamoDB, goes straight to the emulator. Those calls aren't logged and get no faults.
-- Request and response bodies are kept in memory while they pass through, which is fine for tests but not for multi-gigabyte objects.
+- Request and response bodies are kept in memory while they pass through, which is fine for tests but not for multi-gigabyte objects. With `--bodies`, the log keeps 64 KB of each.
 - The proxy identifies calls from the service models of your installed botocore (the first time, it builds an index of them in about 2 s, cached per botocore version). A call it can't identify still goes through, logged with its method and path.
 - Errors injected into a Smithy RPC v2 CBOR API (some newer services) follow the protocol's specification, but only botocore has been checked against them.

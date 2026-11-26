@@ -18,6 +18,10 @@ from awsemu import faults as f
     ("*=InternalFailure:500@1%", dict(service="*", error="InternalFailure", status=500, rate=0.01)),
     ("sqs=AWS.SimpleQueueService.NonExistentQueue", dict(error="AWS.SimpleQueueService.NonExistentQueue")),
     ("s3 = 503 x2", dict(status=503, times=2)),
+    ("dynamodb:PutItem[orders]=throttle", dict(operation="PutItem", resource="orders", error="throttle")),
+    ("s3[uploads-*]=503 for 30s", dict(service="s3", operation="*", resource="uploads-*", duration_s=30)),
+    ("sqs=throttle for 2m @50%", dict(duration_s=120, rate=0.5)),
+    ("sqs=throttle@50%x3for500ms", dict(duration_s=0.5, rate=0.5, times=3)),
 ])
 def test_parse(spec, expected):
     fault = f.parse(spec)
@@ -27,7 +31,7 @@ def test_parse(spec, expected):
 
 @pytest.mark.parametrize("spec", [
     "dynamodb", "dynamodb=", "dynamodb=@10%", "s3=200", "s3=latency:fast", "s3=503@150%",
-    "s3=503@0%", "s3=bad code!",
+    "s3=503@0%", "s3=bad code!", "s3[=503", "s3:Get[a]x=503", "s3=503 for 0s",
 ])
 def test_parse_rejects(spec):
     with pytest.raises(f.FaultError):
@@ -105,3 +109,31 @@ def test_botocore_reads_the_injected_error_and_retries_throttling(service, opera
     parsed = create_parser(protocol).parse(response, shape)
     assert parsed["Error"]["Code"] == code
     assert code in ThrottledRetryableChecker._THROTTLED_ERROR_CODES or status in (500, 502, 503, 504)
+
+
+def test_resource_rules_match_the_named_resource():
+    rule = f.parse("dynamodb:PutItem[orders]=throttle")
+    assert rule.matches("dynamodb", "PutItem", "orders")
+    assert not rule.matches("dynamodb", "PutItem", "users")
+    assert not rule.matches("dynamodb", "PutItem", "")
+    bucket = f.parse("s3[uploads-*]=503")
+    assert bucket.matches("s3", "PutObject", "uploads-2026/cat.jpg")  # the bucket of bucket/key
+    assert bucket.matches("s3", "ListObjectsV2", "uploads-2026")
+    assert not bucket.matches("s3", "PutObject", "photos/uploads-1")
+    assert f.parse("s3[photos/raw/*]=503").matches("s3", "GetObject", "photos/raw/a.jpg")
+    faults = f.FaultSet([rule])
+    assert faults.decide("dynamodb", "PutItem", "users").error is None
+    assert faults.decide("dynamodb", "PutItem", "orders").error is rule
+
+
+def test_a_timed_rule_stops_and_says_how_long_is_left(monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(f.time, "time", lambda: now[0])
+    rule = f.parse("s3=503 for 30s")
+    faults = f.FaultSet([rule])
+    assert faults.decide("s3", "GetObject").error is rule
+    now[0] += 10
+    assert rule.as_dict()["remaining_s"] == 20 and rule.as_dict()["active"]
+    now[0] += 21
+    assert faults.decide("s3", "GetObject").error is None  # the outage is over
+    assert rule.as_dict()["active"] is False and rule.as_dict()["remaining_s"] == 0

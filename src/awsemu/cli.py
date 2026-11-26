@@ -309,7 +309,7 @@ def _up_proxy(port: int, proj) -> None:
     if state:
         ui.success(f"Proxy already running at {state['endpoint_url']}")
         return
-    state = px.start_detached(port, default_listen(port), proj.faults)
+    state = px.start_detached(port, default_listen(port), proj.faults, bodies=proj.proxy_bodies)
     ui.success(f"Proxy started at {state['endpoint_url']}"
                + (f" with faults: {', '.join(proj.faults)}" if proj.faults else ""))
 

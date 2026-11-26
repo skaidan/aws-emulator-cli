@@ -11,7 +11,7 @@ from .. import exitcodes
 from .. import fidelity as fid
 from .. import scan as sc
 from .. import ui
-from ..context import handle_errors, json_option
+from ..context import Ctx, handle_errors, json_option, pass_ctx
 from ..runtime import RuntimeErrorWithHint
 from .fidelity import pick_release
 
@@ -55,9 +55,15 @@ def _difference_line(d: chk.Difference) -> str:
 @click.option("--no-explain", is_flag=True,
               help="Don't look up what explains each difference: the emulator's issue files and whether "
                    "the latest release fixes it (no extra downloads).")
+@click.option("--from-calls", "from_calls", is_flag=True,
+              help="Check the operations the proxy saw your code call (its calls log), instead of reading the code.")
+@click.option("--calls-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), metavar="FILE",
+              help="A calls log to read with --from-calls (default: the proxy's, for --port).")
 @json_option
+@pass_ctx
 @handle_errors
-def check(paths, release, manifest_ref, show_all, strict, refresh, no_explain, as_json):
+def check(c: Ctx, paths, release, manifest_ref, show_all, strict, refresh, no_explain, from_calls, calls_file,
+          as_json):
     """Find the AWS operations your project uses and the known emulator differences for them.
 
     \b
@@ -65,13 +71,21 @@ def check(paths, release, manifest_ref, show_all, strict, refresh, no_explain, a
       awsemu check src infra          # just these
       awsemu check --release latest   # would upgrading help?
       awsemu check --strict           # exit 1 on known differences (CI)
+      awsemu check --from-calls       # what your tests really called, via the proxy
 
     Reads code that uses boto3, the AWS SDKs for JavaScript, Java and Go, and
     Terraform, CloudFormation/SAM and CDK files; nothing is run. Then it looks
     the operations up in the fidelity tests of the release
     (https://github.com/aws/aws-emulator-evaluation-suite): a test is listed when
     it fails at an operation you call, or calls only operations you call.
+
+    With --from-calls it reads the proxy's calls log instead: only operations
+    your code really called (run your tests through 'awsemu exec --proxy' first).
     """
+    if calls_file and not from_calls:
+        from_calls = True
+    if from_calls and paths:
+        raise click.UsageError("--from-calls reads the proxy's log, not files: drop the paths")
     tag, scores, installed = pick_release(release, refresh)
     suite = fid.suite_version(tag) or (None if manifest_ref else chk.latest_suite_version()) or "main"
     try:
@@ -86,8 +100,22 @@ def check(paths, release, manifest_ref, show_all, strict, refresh, no_explain, a
                                    "(manifest.jsonl from a clone of the tests repository).") from exc
 
     index = chk.Index(scores, manifest)
-    result = sc.scan(list(paths) or [Path(".")], index.known_services)
+    unknown_ops: list[str] = []
+    if from_calls:
+        from .. import proxy as px
+        from .proxy import read_calls
+
+        log = calls_file or px.ProxyFiles(c.port).calls
+        calls = read_calls(log)
+        if not calls:
+            raise RuntimeErrorWithHint(f"no calls in {log}",
+                                       "Run your tests through the proxy first: awsemu proxy start -d, "
+                                       "then awsemu exec --proxy -- pytest (or proxy = true in awsemu.toml).")
+        result, unknown_ops = chk.scan_from_calls(calls, index, log.name)
+    else:
+        result = sc.scan(list(paths) or [Path(".")], index.known_services)
     report = chk.analyze(result, index, tag, suite)
+    report.uncovered = sorted(set(report.uncovered) | set(unknown_ops))
     if not no_explain and report.with_differences:
         from .. import issues as iss
 
@@ -114,8 +142,13 @@ def check(paths, release, manifest_ref, show_all, strict, refresh, no_explain, a
 
     ui.kv([("release", tag + (f" (yours: v{installed})" if installed and fid.tag_for(installed) != tag else "")),
            ("fidelity tests", suite),
-           ("scanned", f"{result.files} file(s)" + (f": {', '.join(report.sources)}" if report.sources else ""))])
+           ("calls" if from_calls else "scanned",
+            f"{result.files} call(s) in {result.root}" if from_calls else
+            f"{result.files} file(s)" + (f": {', '.join(report.sources)}" if report.sources else ""))])
     ui.echo()
+    if from_calls and not report.operations and not report.services:
+        ui.warn("none of the logged calls named an operation the proxy recognised")
+        return
     if not report.operations and not report.services:
         ui.warn("found no AWS SDK calls or AWS infrastructure here")
         ui.echo("Looked for boto3, AWS SDK for JavaScript/Java/Go, Terraform, CloudFormation/SAM "

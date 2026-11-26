@@ -50,6 +50,7 @@ TYPES: dict[str, tuple] = {
     "emulator_version": (str,),
     "proxy": (bool,),
     "proxy_port": (int,),
+    "proxy_bodies": (bool,),
     "faults": (list,),
 }
 
@@ -92,6 +93,7 @@ class Project:
     emulator_version: str | None = None
     proxy: bool = False
     proxy_port: int | None = None
+    proxy_bodies: bool = False
     faults: list[str] = field(default_factory=list)
 
     @property
@@ -183,6 +185,7 @@ def parse(path: Path) -> Project:
         emulator_version=data["emulator_version"].lstrip("v") if data.get("emulator_version") else None,
         proxy=bool(data.get("proxy", False)),
         proxy_port=data.get("proxy_port"),
+        proxy_bodies=bool(data.get("proxy_bodies", False)),
         faults=[str(x) for x in data.get("faults", [])],
     )
 

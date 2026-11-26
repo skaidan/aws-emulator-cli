@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
-from . import awscalls, faults
+from . import awscalls, faults, redact
 from .paths import DEFAULT_HOST, InstanceFiles, cli_root
 
 ADMIN = "/__awsemu/proxy"
@@ -42,6 +42,36 @@ HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authoriza
               "trailer", "transfer-encoding", "upgrade", "expect"}
 MAX_LOG_BYTES = 20_000_000
 RING = 5000
+MAX_BODY = 64 * 1024  # per body, with --bodies
+
+
+def body_record(data: bytes, content_type: str) -> dict:
+    """A body for the log: text with secrets masked, or base64 when it isn't text."""
+    import base64
+
+    out: dict = {"size": len(data)}
+    if not data:
+        return out
+    part = data[:MAX_BODY]
+    if len(data) > MAX_BODY:
+        out["truncated"] = True
+    try:
+        out["text"] = redact.text_body(part.decode("utf-8"), content_type)
+    except UnicodeDecodeError:
+        out["base64"] = base64.b64encode(part).decode()
+    return out
+
+
+def exchange(method: str, path: str, req_headers, req_body: bytes, status: int, resp_headers,
+             resp_body: bytes) -> dict:
+    """``request`` and ``response`` of one call, masked, for the calls log."""
+    req_h = redact.headers(list(req_headers))
+    resp_h = redact.headers(list(resp_headers))
+    req_ct = next((v for k, v in req_h if k.lower() == "content-type"), "")
+    resp_ct = next((v for k, v in resp_h if k.lower() == "content-type"), "")
+    return {"request": {"method": method, "path": redact.url(path), "headers": req_h,
+                        "body": body_record(req_body, req_ct)},
+            "response": {"status": status, "headers": resp_h, "body": body_record(resp_body, resp_ct)}}
 
 
 class ProxyError(Exception):
@@ -213,12 +243,13 @@ class _Handler(BaseHTTPRequestHandler):
             ident = awscalls.identify(self.command, self.path, headers, body)
         except Exception:  # noqa: BLE001 - never break a call because we can't name it
             ident = awscalls.Identified()
-        decision = self.server.faults.decide(ident.service, ident.operation)
+        decision = self.server.faults.decide(ident.service, ident.operation, ident.resource)
         if decision.latency_ms:
             time.sleep(decision.latency_ms / 1000)
         rule = decision.error
         if rule and rule.reset:
-            self.server.record(ident, self, 0, "ConnectionReset", started, None, decision.label, len(body), 0)
+            self.server.record(ident, self, 0, "ConnectionReset", started, None, decision.label, len(body), 0,
+                               (body, [], b""))
             self._reset()
             return
         if rule:
@@ -228,7 +259,7 @@ class _Handler(BaseHTTPRequestHandler):
                 headers.get("content-type", ""))
             # Recorded before answering: once the client has its answer, the call is in the log.
             self.server.record(ident, self, status, code, started, h.get("x-amzn-RequestId"),
-                               decision.label, len(body), len(data))
+                               decision.label, len(body), len(data), (body, list(h.items()), data))
             self._send(status, list(h.items()), data, head=self.command == "HEAD")
             return
         try:
@@ -239,12 +270,13 @@ class _Handler(BaseHTTPRequestHandler):
                 f"awsemu proxy: the emulator on port {self.server.emulator_port} didn't answer ({exc})",
                 headers.get("content-type", ""))
             self.server.record(ident, self, 502, "EmulatorUnreachable", started, None, decision.label,
-                               len(body), len(data))
+                               len(body), len(data), (body, list(h.items()), data))
             self._send(status, list(h.items()), data, head=self.command == "HEAD")
             return
         lower = {k.lower(): v for k, v in resp_headers}
         self.server.record(ident, self, status, awscalls.error_code(status, lower, data), started,
-                           awscalls.request_id(lower), decision.label, len(body), len(data))
+                           awscalls.request_id(lower), decision.label, len(body), len(data),
+                           (body, resp_headers, data))
         self._send(status, resp_headers, data, head=self.command == "HEAD")
 
     def _reset(self) -> None:
@@ -295,8 +327,10 @@ class ProxyServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
     def __init__(self, emulator_port: int, listen_port: int = 0, rules: list[faults.Fault] | None = None,
-                 tls: bool = True, calls_file: Path | None = None, on_call=None, timeout: float = 120.0):
+                 tls: bool = True, calls_file: Path | None = None, on_call=None, timeout: float = 120.0,
+                 bodies: bool = False):
         self.emulator_port = emulator_port
+        self.bodies = bodies
         self.faults = faults.FaultSet(rules)
         self.files = ProxyFiles(emulator_port)
         self.calls_file = calls_file
@@ -386,14 +420,21 @@ class ProxyServer(ThreadingHTTPServer):
 
     # -- calls
 
-    def record(self, ident, handler, status, error, started, request_id, fault, bytes_in, bytes_out) -> None:
+    def record(self, ident, handler, status, error, started, request_id, fault, bytes_in, bytes_out,
+               bodies=None) -> None:
+        """Log one call. ``bodies`` is ``(request body, response headers, response body)``,
+        kept (masked) only when the proxy runs with --bodies."""
         call = awscalls.Call(
             time=dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds"),
             service=ident.service, operation=ident.operation, resource=ident.resource,
-            method=handler.command, path=handler.path[:300], status=status, error=error,
+            method=handler.command, path=redact.url(handler.path)[:300], status=status, error=error,
             latency_ms=round((time.perf_counter() - started) * 1000, 1), request_id=request_id,
             fault=fault, bytes_in=bytes_in, bytes_out=bytes_out)
         data = call.as_dict()
+        if self.bodies and bodies is not None:
+            req_body, resp_headers, resp_body = bodies
+            data.update(exchange(handler.command, handler.path, handler.headers.items(), req_body,
+                                 status, resp_headers, resp_body))
         with self._lock:
             self.count += 1
             data["id"] = self.count
@@ -473,13 +514,15 @@ def admin(state: dict, method: str, route: str, payload: dict | None = None, tim
 
 
 def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: bool = True,
-          on_call=None, on_ready=None) -> int:
+          on_call=None, on_ready=None, bodies: bool = False) -> int:
     """Run the proxy in this process until SIGTERM/Ctrl-C, keeping the state file."""
     files = ProxyFiles(emulator_port)
     files.dir.mkdir(parents=True, exist_ok=True)
-    server = ProxyServer(emulator_port, listen_port, rules, tls=tls, calls_file=files.calls, on_call=on_call)
+    server = ProxyServer(emulator_port, listen_port, rules, tls=tls, calls_file=files.calls, on_call=on_call,
+                         bodies=bodies)
     state = {"pid": os.getpid(), "emulator_port": emulator_port, "port": server.port,
              "endpoint_url": server.endpoint_url, "tls": tls, "ca": str(files.ca) if tls else None,
+             "bodies": bodies,
              "calls": str(files.calls), "started_at": dt.datetime.now(dt.timezone.utc).isoformat()}
     files.state.write_text(json.dumps(state), encoding="utf-8")
 
@@ -507,7 +550,7 @@ def serve(emulator_port: int, listen_port: int, rules: list[faults.Fault], tls: 
 
 
 def start_detached(emulator_port: int, listen_port: int, specs: list[str], tls: bool = True,
-                   wait: float = 20.0) -> dict:
+                   wait: float = 20.0, bodies: bool = False) -> dict:
     """Start ``awsemu proxy start`` in the background and wait until it answers."""
     from .runtime import _popen_detached
 
@@ -518,6 +561,8 @@ def start_detached(emulator_port: int, listen_port: int, specs: list[str], tls: 
            "--listen", str(listen_port), "--quiet", "--foreground"]
     if not tls:
         cmd.append("--no-tls")
+    if bodies:
+        cmd.append("--bodies")
     for spec in specs:
         cmd += ["--fault", spec]
     # The child runs this same awsemu, even from a source checkout that isn't installed.
