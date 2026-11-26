@@ -11,6 +11,7 @@
 | [Seeds](seeds.md) | Always start with the same data: format, validation, `apply`, `export`. Snapshots: `snapshot save/restore`. |
 | [Services guide](services.md) | The 10 services with their own commands, and `describe ARN`, with end-to-end examples. |
 | [Testing and CI](testing.md) | pytest plugin, GitHub Action, Testcontainers, scripts and Docker Compose. |
+| [Deprecation policy](deprecations.md) | How long renamed options, settings and JSON fields keep working, and how you're warned. |
 | [IAM](iam.md) | The policy your code's calls need (`awsemu iam policy`), and the permissions your infrastructure is missing (`awsemu check --iam`). |
 | [AI coding agents](agents.md) | The MCP server (`awsemu mcp`), its guard rails, and explaining a failed call. |
 | [Scripting](scripting.md) | Stable JSON output and exit codes for scripts. |

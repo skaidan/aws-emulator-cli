@@ -8,6 +8,7 @@ from awsemu import check as chk
 from awsemu import explain as ex
 from awsemu import proxy as px
 from awsemu.cli import cli
+from tests.schema_check import validate
 from tests.test_check import MANIFEST, SCORES
 
 
@@ -66,6 +67,7 @@ def test_command(runner, cached, isolated_home):
     )
     result = runner.invoke(cli, ["explain", "--json"])  # last failed: the SQS one
     assert result.exit_code == 0, result.output
+    validate("explain", json.loads(result.output))
     assert json.loads(result.output)["verdict"] == "likely_your_code"
     text = runner.invoke(cli, ["explain", "1"]).output
     assert "Verdict: a known emulator difference" in text and "= ddb-tx-1: AWS 400 ValidationException" in text

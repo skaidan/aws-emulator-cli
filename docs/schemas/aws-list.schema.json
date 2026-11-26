@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/aws-list.schema.json",
+  "title": "lists of AWS resources as AWS returns them (s3 ls, lambda ls, sfn ls, secrets ls, ssm ls\u2026)",
+  "type": "array",
+  "items": {
+    "type": "object"
+  }
+}

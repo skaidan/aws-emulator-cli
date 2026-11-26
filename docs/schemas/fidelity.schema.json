@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/fidelity.schema.json",
+  "title": "awsemu fidelity --json",
+  "type": "object",
+  "required": [
+    "commit",
+    "installed",
+    "release",
+    "scored_at",
+    "services"
+  ],
+  "properties": {
+    "release": {
+      "type": "string"
+    },
+    "commit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scored_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "installed": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "services": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "multi_service_passed",
+          "multi_service_total",
+          "passed",
+          "total"
+        ],
+        "properties": {
+          "passed": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "multi_service_passed": {
+            "type": "integer"
+          },
+          "multi_service_total": {
+            "type": "integer"
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "actual",
+                "expected",
+                "mismatch",
+                "operation",
+                "test"
+              ],
+              "properties": {
+                "test": {
+                  "type": "string"
+                },
+                "operation": {
+                  "type": "string"
+                },
+                "mismatch": {
+                  "type": "string"
+                },
+                "expected": {
+                  "type": "string"
+                },
+                "actual": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

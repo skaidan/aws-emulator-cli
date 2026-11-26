@@ -26,8 +26,10 @@ jobs:
       - name: Tests with coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
         run: pytest -q --cov --cov-report=term-missing:skip-covered --cov-report=xml
-      - name: Command reference is up to date
-        run: python scripts/gen_reference.py --check
+      - name: Command reference and JSON Schemas are up to date
+        run: |
+          python scripts/gen_reference.py --check
+          python scripts/gen_schemas.py --check
       - run: awsemu --help
       - run: awsemu doctor
         continue-on-error: true

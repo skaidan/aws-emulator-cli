@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/sns-ls.schema.json",
+  "title": "awsemu sns ls --json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "arn",
+      "name",
+      "subscriptions"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "arn": {
+        "type": "string"
+      },
+      "subscriptions": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

@@ -4,6 +4,8 @@
 
 Towards 0.12.0.
 
+- A deprecation policy (`docs/deprecations.md`): renamed options, settings and JSON fields keep working for at least two minor releases and three months, with a warning; the code has the helpers to do it (`awsemu.deprecation`).
+- JSON Schemas for every `--json` output in `docs/schemas/` (generated from `src/awsemu/schemas.py`; the contract tests validate real outputs against them).
 - `awsemu doctor` shows whether your emulator is supported (from 1.0.250, the oldest release CI tests awsemu with) and whether a newer emulator or awsemu is out; `awsemu start` mentions newer releases at most once a day, on a terminal, never in CI or with `AWSEMU_NO_UPDATE_CHECK=1`.
 - Releases come with signed build provenance (Sigstore, GitHub attestations), a CycloneDX SBOM and SHA-256 checksums; `SECURITY.md` says how to verify them. GitHub Actions are pinned to commit SHAs, and Dependabot proposes updates for Python, Actions, npm and Maven dependencies.
 - Project health: `SECURITY.md` (private vulnerability reports, scope), a code of conduct, issue forms (bugs, ideas, links to the emulator's own issues) and a pull request template.

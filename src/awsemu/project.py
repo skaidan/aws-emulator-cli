@@ -137,8 +137,10 @@ def find(start: Path | None = None) -> Path | None:
 
 
 def parse(path: Path) -> Project:
-    data = _read(path) or {}
     where = f"{path}" + (" [tool.awsemu]" if path.name == "pyproject.toml" else "")
+    from . import deprecation
+
+    data = deprecation.settings(_read(path) or {}, where)
     problems = []
     for key, value in data.items():
         if key not in TYPES:

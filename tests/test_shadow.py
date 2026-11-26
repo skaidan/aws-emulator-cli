@@ -111,6 +111,9 @@ def test_shadow_command(runner, isolated_home):
     out = runner.invoke(cli, ["proxy", "shadow"]).output
     assert "AWS 400 ResourceNotFoundException, emulator 200" in out and "2 call(s) compared, 1 differ" in out
     data = json.loads(runner.invoke(cli, ["proxy", "shadow", "--json"]).output)
+    from tests.schema_check import validate
+
+    validate("proxy-shadow", data)
     assert data["differ"] == 1 and data["failed"] == 1 and [c["id"] for c in data["calls"]] == [1]
 
 

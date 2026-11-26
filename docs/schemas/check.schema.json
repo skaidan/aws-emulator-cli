@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/check.schema.json",
+  "title": "awsemu check --json",
+  "type": "object",
+  "required": [
+    "operations",
+    "release",
+    "scanned_files",
+    "services",
+    "sources",
+    "suite",
+    "summary",
+    "uncovered"
+  ],
+  "properties": {
+    "release": {
+      "type": "string"
+    },
+    "suite": {
+      "type": "string"
+    },
+    "scanned_files": {
+      "type": "integer"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "differences",
+          "locations",
+          "operation",
+          "other_failing",
+          "passed",
+          "service",
+          "tests"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "locations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "file",
+                "line",
+                "source"
+              ],
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                },
+                "source": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "tests": {
+            "type": "integer"
+          },
+          "passed": {
+            "type": "integer"
+          },
+          "differences": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "actual",
+                "at_operation",
+                "expected",
+                "fixed_in",
+                "issues",
+                "kind",
+                "matches_usage",
+                "mismatch",
+                "operation",
+                "step",
+                "test",
+                "url"
+              ],
+              "properties": {
+                "test": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "operation": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "mismatch": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "expected": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "actual": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "step": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "at_operation": {
+                  "type": "boolean"
+                },
+                "matches_usage": {
+                  "type": "boolean"
+                },
+                "url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "severity",
+                      "state",
+                      "title",
+                      "url"
+                    ],
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "fixed_in": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "other_failing": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "uncovered": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "cloudformation",
+          "passed",
+          "resources",
+          "service",
+          "sources",
+          "tests"
+        ],
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tests": {
+            "type": "integer"
+          },
+          "passed": {
+            "type": "integer"
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "file",
+                "line",
+                "source",
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "file": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                },
+                "source": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "cloudformation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "failing",
+                  "passed",
+                  "tests"
+                ],
+                "properties": {
+                  "tests": {
+                    "type": "integer"
+                  },
+                  "passed": {
+                    "type": "integer"
+                  },
+                  "failing": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "differences",
+        "explained_by_issues",
+        "fixed_in_latest",
+        "latest",
+        "operations",
+        "operations_with_differences",
+        "services"
+      ],
+      "properties": {
+        "operations": {
+          "type": "integer"
+        },
+        "services": {
+          "type": "integer"
+        },
+        "operations_with_differences": {
+          "type": "integer"
+        },
+        "differences": {
+          "type": "integer"
+        },
+        "explained_by_issues": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "fixed_in_latest": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "latest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

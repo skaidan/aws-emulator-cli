@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/check-iam.schema.json",
+  "title": "awsemu check --iam --json",
+  "type": "object",
+  "required": [
+    "missing",
+    "needed",
+    "not_expanded",
+    "policy_files",
+    "unused_grants"
+  ],
+  "properties": {
+    "needed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "action",
+          "granted_by",
+          "used_in"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "used_in": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "granted_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "missing": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unused_grants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "action",
+          "file",
+          "line"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "not_expanded": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "policy"
+        ],
+        "properties": {
+          "policy": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "policy_files": {
+      "type": "integer"
+    }
+  }
+}

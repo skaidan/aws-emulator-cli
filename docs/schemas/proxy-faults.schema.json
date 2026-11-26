@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/proxy-faults.schema.json",
+  "title": "awsemu proxy faults --json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "active",
+      "hits",
+      "remaining_s",
+      "rule"
+    ],
+    "properties": {
+      "rule": {
+        "type": "string"
+      },
+      "hits": {
+        "type": "integer"
+      },
+      "active": {
+        "type": "boolean"
+      },
+      "remaining_s": {
+        "type": [
+          "number",
+          "null"
+        ]
+      }
+    }
+  }
+}

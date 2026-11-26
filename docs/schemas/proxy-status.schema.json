@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/proxy-status.schema.json",
+  "title": "awsemu proxy status --json",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "ca",
+        "calls",
+        "calls_file",
+        "emulator_port",
+        "endpoint_url",
+        "faults",
+        "pid",
+        "port",
+        "running"
+      ],
+      "properties": {
+        "running": {
+          "const": true
+        },
+        "emulator_port": {
+          "type": "integer"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "endpoint_url": {
+          "type": "string"
+        },
+        "pid": {
+          "type": "integer"
+        },
+        "ca": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "calls": {
+          "type": "integer"
+        },
+        "faults": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "calls_file": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "emulator_port",
+        "running"
+      ],
+      "properties": {
+        "running": {
+          "const": false
+        },
+        "emulator_port": {
+          "type": "integer"
+        }
+      }
+    }
+  ]
+}

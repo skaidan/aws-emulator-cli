@@ -16,15 +16,23 @@ from awsemu.commands import overview as overview_mod
 from awsemu.commands import s3 as s3_mod
 from awsemu.commands import sns as sns_mod
 from awsemu.commands import sqs as sqs_mod
+from tests.schema_check import schema_for, validate
 from tests.test_services import FakeClient
 
 NOW = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc)
 
 
 def run_json(runner, *args):
+    """Run ``awsemu ARGS`` and parse its JSON, validated against its published schema."""
     result = runner.invoke(cli, list(args))
     assert result.exit_code in (0, 1, 3), result.output
-    return json.loads(result.output)
+    data = json.loads(result.output)
+    name = schema_for(args)
+    if name:
+        validate(name, data)
+    elif isinstance(data, list):
+        validate("aws-list", data)  # AWS resources passed through
+    return data
 
 
 def use(monkeypatch, module, **clients):
@@ -35,6 +43,7 @@ def test_status(runner, free_port):
     result = runner.invoke(cli, ["--port", str(free_port), "status", "--json"])
     assert result.exit_code == 3  # not healthy: same exit code as without --json
     data = json.loads(result.output)
+    validate("status", data)
     assert set(data) == {
         "port",
         "status",
@@ -189,6 +198,8 @@ def test_kinesis_read_lines(runner, monkeypatch, running):
     )
     result = runner.invoke(cli, ["kinesis", "read", "clicks", "--json"])
     lines = [json.loads(line) for line in result.output.strip().splitlines()]
+    for line in lines:
+        validate("kinesis-read-line", line)
     assert lines == [
         {"shard": "s-0", "sequence": "1", "key": "k", "data": '{"n": 1}', "arrived": "2026-11-16T12:00:00+00:00"}
     ]
@@ -422,6 +433,7 @@ def test_proxy(runner, monkeypatch):
     result = runner.invoke(cli, ["--port", "9297", "proxy", "status", "--json"])
     assert result.exit_code == 3
     assert json.loads(result.output) == {"running": False, "emulator_port": 9297}
+    validate("proxy-status", json.loads(result.output))
 
     state = {
         "pid": 1,
@@ -463,3 +475,18 @@ def test_snapshot_ls(runner, monkeypatch):
     (row,) = run_json(runner, "snapshot", "ls", "--json")
     assert set(row) == {"name", "created_at", "port", "emulator_version", "counts", "secrets", "path"}
     assert row["counts"] == {"queues": 1}
+
+
+def test_schemas_reject_what_breaks_the_contract():
+    jsonschema = pytest.importorskip("jsonschema")
+    with pytest.raises(jsonschema.ValidationError):
+        validate("status", {"port": "9297"})  # a missing field, and the wrong type
+    with pytest.raises(jsonschema.ValidationError):
+        validate("doctor", {"ok": True, "problems": 0, "checks": [{"check": "x", "result": "maybe"}]})
+    validate("sqs-ls", [{"name": "q", "url": "u", "visible": 1, "in_flight": 0, "delayed": 0, "new_field": 1}])
+
+
+def test_every_schema_names_its_command():
+    from awsemu import schemas
+
+    assert set(schemas.SCHEMAS) == set(schemas.COMMANDS)

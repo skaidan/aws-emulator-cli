@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/snapshot-ls.schema.json",
+  "title": "awsemu snapshot ls --json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "counts",
+      "created_at",
+      "emulator_version",
+      "name",
+      "path",
+      "port",
+      "secrets"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "created_at": {
+        "type": "string"
+      },
+      "port": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "emulator_version": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "counts": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "integer"
+        }
+      },
+      "secrets": {
+        "type": "boolean"
+      },
+      "path": {
+        "type": "string"
+      }
+    }
+  }
+}

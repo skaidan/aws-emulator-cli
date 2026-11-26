@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/proxy-calls.schema.json",
+  "title": "awsemu proxy calls --json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "bytes_in",
+      "bytes_out",
+      "error",
+      "fault",
+      "id",
+      "latency_ms",
+      "method",
+      "operation",
+      "path",
+      "request_id",
+      "resource",
+      "service",
+      "status",
+      "time"
+    ],
+    "properties": {
+      "id": {
+        "type": "integer"
+      },
+      "time": {
+        "type": "string"
+      },
+      "service": {
+        "type": "string"
+      },
+      "operation": {
+        "type": "string"
+      },
+      "resource": {
+        "type": "string"
+      },
+      "method": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "status": {
+        "type": "integer"
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "latency_ms": {
+        "type": "number"
+      },
+      "request_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "fault": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "bytes_in": {
+        "type": "integer"
+      },
+      "bytes_out": {
+        "type": "integer"
+      },
+      "request": {
+        "type": "object"
+      },
+      "response": {
+        "type": "object"
+      }
+    }
+  }
+}

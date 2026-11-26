@@ -28,6 +28,7 @@ ruff format src tests scripts         # the format, applied
 mypy                                  # types, on src/
 pytest --cov                          # tests, with coverage (CI requires 65%)
 python scripts/gen_reference.py       # docs/reference.md, after changing commands or options
+python scripts/gen_schemas.py         # docs/schemas/, after changing a --json output (src/awsemu/schemas.py)
 ```
 
 Imports inside functions are deliberate: they keep `awsemu` quick to start, so the linter doesn't flag them. The test suite runs without warnings (no unclosed sockets or processes); keep it that way.
@@ -89,7 +90,7 @@ Variables to trigger odd cases: `FAKE_EMULATOR_CRASH=1` (exits with code 1) and 
 
 ## Changing the JSON output or exit codes
 
-They're a stable interface (`docs/scripting.md`). Adding a field is fine. Renaming, removing or changing the type of one, or changing an exit code, is a breaking change: update `tests/test_json_contract.py` and `docs/scripting.md`, and list it under **Breaking** in the CHANGELOG.
+They're a stable interface (`docs/scripting.md`). Adding a field is fine. Renaming, removing or changing the type of one, or changing an exit code, is a breaking change: update `tests/test_json_contract.py`, `src/awsemu/schemas.py` (then `python scripts/gen_schemas.py`) and `docs/scripting.md`, and list it under **Breaking** in the CHANGELOG. A new `--json` output gets a schema there too, and a test that validates it.
 
 ## The proxy
 

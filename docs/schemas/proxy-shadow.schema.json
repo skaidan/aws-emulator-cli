@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/proxy-shadow.schema.json",
+  "title": "awsemu proxy shadow --json",
+  "type": "object",
+  "required": [
+    "calls",
+    "compared",
+    "differ",
+    "failed"
+  ],
+  "properties": {
+    "compared": {
+      "type": "integer"
+    },
+    "differ": {
+      "type": "integer"
+    },
+    "failed": {
+      "type": "integer"
+    },
+    "calls": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

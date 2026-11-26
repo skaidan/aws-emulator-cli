@@ -210,6 +210,9 @@ def test_compare_and_command(runner, isolated_home, tmp_path):
         "ddb.get_item(TableName='t', Key={})\n"
     )
     data = json.loads(runner.invoke(cli, ["check", "--iam", str(tmp_path), "--json"]).output)
+    from tests.schema_check import validate
+
+    validate("check-iam", data)
     assert data["missing"] == ["dynamodb:PutItem"]
     assert {n["action"] for n in data["needed"]} == {"dynamodb:GetItem", "dynamodb:PutItem"}
     assert runner.invoke(cli, ["check", "--iam", str(tmp_path), "--strict"]).exit_code == 1

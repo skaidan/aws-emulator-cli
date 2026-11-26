@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/status.schema.json",
+  "title": "awsemu status --json",
+  "type": "object",
+  "required": [
+    "auth",
+    "container",
+    "detail",
+    "endpoint",
+    "files",
+    "log",
+    "mode",
+    "pid",
+    "port",
+    "status",
+    "uptime_seconds"
+  ],
+  "properties": {
+    "port": {
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "healthy",
+        "unhealthy",
+        "stopped"
+      ]
+    },
+    "detail": {
+      "type": "string"
+    },
+    "endpoint": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string"
+    },
+    "pid": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "container": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "uptime_seconds": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "auth": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "files": {
+      "type": "string"
+    },
+    "log": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

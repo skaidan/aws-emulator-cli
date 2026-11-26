@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/proxy-cost.schema.json",
+  "title": "awsemu proxy cost --json",
+  "type": "object",
+  "required": [
+    "calls",
+    "estimate",
+    "excludes",
+    "lines",
+    "not_priced",
+    "prices_as_of",
+    "region",
+    "runs",
+    "total_usd"
+  ],
+  "properties": {
+    "estimate": {
+      "const": true
+    },
+    "region": {
+      "type": "string"
+    },
+    "prices_as_of": {
+      "type": "string"
+    },
+    "calls": {
+      "type": "integer"
+    },
+    "runs": {
+      "type": "integer"
+    },
+    "total_usd": {
+      "type": "number"
+    },
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "item",
+          "service",
+          "unit",
+          "units",
+          "usd",
+          "usd_per_unit"
+        ],
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "item": {
+            "type": "string"
+          },
+          "units": {
+            "type": "number"
+          },
+          "usd_per_unit": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "usd": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "not_priced": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "excludes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

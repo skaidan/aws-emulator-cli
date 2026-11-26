@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/fidelity-run.schema.json",
+  "title": "awsemu fidelity run \u2026 --json",
+  "type": "object",
+  "required": [
+    "installed",
+    "release",
+    "suite",
+    "summary",
+    "tests"
+  ],
+  "properties": {
+    "release": {
+      "type": "string"
+    },
+    "installed": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "suite": {
+      "type": "string"
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "detail",
+          "duration_ms",
+          "kind",
+          "path",
+          "published",
+          "same_as_published",
+          "test",
+          "verdict"
+        ],
+        "properties": {
+          "test": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "passed",
+              "failed",
+              "error"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "published": {
+            "enum": [
+              "pass",
+              "fail",
+              null
+            ]
+          },
+          "same_as_published": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "differ_from_published",
+        "error",
+        "failed",
+        "passed"
+      ],
+      "properties": {
+        "passed": {
+          "type": "integer"
+        },
+        "failed": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "integer"
+        },
+        "differ_from_published": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

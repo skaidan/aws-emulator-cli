@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/install-list.schema.json",
+  "title": "awsemu install --list --json",
+  "type": "object",
+  "required": [
+    "installed",
+    "pinned",
+    "versions"
+  ],
+  "properties": {
+    "versions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "installed": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pinned": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

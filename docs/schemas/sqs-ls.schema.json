@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/sqs-ls.schema.json",
+  "title": "awsemu sqs ls --json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "delayed",
+      "in_flight",
+      "name",
+      "url",
+      "visible"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "visible": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "in_flight": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "delayed": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      }
+    }
+  }
+}

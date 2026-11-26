@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/overview.schema.json",
+  "title": "awsemu overview --json",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "required": [
+      "error",
+      "items",
+      "label"
+    ],
+    "properties": {
+      "label": {
+        "type": "string"
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/kinesis-read-line.schema.json",
+  "title": "awsemu kinesis read --json (each line)",
+  "type": "object",
+  "required": [
+    "arrived",
+    "data",
+    "key",
+    "sequence",
+    "shard"
+  ],
+  "properties": {
+    "shard": {
+      "type": "string"
+    },
+    "sequence": {
+      "type": "string"
+    },
+    "key": {
+      "type": "string"
+    },
+    "data": {
+      "type": "string"
+    },
+    "arrived": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

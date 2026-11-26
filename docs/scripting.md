@@ -8,6 +8,7 @@ Everything on this page is a stable interface: scripts can rely on it.
 - **Adding** a field to a JSON object, or a new command or option, isn't a breaking change: parse JSON by key and ignore keys you don't know.
 - Human-readable output (tables, colours, messages) is **not** part of the interface and may change at any time. Use `--json`, `--raw` or exit codes in scripts, never the tables.
 - Each format is pinned by `tests/test_json_contract.py`; a change that breaks it fails CI.
+- Renamed options, settings and fields go through a deprecation period with warnings before they stop working: see [deprecations.md](deprecations.md).
 
 ## Exit codes
 
@@ -27,6 +28,8 @@ awsemu seed validate seed.yaml; [ $? -eq 2 ] && echo "fix the seed"
 ```
 
 ## JSON conventions
+
+Every `--json` output has a **JSON Schema** in [`docs/schemas/`](schemas/README.md), and the tests validate real outputs against them, so scripts can check what they read.
 
 - `--json` prints one JSON document to standard output (`kinesis read --json` prints one object per line, see below). Warnings and errors go to standard error.
 - **awsemu's own summaries** (`status`, `overview`, `doctor`, `fidelity`, `check`, `install --list`, `issues`, `snapshot ls`, `proxy status`, `proxy calls`, `proxy faults`, `sqs ls`, `sns ls`, `ddb ls`, `kinesis read`) use `snake_case` keys.
@@ -188,7 +191,7 @@ The same objects are in `~/.aws/emulator-cli/proxy/<port>/calls.jsonl`, and in `
 
 Not running: `{"running": false, "emulator_port": 9297}` and exit code 3.
 
-`awsemu proxy faults --json`: `[{"rule": "dynamodb=throttle@10%", "hits": 3}]`.
+`awsemu proxy faults --json`: `[{"rule": "dynamodb=throttle@10%", "hits": 3, "active": true, "remaining_s": null}]` (`remaining_s` for rules with `for DURATION`; `active` is false once a rule ran out).
 
 ### `awsemu issues SERVICE --json`
 

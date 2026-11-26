@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/doctor.schema.json",
+  "title": "awsemu doctor --json",
+  "type": "object",
+  "required": [
+    "checks",
+    "ok",
+    "problems"
+  ],
+  "properties": {
+    "ok": {
+      "type": "boolean"
+    },
+    "problems": {
+      "type": "integer"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "check",
+          "detail",
+          "fix",
+          "result"
+        ],
+        "properties": {
+          "check": {
+            "type": "string"
+          },
+          "result": {
+            "enum": [
+              "ok",
+              "warn",
+              "fail"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "fix": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

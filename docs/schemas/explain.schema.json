@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/explain.schema.json",
+  "title": "awsemu explain [CALL] --json",
+  "type": "object",
+  "required": [
+    "advice",
+    "call",
+    "differences",
+    "fidelity_tests",
+    "matching",
+    "operation",
+    "passed",
+    "release",
+    "tests",
+    "verdict"
+  ],
+  "properties": {
+    "call": {
+      "type": "object"
+    },
+    "release": {
+      "type": "string"
+    },
+    "fidelity_tests": {
+      "type": "string"
+    },
+    "operation": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tests": {
+      "type": "integer"
+    },
+    "passed": {
+      "type": "integer"
+    },
+    "differences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "actual",
+          "at_operation",
+          "expected",
+          "fixed_in",
+          "issues",
+          "kind",
+          "matches_usage",
+          "mismatch",
+          "operation",
+          "step",
+          "test",
+          "url"
+        ],
+        "properties": {
+          "test": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "operation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mismatch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expected": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "actual": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "step": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at_operation": {
+            "type": "boolean"
+          },
+          "matches_usage": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "severity",
+                "state",
+                "title",
+                "url"
+              ],
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "severity": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "fixed_in": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "matching": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verdict": {
+      "enum": [
+        "injected",
+        "known_difference",
+        "possible_difference",
+        "emulator_gap",
+        "likely_your_code",
+        "unknown",
+        "succeeded"
+      ]
+    },
+    "advice": {
+      "type": "string"
+    }
+  }
+}

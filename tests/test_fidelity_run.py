@@ -115,6 +115,9 @@ def test_command(runner, isolated_home, suite, monkeypatch):
         runner.invoke(cli, ["fidelity", "run", "dynamodb", "--failing", "--json", "--suite", str(suite.root)]).output
     )
     assert ran == ["dynamodb.b"] and data["summary"]["differ_from_published"] == []
+    from tests.schema_check import validate
+
+    validate("fidelity-run", data)
     assert runner.invoke(cli, ["fidelity", "run"]).exit_code == 2
     assert (
         runner.invoke(

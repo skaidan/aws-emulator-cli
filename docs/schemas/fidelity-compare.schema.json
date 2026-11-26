@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/fidelity-compare.schema.json",
+  "title": "awsemu fidelity --compare VERSION --json",
+  "type": "object",
+  "required": [
+    "from",
+    "services",
+    "to"
+  ],
+  "properties": {
+    "from": {
+      "type": "object",
+      "required": [
+        "release",
+        "suite"
+      ],
+      "properties": {
+        "release": {
+          "type": "string"
+        },
+        "suite": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "to": {
+      "type": "object",
+      "required": [
+        "release",
+        "suite"
+      ],
+      "properties": {
+        "release": {
+          "type": "string"
+        },
+        "suite": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "services": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "added_failing",
+          "added_passing",
+          "fixed",
+          "from",
+          "regressed",
+          "removed",
+          "to"
+        ],
+        "properties": {
+          "from": {
+            "type": "object",
+            "required": [
+              "passed",
+              "total"
+            ],
+            "properties": {
+              "passed": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              }
+            }
+          },
+          "to": {
+            "type": "object",
+            "required": [
+              "passed",
+              "total"
+            ],
+            "properties": {
+              "passed": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              }
+            }
+          },
+          "fixed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regressed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "added_passing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "added_failing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

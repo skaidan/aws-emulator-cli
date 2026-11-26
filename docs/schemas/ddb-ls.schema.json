@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/ddb-ls.schema.json",
+  "title": "awsemu ddb ls --json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "item_count",
+      "name",
+      "partition_key",
+      "sort_key",
+      "status"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "partition_key": {
+        "type": "object",
+        "required": [
+          "name",
+          "type"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "sort_key": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "required": [
+              "name",
+              "type"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "item_count": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "status": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  }
+}

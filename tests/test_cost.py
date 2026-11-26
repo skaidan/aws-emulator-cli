@@ -62,4 +62,7 @@ def test_command(runner, isolated_home):
     assert out.exit_code == 0, out.output
     assert "Estimated total" in out.output and "per run" in out.output and "apigateway" in out.output
     data = json.loads(runner.invoke(cli, ["proxy", "cost", "--json"]).output)
+    from tests.schema_check import validate
+
+    validate("proxy-cost", data)
     assert data["estimate"] is True and data["region"] == "us-east-1" and "free tier" in data["excludes"]

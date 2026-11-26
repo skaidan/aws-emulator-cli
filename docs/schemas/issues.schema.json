@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/skaidan/aws-emulator-cli/main/docs/schemas/issues.schema.json",
+  "title": "awsemu issues SERVICE --json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "created",
+      "kind",
+      "name",
+      "operations",
+      "services",
+      "severity",
+      "state",
+      "tests",
+      "title",
+      "url"
+    ],
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "severity": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "state": {
+        "enum": [
+          "open",
+          "fixed"
+        ]
+      },
+      "services": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "operations": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "tests": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "kind": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "created": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "fails_in_release": {
+        "type": "boolean"
+      }
+    }
+  }
+}
