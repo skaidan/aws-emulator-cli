@@ -20,7 +20,6 @@ from __future__ import annotations
 import configparser
 import os
 import tempfile
-import time
 
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.waiting_utils import wait_for_logs
@@ -91,14 +90,16 @@ class AwsEmulatorContainer(DockerContainer):
 
     def _read(self, path: str, timeout: float = 15) -> str:
         """A file the emulator writes at start (it may lag the log line a little)."""
-        deadline = time.monotonic() + timeout
-        while True:
+        from .waiting import poll
+
+        def written() -> str | None:
             result = self.exec(["cat", path])
-            if result.exit_code == 0 and result.output:
-                return result.output.decode("utf-8")
-            if time.monotonic() > deadline:
-                raise RuntimeError(f"the emulator didn't write {path} in the container")
-            time.sleep(0.2)
+            return result.output.decode("utf-8") if result.exit_code == 0 and result.output else None
+
+        text = poll(written, timeout=timeout)
+        if text is None:
+            raise RuntimeError(f"the emulator didn't write {path} in the container")
+        return text
 
     def _read_keys(self) -> tuple[str, str]:
         parser = configparser.ConfigParser()
@@ -152,16 +153,11 @@ class AwsEmulatorContainer(DockerContainer):
     def client(self, service: str, **kwargs):
         """A boto3 client for this container."""
         import boto3
-        from botocore.config import Config
 
-        kwargs.setdefault(
-            "config",
-            Config(
-                inject_host_prefix=False,
-                s3={"addressing_style": "path"},
-                retries={"max_attempts": 2, "mode": "standard"},
-            ),
-        )
+        from .clients import emulator_config
+
+        # botocore's own timeouts (60 s), as before: a container may be slower than a local process.
+        kwargs.setdefault("config", emulator_config(connect_timeout=60, read_timeout=60))
         return boto3.client(
             service,
             endpoint_url=self.endpoint_url,

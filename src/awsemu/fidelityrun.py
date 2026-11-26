@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .paths import cli_root
+from . import errors
 
 SUITE_REPO = "https://github.com/aws/aws-emulator-evaluation-suite"
 SCRUB = (
@@ -41,10 +42,8 @@ SCRUB = (
 )
 
 
-class RunError(Exception):
-    def __init__(self, message: str, hint: str | None = None):
-        super().__init__(message)
-        self.hint = hint
+class RunError(errors.AwsemuError):
+    pass
 
 
 @dataclass

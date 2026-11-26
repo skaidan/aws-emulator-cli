@@ -9,7 +9,7 @@ import click
 
 from . import exitcodes
 from . import ui
-from .runtime import RuntimeErrorWithHint
+from .errors import AwsemuError
 
 
 json_option = click.option(
@@ -52,15 +52,15 @@ OPTIONAL_PACKAGES = {
 
 
 def handle_errors(fn):
-    """Turn expected failures into a one-line message plus a hint, exit code 1."""
+    """Turn expected failures into a one-line message plus a hint, and the error's exit code."""
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
-        except RuntimeErrorWithHint as exc:
+        except AwsemuError as exc:
             ui.error(str(exc), exc.hint)
-            sys.exit(exitcodes.FAILED)
+            sys.exit(exc.exit_code)
         except ImportError as exc:
             missing = (exc.name or "").split(".")[0]
             if missing not in OPTIONAL_PACKAGES:

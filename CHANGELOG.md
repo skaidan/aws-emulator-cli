@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- **Faster startup**: commands are imported only when they run, so `awsemu --version` and `awsemu --help`'s first line no longer load every module (about 170 ms → 40 ms on a laptop). The commands that lived in `cli.py` moved to `awsemu/commands/` (`lifecycle`, `env`, `logs_`, `doctor`, `image`, `config`, `ui`, `completion_`); nothing changes on the command line.
+- **One way to wait**: every wait for something to happen (the emulator to be healthy or to stop, a port to close, the proxy to answer, a Step Functions execution to finish, a file in a Testcontainers container) now goes through `awsemu.waiting.poll`, which always tries one last time at the deadline.
+- **One error hierarchy**: every error awsemu raises on purpose derives from `awsemu.errors.AwsemuError` and carries its message, hint and exit code, and one handler prints them. An invalid seed, `awsemu.toml` or fault rule now always exits with 2 (usage), and proxy, report, fidelity and real-account errors that reached the handler print one line instead of a traceback. `awsemu.runtime.RuntimeErrorWithHint` still works.
+- Waits for "not found" answers (seeds, `lambda deploy`, `watch`, `sfn`, `events`, `secrets put`) only catch AWS error answers now, so a bug or a lost connection is no longer taken for "not found".
+- One place for the boto3 client configuration of the emulator and of a real account (`awsemu.clients.emulator_config` and `real_account_config`), also used by the Testcontainers module.
+
 ### Breaking
 
 - **Python 3.11 or later** is now required: Python 3.10 reached its end of life in October 2026. pip keeps installing awsemu 0.13.0 on Python 3.10. `tomli` is no longer a dependency (awsemu uses the standard library's `tomllib`). The policy for Python versions is now in [docs/deprecations.md](docs/deprecations.md).

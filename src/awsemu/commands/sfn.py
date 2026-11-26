@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import json
-import time
 import uuid
 from pathlib import Path
 
 import click
 
 from .. import exitcodes
-from .. import ui
+from .. import ui, waiting
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
-from ._common import arn, ensure_service_role, is_error, load_json_arg
+from ._common import arn, client_error, ensure_service_role, is_error, load_json_arg
 
 DEFAULT_ROLE_NAME = "awsemu-sfn-role"
 FINAL = {"SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"}
@@ -81,7 +80,7 @@ def deploy(c: Ctx, name: str, definition: str, express: bool, role: str | None):
     try:
         s.describe_state_machine(stateMachineArn=target)
         exists = True
-    except Exception as exc:
+    except client_error() as exc:
         if not is_error(exc, "StateMachineDoesNotExist", "ResourceNotFound"):
             raise
         exists = False
@@ -148,14 +147,15 @@ def start(c: Ctx, name: str, input_json: str, file_, no_wait: bool, timeout: flo
         ui.success("started")
         ui.echo(exec_arn, "muted")
         return
-    deadline = time.monotonic() + timeout
-    while True:
-        d = s.describe_execution(executionArn=exec_arn)
-        if d["status"] in FINAL:
-            break
-        if time.monotonic() > deadline:
-            raise click.ClickException(f"still {d['status']} after {timeout:.0f}s: {exec_arn}")
-        time.sleep(0.5)
+    last: dict = {}
+
+    def finished() -> dict | None:
+        last.update(s.describe_execution(executionArn=exec_arn))
+        return dict(last) if last["status"] in FINAL else None
+
+    d = waiting.poll(finished, timeout=timeout, interval=0.5)
+    if d is None:
+        raise click.ClickException(f"still {last['status']} after {timeout:.0f}s: {exec_arn}")
     output = d.get("output")
     if raw:
         click.echo(output or "")

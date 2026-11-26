@@ -11,7 +11,7 @@ from .. import ui
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
-from ._common import is_error
+from ._common import client_error, is_error
 
 
 def _read_value(value: str | None, file_) -> str:
@@ -97,7 +97,7 @@ def secrets_put(c: Ctx, name: str, value: str | None, file_, description: str | 
             kwargs["Description"] = description
         sm.create_secret(**kwargs)
         ui.success(f"created {name}")
-    except Exception as exc:
+    except client_error() as exc:
         if not is_error(exc, "ResourceExists"):
             raise
         sm.put_secret_value(SecretId=name, SecretString=value)

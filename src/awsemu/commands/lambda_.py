@@ -22,7 +22,7 @@ from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
 from ..paths import cli_root
-from ._common import ensure_service_role, is_error, parse_kv
+from ._common import client_error, ensure_service_role, is_error, parse_kv
 
 DEFAULT_ROLE_NAME = "awsemu-lambda-role"
 SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules/.cache", ".pytest_cache", ".mypy_cache"}
@@ -508,7 +508,7 @@ def logs_cmd(c: Ctx, name: str, follow: bool, since: int):
                         ts = time.strftime("%H:%M:%S", time.localtime(ev["timestamp"] / 1000))
                         ui.echo(f"{ts}  {ev['message'].rstrip()}")
                         start = max(start, ev["timestamp"])
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "ResourceNotFound"):
                     raise
                 if not follow:

@@ -29,13 +29,14 @@ from pathlib import Path
 
 from ._service_names import BOTO_TO_SCORE
 from .paths import cli_root
+from . import errors
 
 REPO = "aws/aws-emulator"
 API = f"https://api.github.com/repos/{REPO}/releases"
 ASSET = "scores.json.gz"
 
 
-class FidelityError(Exception):
+class FidelityError(errors.AwsemuError):
     pass
 
 

@@ -12,14 +12,12 @@ from awsemu.commands import events as events_mod
 from awsemu.commands import kinesis as kinesis_mod
 from awsemu.commands import secrets as secrets_mod
 from awsemu.commands import sfn as sfn_mod
+from tests.conftest import aws_error
 from tests.test_services import FakeClient
 
 
 def err(code):
-    cls = type(code, (Exception,), {})
-    exc = cls(code)
-    exc.response = {"Error": {"Code": code, "Message": code}}
-    return exc
+    return aws_error(code)
 
 
 def raises(code):
@@ -165,7 +163,7 @@ def test_sfn_start_waits_and_reports_failure(runner, monkeypatch, running):
     )
     s = FakeClient(start_execution={"executionArn": "arn:exec"}, describe_execution=lambda **_: next(states))
     use(monkeypatch, sfn_mod, stepfunctions=s)
-    monkeypatch.setattr(sfn_mod.time, "sleep", lambda _: None)
+    monkeypatch.setattr(sfn_mod.waiting.time, "sleep", lambda _: None)
     result = runner.invoke(cli, ["sfn", "start", "flow", '{"x": 1}'])
     assert result.exit_code == 1
     assert "FAILED: States.TaskFailed boom" in result.output

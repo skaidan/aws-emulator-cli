@@ -177,19 +177,19 @@ Where we are (measured on 0.13.0): 18,400 lines in 73 modules; `cli.py` has 1,16
 - ⬜ **Layers**: a core with no Click and no Rich (pure logic that returns dataclasses), adapters for the outside world (boto3, processes, Docker, files, the network) and a presentation layer (Click commands, Rich tables, JSON). The same core result feeds the table, `--json`, the MCP server and the pytest plugin, so they can't drift apart.
 - ⬜ **JSON Schemas from the types**: generate `schemas.py` from the core's dataclasses instead of writing the schemas by hand, so an output and its schema can't disagree.
 - ⬜ **A public Python API** (`awsemu.api`): start, stop, env, seed, snapshot, proxy, faults and calls as plain functions, documented and covered by the stability promise. The CLI, the pytest plugin, the Testcontainers module and the MCP server all use it; today each has part of that logic.
-- ⬜ **One client factory**: one place that creates boto3 clients for the emulator, the proxy or a real account (CA, endpoint, region, retries, timeouts, the read-only guard), with a cache per process.
+- ✅ **One client factory**: one place that creates boto3 clients for the emulator, the proxy or a real account (CA, endpoint, region, retries, timeouts, the read-only guard), with a cache per process.
 - ⬜ **One runtime interface** for native and Docker modes (start, stop, health, logs, version, files), with a fake implementation for tests, instead of `subprocess` calls spread across modules.
 - ⬜ **One configuration model**: `settings`, `project`, `envvars` and command-line options merged into one layered object that knows where each value came from; `awsemu config --explain` prints it ("port 4566 from awsemu.toml, line 3").
-- ⬜ **Errors**: a small hierarchy of awsemu errors mapped to exit codes in one place; narrow the 57 `except Exception` to what each one really expects, and log the rest with `--debug`.
-- ⬜ **Split the big modules** along those lines: `cli.py` (1,167 lines), `commands/seed.py` (1,124), `proxy.py` (890), `commands/proxy.py` (663), `runtime.py` (567), `seed.py` (568), `commands/lambda_.py` (565).
+- ✅ **Errors**: a small hierarchy of awsemu errors mapped to exit codes in one place (`awsemu.errors`); the 18 "not found" checks only catch AWS error answers. The other 39 `except Exception` are deliberate (one failing resource or service mustn't stop the others, a notice must never break a command) and stay, each with its reason.
+- ⬜ **Split the big modules** along those lines: ~~`cli.py` (1,167 lines)~~ (done: 128 lines, its commands are in `commands/`), `commands/seed.py` (1,124), `proxy.py` (890), `commands/proxy.py` (663), `runtime.py` (567), `seed.py` (568), `commands/lambda_.py` (565).
 - ⬜ **The proxy as a pipeline**: parse → match faults → forward → record → shadow → cost, each step a small class with its own tests, so new steps (IAM enforcement, tracing in v0.20) plug in without touching the others.
 - ⬜ Keep old import paths working through the deprecation policy (the pytest plugin and `awsemu.containers` are imported by users).
 
 **Performance**
 
-- ⬜ **Lazy commands**: load a command's module only when it runs (Click lazy groups), and keep heavy imports (boto3, cryptography, the proxy, YAML) inside the functions that need them. Target: `awsemu --version` and `awsemu env` under 50 ms, and completion that feels instant.
+- ✅ **Lazy commands**: a command's module loads only when it runs (`LAZY_COMMANDS` in `cli.py`), and the root group imports Rich, the runtime and the project file only when a command runs: `awsemu --version` went from about 170 ms to 40 ms. ⬜ Still to do: keep boto3, cryptography and YAML out of `env` and completion, so they feel instant too.
 - ⬜ **Proxy throughput**: reuse upstream connections (a pool per thread), stream large bodies instead of reading them into memory, and write the call log in batches; measure calls per second and added latency with `awsemu bench` (moved here from the ideas list) before and after.
-- ⬜ **One wait helper**: the 18 `time.sleep` loops (health checks, waiting for resources, `--follow`) become one helper with a deadline, backoff and a clear timeout message.
+- ✅ **One wait helper**: the 18 `time.sleep` loops (health checks, waiting for resources, `--follow`) become one helper with a deadline, backoff and a clear timeout message.
 - ⬜ **Caching**: botocore's service models and the fidelity scores loaded once per process; `check` and `scan` reuse one parsed index.
 - ⬜ Profile `seed apply`, `snapshot save/restore`, `overview` and `check` on a large project (thousands of objects and items) and fix what shows up.
 

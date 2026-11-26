@@ -16,6 +16,7 @@ import datetime as dt
 import json
 from dataclasses import dataclass
 from urllib.parse import urlencode
+from . import errors
 
 ISSUE_FORM = "https://github.com/aws/aws-emulator/issues/new"
 TEMPLATE = "behavior-differs.yml"
@@ -47,7 +48,7 @@ EXPECTED_PLACEHOLDER = (
 )
 
 
-class ReportError(Exception):
+class ReportError(errors.AwsemuError):
     pass
 
 

@@ -10,7 +10,7 @@ from .. import ui
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
-from ._common import allow_lambda, allow_queue, is_error, load_json_arg
+from ._common import allow_lambda, allow_queue, client_error, is_error, load_json_arg
 
 bus_option = click.option("--bus", default="default", show_default=True, help="Event bus name.")
 
@@ -169,7 +169,7 @@ def rm(c: Ctx, name: str, bus: str, yes: bool):
     ev = client("events", c.port)
     try:
         ids = [t["Id"] for t in ev.list_targets_by_rule(Rule=name, EventBusName=bus).get("Targets", [])]
-    except Exception as exc:
+    except client_error() as exc:
         if not is_error(exc, "ResourceNotFound"):
             raise
         ids = []

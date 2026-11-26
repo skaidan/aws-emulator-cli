@@ -17,7 +17,7 @@ from .. import exitcodes
 from .. import health, ui
 from ..clients import client
 from ..context import Ctx, handle_errors, pass_ctx
-from ._common import is_error
+from ._common import client_error, is_error
 
 # A snapshot maps (kind, name) -> a number to compare (messages, items, objects) or None.
 Snapshot = dict[tuple[str, str], "int | None"]
@@ -31,7 +31,7 @@ def _s3(c) -> Snapshot:
     for b in c.list_buckets().get("Buckets", []):
         try:
             out[("bucket", b["Name"])] = c.list_objects_v2(Bucket=b["Name"], MaxKeys=S3_CAP).get("KeyCount", 0)
-        except Exception as exc:
+        except client_error() as exc:
             if not is_error(exc, "NoSuchBucket"):
                 raise
     return out
@@ -43,7 +43,7 @@ def _sqs(c) -> Snapshot:
         try:
             a = c.get_queue_attributes(QueueUrl=url, AttributeNames=["ApproximateNumberOfMessages"])
             out[("queue", url.rsplit("/", 1)[-1])] = int(a["Attributes"].get("ApproximateNumberOfMessages", 0))
-        except Exception as exc:
+        except client_error() as exc:
             if not is_error(exc, "NonExistentQueue", "QueueDoesNotExist"):
                 raise
     return out
@@ -61,7 +61,7 @@ def _ddb(c) -> Snapshot:
                     if "LastEvaluatedKey" not in resp:
                         break
                     kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
-            except Exception as exc:
+            except client_error() as exc:
                 if not is_error(exc, "ResourceNotFound"):
                     raise
                 continue

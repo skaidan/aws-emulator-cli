@@ -14,6 +14,7 @@ Everything that touches a real account goes through :func:`session`, which:
 from __future__ import annotations
 
 import re
+from . import errors
 
 READ_PREFIXES = ("Describe", "List", "Get", "Head")
 DATA_READS = {
@@ -56,7 +57,7 @@ DATA_READS = {
 ARN_RE = re.compile(r"arn:aws:([a-z0-9-]+):([a-z0-9-]*):(\d{12}):")
 
 
-class NotReadOnly(Exception):
+class NotReadOnly(errors.AwsemuError):
     pass
 
 
@@ -98,11 +99,9 @@ def session(profile: str, region: str | None = None, data_reads: bool = False):
 
 
 def client(sess, service: str):
-    from botocore.config import Config
+    from .clients import real_account_config
 
-    return sess.client(
-        service, config=Config(ignore_configured_endpoint_urls=True, retries={"max_attempts": 3, "mode": "standard"})
-    )
+    return sess.client(service, config=real_account_config())
 
 
 def localize(value, account: str, emulator_account: str = "000000000000", emulator_region: str = "us-east-1"):

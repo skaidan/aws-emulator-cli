@@ -19,6 +19,17 @@ def error_code(exc: Exception) -> str:
     return type(exc).__name__
 
 
+def client_error() -> type[Exception]:
+    """botocore's ``ClientError`` (an error answer from AWS), imported only when an error happens.
+
+    Use it as ``except client_error() as exc:`` where only an AWS error answer is expected,
+    so a bug or a lost connection isn't mistaken for "not found".
+    """
+    from botocore.exceptions import ClientError
+
+    return ClientError
+
+
 def is_error(exc: Exception, *codes: str) -> bool:
     code = error_code(exc)
     return any(c in code or c in type(exc).__name__ for c in codes)
@@ -49,7 +60,7 @@ def ensure_service_role(iam, role_name: str, service: str, description: str) -> 
     """Return the ARN of ``role_name``, creating it with a trust policy for ``service``."""
     try:
         return iam.get_role(RoleName=role_name)["Role"]["Arn"]
-    except Exception as exc:
+    except client_error() as exc:
         if not is_error(exc, "NoSuchEntity"):
             raise
     trust = {
@@ -109,7 +120,42 @@ def allow_lambda(lam, function: str, service: str, source_arn: str, sid: str) ->
             Principal=service,
             SourceArn=source_arn,
         )
-    except Exception as exc:
+    except client_error() as exc:
         if not is_error(exc, "ResourceConflict"):
             raise
     return fn_arn
+
+
+class AliasedGroup(click.Group):
+    """Lets users type unambiguous prefixes (``awsemu st`` -> status) and a few aliases."""
+
+    ALIASES = {
+        "ps": "status",
+        "reset": "restart",
+        "ddb": "dynamodb",
+        "ls": "overview",
+        "fn": "lambda",
+        "eb": "events",
+        "stepfunctions": "sfn",
+        "secretsmanager": "secrets",
+    }
+
+    def lookup(self, ctx, cmd_name):
+        """Find a command by its exact name (subclasses can load it on demand)."""
+        return super().get_command(ctx, cmd_name)
+
+    def get_command(self, ctx, cmd_name):
+        cmd_name = self.ALIASES.get(cmd_name, cmd_name)
+        rv = self.lookup(ctx, cmd_name)
+        if rv is not None:
+            return rv
+        matches = [n for n in self.list_commands(ctx) if n.startswith(cmd_name)]
+        if len(matches) == 1:
+            return self.lookup(ctx, matches[0])
+        if len(matches) > 1:
+            ctx.fail(f"'{cmd_name}' is ambiguous: {', '.join(sorted(matches))}")
+        return None
+
+    def resolve_command(self, ctx, args):
+        _, cmd, args = super().resolve_command(ctx, args)
+        return cmd.name if cmd else None, cmd, args

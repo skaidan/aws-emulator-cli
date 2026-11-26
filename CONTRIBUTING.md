@@ -71,7 +71,7 @@ Variables to trigger odd cases: `FAKE_EMULATOR_CRASH=1` (exits with code 1) and 
    - exit with the constants in `exitcodes.py`, never bare numbers;
    - add `shell_complete=complete("<kind>")` to arguments that take resource names (see `completion.py`);
    - for roles, queue policies, Lambda permissions or expected errors (`is_error(exc, "ResourceNotFound")`), use `commands/_common.py`.
-2. Register it in `cli.py` (`cli.add_command(...)`).
+2. Register it in `LAZY_COMMANDS` in `cli.py` (`"name": "module:attribute"`); `tests/test_cli_lazy.py` checks it loads.
 3. If it has resources to list, add it to `SERVICES` in `commands/overview.py`, to `DETAILS` in `browse.py` and, if useful, to `COLLECTORS` in `commands/watch.py`.
 4. Tests with `FakeClient` (see `tests/test_services.py`) and, if you can, a test in `tests/test_real.py`.
 5. If it makes sense in a seed, add the section in `seed.py` (fields and validation), its `_apply_*` and its export in `commands/seed.py`, and extend `examples/seed.yaml`.
