@@ -48,9 +48,20 @@ def test_lifecycle_and_environment_need_neither(runner, fake_binary, free_port, 
         boto = next(c for c in doctor["checks"] if c["check"] == "boto3")
         assert boto["result"] == "fail" and boto["fix"]  # says what to install
         assert runner.invoke(cli, ["--port", port, "compose"]).exit_code == 0
+        assert runner.invoke(cli, ["--port", port, "config", "show"]).exit_code == 0
+        restarted = runner.invoke(cli, ["--port", port, "restart", "--wait", "20"])
+        assert restarted.exit_code == 0, restarted.output
     finally:
         assert runner.invoke(cli, ["--port", port, "stop"]).exit_code == 0
     assert "boto3" not in sys.modules and "cryptography" not in sys.modules
+
+
+def test_up_and_down_need_neither(runner, fake_binary, free_port, tmp_path, monkeypatch, without_heavy):
+    (tmp_path / "awsemu.toml").write_text(f"port = {free_port}\n")
+    monkeypatch.chdir(tmp_path)
+    up = runner.invoke(cli, ["up", "--wait", "20"])
+    assert up.exit_code == 0, up.output
+    assert runner.invoke(cli, ["down"]).exit_code == 0
 
 
 def test_commands_that_need_them_say_so(runner, running, without_heavy):

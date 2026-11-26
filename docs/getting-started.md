@@ -32,7 +32,7 @@ pip install --no-deps 'aws-emulator-cli @ git+https://github.com/skaidan/aws-emu
 # Python 3.10 also needs: tomli
 ```
 
-What works then: `start`, `stop`, `restart`, `status`, `up`, `down`, `env`, `exec`, `shell`, `logs`, `compose`, `install`, `doctor`, `config` (tested in CI with those packages blocked). Commands that call AWS APIs (`s3`, `sqs`, `overview`, `seed`, `call`…) or run the proxy say what's missing and how to install it. `awsemu doctor` lists `boto3` as missing.
+What works then (tested with those packages blocked): `start`, `stop`, `restart`, `status`, `up`, `down`, `env`, `exec`, `logs`, `compose`, `doctor` and `config`. Commands that call AWS APIs (`s3`, `sqs`, `overview`, `seed`, `call`…) or run the proxy say what's missing and how to install it. `awsemu doctor` lists `boto3` as missing.
 
 They stay regular dependencies of the package: pip can't install "optional by default" extras yet, and making them opt-in would leave the usual `pip install` without the service commands, seeds, the proxy and the pytest plugin's fault injection.
 
