@@ -72,3 +72,13 @@ def test_every_seed_section_has_one_service():
 
     assert sorted(seed_sections()) == sorted(seedlib.SECTIONS) == sorted(APPLY_ORDER)
     assert len([s for s in SERVICES if s.seed_section]) == len(seedlib.SECTIONS)
+
+
+@pytest.mark.parametrize("service", SERVICES, ids=lambda s: s.name)
+def test_iam_policy_knows_each_services_arns(service):
+    # IAM tables stay in iampolicy.py (they also cover services outside the registry);
+    # this keeps a new service from silently getting Resource "*" in `awsemu iam policy`.
+    from awsemu.iampolicy import resource_arn
+
+    arn = resource_arn(service.name, f"{service.arn}:SomeAction", "name", "us-east-1", "123456789012")
+    assert arn.startswith(f"arn:aws:{service.arn}:"), f"add {service.name} to iampolicy.resource_arn's templates"
