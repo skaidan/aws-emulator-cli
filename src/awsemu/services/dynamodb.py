@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from .. import clients
 from ..runtime import RuntimeErrorWithHint
+from .. import realaccount
 from .. import seed as seedlib
 from ..awserrors import client_error, is_error
 from . import COMPLETE_MAX, Service, Snapshot, pages
@@ -131,6 +132,40 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return tables
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``tables`` of a real account (read-only), for ``awsemu seed import``."""
+    ddb = realaccount.client(sess, "dynamodb")
+    tables = []
+    for page in ddb.get_paginator("list_tables").paginate():
+        for name in page.get("TableNames", []):
+            t = ddb.describe_table(TableName=name)["Table"]
+            types = {d["AttributeName"]: d["AttributeType"] for d in t["AttributeDefinitions"]}
+            entry = {"name": name}
+            for k in t["KeySchema"]:
+                spec = k["AttributeName"] + (
+                    "" if types[k["AttributeName"]] == "S" else f":{types[k['AttributeName']]}"
+                )
+                entry["pk" if k["KeyType"] == "HASH" else "sk"] = spec
+            if t.get("GlobalSecondaryIndexes") or t.get("LocalSecondaryIndexes"):
+                opts.notes.append(f"table {name}: its secondary indexes aren't in seeds yet; left out")
+            tables.append(entry)
+    return tables
+
+
+WRITES = {"PutItem", "UpdateItem", "DeleteItem", "BatchWriteItem"}
+READS = {"GetItem", "Query", "Scan", "BatchGetItem"}
+
+
+def cost(call) -> list[tuple[str, float]]:
+    """One request unit per call, two for transactions (big items take more: awsemu.cost)."""
+    op = call["operation"]
+    if op in WRITES or op == "TransactWriteItems":
+        return [("dynamodb.write", 2 if op.startswith("Transact") else 1)]
+    if op in READS or op == "TransactGetItems":
+        return [("dynamodb.read", 2 if op.startswith("Transact") else 1)]
+    return []
+
+
 SERVICE = Service(
     name="dynamodb",
     label="DynamoDB tables",
@@ -142,4 +177,6 @@ SERVICE = Service(
     seed_section="tables",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )

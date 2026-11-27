@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from .. import clients
+from .. import realaccount
 from .. import seed as seedlib
 from ..commands._common import allow_lambda, allow_queue
 
@@ -116,6 +117,41 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return topics
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``topics`` of a real account (read-only), for ``awsemu seed import``."""
+    queue_names = {q["name"] for q in opts.data.get("queues", [])}
+    sns = realaccount.client(sess, "sns")
+    topics = []
+    for page in sns.get_paginator("list_topics").paginate():
+        for t in page.get("Topics", []):
+            arn = t["TopicArn"]
+            entry = {"name": arn.rsplit(":", 1)[-1]}
+            if entry["name"].endswith(".fifo"):
+                entry["fifo"] = True
+            subs = []
+            for sp in sns.get_paginator("list_subscriptions_by_topic").paginate(TopicArn=arn):
+                for s in sp.get("Subscriptions", []):
+                    target = s["Endpoint"].rsplit(":", 1)[-1]
+                    if s["Protocol"] != "sqs" or target not in queue_names:
+                        opts.notes.append(f"topic {entry['name']}: left out its {s['Protocol']} subscription")
+                        continue
+                    sub: dict = {"sqs": target}
+                    attrs = sns.get_subscription_attributes(SubscriptionArn=s["SubscriptionArn"])["Attributes"]
+                    if attrs.get("RawMessageDelivery") == "true":
+                        sub["raw"] = True
+                    if attrs.get("FilterPolicy"):
+                        sub["filter"] = json.loads(attrs["FilterPolicy"])
+                    subs.append(sub)
+            if subs:
+                entry["subscriptions"] = subs
+            topics.append(entry)
+    return topics
+
+
+def cost(call) -> list[tuple[str, float]]:
+    return [("sns.publish", 1)] if call["operation"] in ("Publish", "PublishBatch") else []
+
+
 SERVICE = Service(
     name="sns",
     label="SNS topics",
@@ -131,4 +167,6 @@ SERVICE = Service(
     seed_section="topics",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )

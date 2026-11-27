@@ -27,6 +27,10 @@ def describe(a, port, full):
     raise errors.AwsemuError(f"IAM resource type '{a.kind}' isn't supported by describe")
 
 
+def cost(call) -> list[tuple[str, float]]:
+    return []  # IAM has no request charge
+
+
 SERVICE = Service(
     name="iam",
     label="IAM roles",
@@ -38,5 +42,7 @@ SERVICE = Service(
         "completions": "no command takes a role name",
         "apply": "seeds have no IAM section: `functions` create the role they need",
         "export": "seeds have no IAM section: `functions` create the role they need",
+        "seed_import": "seeds have no IAM section: `functions` create the role they need",
     },
+    cost=cost,
 )

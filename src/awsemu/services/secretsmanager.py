@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from .. import clients
+from .. import realaccount
 from .. import seed as seedlib
 from ..awserrors import client_error, is_error
 from . import COMPLETE_MAX, Service, clean, names_snapshot, pages
@@ -74,6 +75,25 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return secrets
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``secrets`` of a real account (read-only), for ``awsemu seed import``."""
+    sm = realaccount.client(sess, "secretsmanager")
+    secrets = []
+    for page in sm.get_paginator("list_secrets").paginate():
+        for s in page.get("SecretList", []):
+            entry = {"name": s["Name"], "value": realaccount.PLACEHOLDER}
+            if s.get("Description"):
+                entry["description"] = s["Description"]
+            secrets.append(entry)
+    if secrets:
+        opts.notes.append(f"{len(secrets)} secret(s) with a placeholder value: set real test values locally")
+    return secrets
+
+
+def cost(call) -> list[tuple[str, float]]:
+    return [("secretsmanager.api", 1)]
+
+
 SERVICE = Service(
     name="secretsmanager",
     alias="secrets",
@@ -86,4 +106,6 @@ SERVICE = Service(
     seed_section="secrets",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )

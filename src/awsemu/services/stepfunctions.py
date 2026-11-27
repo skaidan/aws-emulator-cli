@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from .. import clients
+from .. import realaccount
 from .. import seed as seedlib
 from ..commands._common import arn, ensure_service_role
 from ..awserrors import client_error, is_error
@@ -86,6 +87,30 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return machines
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``state_machines`` of a real account (read-only), for ``awsemu seed import``."""
+    sf = realaccount.client(sess, "stepfunctions")
+    machines = []
+    for page in sf.get_paginator("list_state_machines").paginate():
+        for m in page.get("stateMachines", []):
+            d = sf.describe_state_machine(stateMachineArn=m["stateMachineArn"])
+            entry = {"name": m["name"], "definition": realaccount.localize(json.loads(d["definition"]), opts.account)}
+            if d.get("type") == "EXPRESS":
+                entry["express"] = True
+            machines.append(entry)
+    if machines:
+        opts.notes.append(
+            "state machine definitions point at the emulator's account and Region now; "
+            "the resources they use must exist locally"
+        )
+    return machines
+
+
+def cost(call) -> list[tuple[str, float]]:
+    """One state transition per execution started (real workflows have more)."""
+    return [("stepfunctions.transition", 1)] if call["operation"] in ("StartExecution", "StartSyncExecution") else []
+
+
 SERVICE = Service(
     name="stepfunctions",
     arn="states",
@@ -101,4 +126,6 @@ SERVICE = Service(
     seed_section="state_machines",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )

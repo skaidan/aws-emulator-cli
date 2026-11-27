@@ -25,6 +25,11 @@ def describe(a, port, full):
     return match[0]
 
 
+def cost(call) -> list[tuple[str, float]]:
+    """Ingestion, from the request bytes of PutLogEvents."""
+    return [("logs.ingest_gb", float(call.get("bytes_in") or 0) / 1e9)] if call["operation"] == "PutLogEvents" else []
+
+
 SERVICE = Service(
     name="logs",
     label="Log groups",
@@ -36,5 +41,7 @@ SERVICE = Service(
         "completions": "no command takes a log group name yet (v0.15)",
         "apply": "seeds have no log groups: functions create theirs when they log",
         "export": "seeds have no log groups: functions create theirs when they log",
+        "seed_import": "seeds have no log groups: functions create theirs when they log",
     },
+    cost=cost,
 )

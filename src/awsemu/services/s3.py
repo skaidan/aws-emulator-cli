@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from .. import clients
+from .. import realaccount
 from .. import seed as seedlib
 from ..awserrors import client_error, is_error
 from . import COMPLETE_MAX, Service, Snapshot, clean
@@ -122,6 +123,46 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return buckets
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``buckets`` of a real account (read-only), for ``awsemu seed import``."""
+    s3 = realaccount.client(sess, "s3")
+    buckets = []
+    for b in s3.list_buckets().get("Buckets", []):
+        try:
+            where = s3.get_bucket_location(Bucket=b["Name"]).get("LocationConstraint") or "us-east-1"
+        except Exception:  # a bucket we can't read the location of is skipped
+            opts.notes.append(f"skipped bucket {b['Name']} (couldn't read its Region)")
+            continue
+        if where == opts.region:
+            buckets.append({"name": b["Name"]})
+    return buckets
+
+
+FREE_OPERATIONS = {"DeleteObject", "DeleteObjects", "AbortMultipartUpload", "DeleteBucket"}
+PUT_CLASS = {  # billed like PUT; every other request like GET
+    "PutObject",
+    "CopyObject",
+    "CompleteMultipartUpload",
+    "CreateMultipartUpload",
+    "UploadPart",
+    "UploadPartCopy",
+    "ListObjects",
+    "ListObjectsV2",
+    "ListObjectVersions",
+    "ListBuckets",
+    "ListMultipartUploads",
+    "ListParts",
+    "CreateBucket",
+}
+
+
+def cost(call) -> list[tuple[str, float]]:
+    op = call["operation"]
+    if op in FREE_OPERATIONS:
+        return []
+    return [("s3.put" if op in PUT_CLASS or op.startswith("Put") else "s3.get", 1)]
+
+
 SERVICE = Service(
     name="s3",
     label="S3 buckets",
@@ -133,4 +174,6 @@ SERVICE = Service(
     seed_section="buckets",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )
