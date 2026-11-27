@@ -104,7 +104,7 @@ def issues(targets, mine, fixed, severity, search, limit, show, release, refresh
     failing: set[str] = set()
     tag = None
     if fixed:
-        from .fidelity import pick_release
+        from ..fidelity import pick_release
 
         tag, scores, _ = pick_release(release)
         failing = {u["unitId"] for u in scores.get("units", []) if u.get("outcome") == "fail"}

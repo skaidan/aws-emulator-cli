@@ -12,14 +12,8 @@ import click
 from .. import exitcodes, faults, health, project, ui
 from .. import proxy as px
 from ..context import Ctx, handle_errors, json_option, pass_ctx
+from ..proxy import default_listen, read_calls
 from ..runtime import RuntimeErrorWithHint
-
-
-def default_listen(emulator_port: int) -> int:
-    proj = _project()
-    if proj and proj.proxy_port is not None:
-        return proj.proxy_port
-    return emulator_port + 1 if emulator_port else 0
 
 
 def _project():
@@ -376,20 +370,6 @@ def faults_clear(c: Ctx):
 # --------------------------------------------------------------------------- calls
 
 
-def read_calls(path: Path, last: int | None = None) -> list[dict]:
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
-    out = []
-    for line in lines[-last:] if last else lines:
-        try:
-            out.append(json.loads(line))
-        except ValueError:
-            continue
-    return out
-
-
 def _keep(call: dict, services, errors_only: bool) -> bool:
     if services and call["service"] not in services:
         return False
@@ -561,7 +541,7 @@ def cost_cmd(c: Ctx, runs, calls_file, prices_file, as_json):
     transfer or discounts. An order of magnitude, not a quote. Guide: docs/proxy.md.
     """
     from .. import cost as cs
-    from .iam import load_calls
+    from ..proxy import load_calls
 
     calls, log = load_calls(c.port, calls_file)
     try:

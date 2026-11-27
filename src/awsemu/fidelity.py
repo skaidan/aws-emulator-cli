@@ -347,3 +347,38 @@ def compare(before: dict, after: dict) -> dict[str, ServiceChange]:
         if name in sb:
             c.after = (sb[name].passed, sb[name].total)
     return changes
+
+
+def pick_release(release: str | None, refresh: bool = False) -> tuple[str, dict, str | None]:
+    """``(tag, scores, installed)``: --release, else the project's pin, else installed, else latest."""
+    from . import project
+
+    installed = installed_version()
+    pinned = None
+    try:
+        proj = project.load()
+        pinned = proj.emulator_version if proj else None
+    except project.ProjectError:
+        pass
+    wanted = release or pinned or installed or "latest"
+    try:
+        tag, scores = fetch(wanted, refresh=refresh)
+    except FidelityError as exc:
+        raise errors.RuntimeErrorWithHint(str(exc), "Check your connection, or pass --release.") from exc
+    return tag, scores, installed
+
+
+def pin_mismatch() -> tuple[str, str] | None:
+    """``(pinned, installed)`` when the project pins another emulator version than the binary's."""
+    from . import project
+
+    try:
+        proj = project.load()
+    except project.ProjectError:
+        return None
+    if not proj or not proj.emulator_version:
+        return None
+    installed = installed_version()
+    if installed and installed != proj.emulator_version:
+        return proj.emulator_version, installed
+    return None

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from .. import exitcodes, health, logs, project, runtime, ui
+from .. import exitcodes, fidelity, health, logs, project, runtime, ui
 from ..context import Ctx, handle_errors, json_option, pass_ctx
 from ..paths import InstanceFiles, known_ports
 
@@ -91,26 +91,10 @@ def start_params(fn):
     return click.argument("extra", nargs=-1, type=click.UNPROCESSED)(fn)
 
 
-def pin_mismatch() -> tuple[str, str] | None:
-    """``(pinned, installed)`` when the project pins another emulator version than the binary's."""
-    from ..fidelity import installed_version
-
-    try:
-        proj = project.load()
-    except project.ProjectError:
-        return None
-    if not proj or not proj.emulator_version:
-        return None
-    installed = installed_version()
-    if installed and installed != proj.emulator_version:
-        return proj.emulator_version, installed
-    return None
-
-
 def _warn_version_pin(mode: str) -> None:
     if mode != "native":
         return
-    mismatch = pin_mismatch()
+    mismatch = fidelity.pin_mismatch()
     if mismatch:
         ui.warn(
             f"this project pins emulator {mismatch[0]}, but {mismatch[1]} is installed. Install it with: awsemu install"
@@ -324,7 +308,7 @@ def up(c: Ctx, seed_file: str | None, no_seed: bool, wait: float):
 
 def _up_proxy(port: int, proj) -> None:
     from .. import proxy as px
-    from ..commands.proxy import default_listen
+    from ..proxy import default_listen
 
     state = px.running(port)
     if state:

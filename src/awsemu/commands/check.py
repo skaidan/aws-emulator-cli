@@ -13,7 +13,6 @@ from .. import scan as sc
 from .. import ui
 from ..context import Ctx, handle_errors, json_option, pass_ctx
 from ..runtime import RuntimeErrorWithHint
-from .fidelity import pick_release
 
 
 def _where(locations: list[sc.Location]) -> str:
@@ -38,25 +37,6 @@ def _difference_line(d: chk.Difference) -> str:
     if d.matches_usage:
         what += "; calls only operations you use"
     return f"{d.test.id}  {what}"
-
-
-def load_index(release: str | None, manifest_ref: str | None = None, refresh: bool = False):
-    """``(release tag, tests version, Index, installed version)`` for check and explain."""
-    tag, scores, installed = pick_release(release, refresh)
-    suite = fid.suite_version(tag) or (None if manifest_ref else chk.latest_suite_version()) or "main"
-    try:
-        if manifest_ref and Path(manifest_ref).is_file():
-            manifest = chk.read_manifest_file(Path(manifest_ref))
-            suite = Path(manifest_ref).name
-        else:
-            suite = manifest_ref or suite
-            manifest = chk.load_manifest(suite, refresh=refresh)
-    except fid.FidelityError as exc:
-        raise RuntimeErrorWithHint(
-            str(exc),
-            "Check your connection, or pass --manifest FILE (manifest.jsonl from a clone of the tests repository).",
-        ) from exc
-    return tag, suite, chk.Index(scores, manifest), installed
 
 
 @click.command()
@@ -145,11 +125,11 @@ def check(
         return _check_iam(c, list(paths) or [Path(".")], from_calls, calls_file, strict, as_json)
     if from_calls and paths:
         raise click.UsageError("--from-calls reads the proxy's log, not files: drop the paths")
-    tag, suite, index, installed = load_index(release, manifest_ref, refresh)
+    tag, suite, index, installed = chk.load_index(release, manifest_ref, refresh)
     unknown_ops: list[str] = []
     if from_calls:
         from .. import proxy as px
-        from .proxy import read_calls
+        from ..proxy import read_calls
 
         log = calls_file or px.ProxyFiles(c.port).calls
         calls = read_calls(log)
@@ -302,7 +282,7 @@ def _check_iam(c: Ctx, paths: list[Path], from_calls: bool, calls_file, strict: 
     from .. import iamcheck as ic
 
     if from_calls:
-        from .iam import load_calls
+        from ..proxy import load_calls
 
         calls, log = load_calls(c.port, calls_file)
         needed, source = ic.needed_from_calls(calls, log.name), f"{len(calls)} call(s) in {log.name}"
