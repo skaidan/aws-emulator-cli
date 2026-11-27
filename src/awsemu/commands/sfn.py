@@ -13,15 +13,12 @@ from .. import ui, waiting
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
-from ._common import arn, client_error, ensure_service_role, is_error, load_json_arg
+from ..services.stepfunctions import DEFAULT_ROLE_NAME, machine_arn
+from ..grants import ensure_service_role
+from ._common import client_error, is_error, load_json_arg
 
-DEFAULT_ROLE_NAME = "awsemu-sfn-role"
 FINAL = {"SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"}
 STATUS_STYLE = {"SUCCEEDED": "ok", "RUNNING": "info", "FAILED": "error", "TIMED_OUT": "error", "ABORTED": "warn"}
-
-
-def machine_arn(name: str) -> str:
-    return name if name.startswith("arn:") else arn("states", f"stateMachine:{name}")
 
 
 def read_definition(value: str) -> str:

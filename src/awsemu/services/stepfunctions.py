@@ -7,9 +7,16 @@ import json
 from .. import clients
 from .. import realaccount
 from .. import seed as seedlib
-from ..commands._common import arn, ensure_service_role
+from ..grants import arn, ensure_service_role
 from ..awserrors import client_error, is_error
 from . import COMPLETE_MAX, Service, clean, names_snapshot, pages
+
+
+DEFAULT_ROLE_NAME = "awsemu-sfn-role"
+
+
+def machine_arn(name: str) -> str:
+    return name if name.startswith("arn:") else arn("states", f"stateMachine:{name}")
 
 
 def machines(c) -> list[str]:
@@ -17,8 +24,6 @@ def machines(c) -> list[str]:
 
 
 def details(port, name):
-    from ..commands.sfn import machine_arn
-
     s = clients.client("stepfunctions", port)
     machine = clean(s.describe_state_machine(stateMachineArn=machine_arn(name)))
     runs = s.list_executions(stateMachineArn=machine_arn(name), maxResults=10).get("executions", [])
@@ -33,8 +38,6 @@ def describe(a, port, full):
 
 
 def apply(seed, port, report):
-    from ..commands.sfn import DEFAULT_ROLE_NAME
-
     sf = clients.client("stepfunctions", port)
     for sm in seed.section("state_machines"):
         name = sm["name"]

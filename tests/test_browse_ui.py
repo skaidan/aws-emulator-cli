@@ -49,10 +49,8 @@ def fake_emulator(monkeypatch):
             }
         )
 
-    import awsemu.commands.overview as overview
-
     monkeypatch.setattr("awsemu.clients.client", fake_client)  # what the service registry uses
-    monkeypatch.setattr(overview, "client", fake_client)
+    monkeypatch.setattr("awsemu.clients.client", fake_client)
     return fakes
 
 

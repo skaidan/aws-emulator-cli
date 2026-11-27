@@ -7,7 +7,7 @@ import json
 from .. import clients
 from .. import realaccount
 from .. import seed as seedlib
-from ..commands._common import allow_lambda, allow_queue, arn, ensure_service_role
+from ..grants import allow_lambda, allow_queue, arn, ensure_service_role
 from ..awserrors import client_error, is_error
 from . import COMPLETE_MAX, Service, clean, names_snapshot, pages
 

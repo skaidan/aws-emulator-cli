@@ -10,15 +10,9 @@ from .. import ui
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
-from ..paths import ACCOUNT_ID, REGION
-from ._common import allow_lambda, allow_queue, parse_kv, queue_policy_allowing
-
-
-def topic_arn(topic: str) -> str:
-    """Accept a topic name or ARN."""
-    if topic.startswith("arn:"):
-        return topic
-    return f"arn:aws:sns:{REGION}:{ACCOUNT_ID}:{topic}"
+from ..services.sns import topic_arn
+from ..grants import allow_lambda, allow_queue, queue_policy_allowing
+from ._common import parse_kv
 
 
 def topic_name(arn: str) -> str:

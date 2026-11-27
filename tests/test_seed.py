@@ -167,7 +167,7 @@ def test_lambda_zip_is_reproducible(tmp_path):
     import os
     import time
 
-    from awsemu.commands.lambda_ import build_zip
+    from awsemu.services.lambda_ import build_zip
 
     (tmp_path / "app.py").write_text("x = 1\n")
     first = build_zip(tmp_path)

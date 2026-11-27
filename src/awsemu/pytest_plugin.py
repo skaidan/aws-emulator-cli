@@ -112,12 +112,12 @@ class Emulator:
 
     def apply_seed(self, path: str | Path | None = None) -> None:
         """Apply a seed (default: the fixture's seed). Fails the test on errors."""
-        from .commands.seed import apply_seed
+        from . import seeding
 
         seed = _load_seed(Path(path)) if path else self._seed
         if seed is None:
             return
-        report = apply_seed(seed, self.port)
+        report = seeding.apply(seed, self.port)
         if report.failures:
             rows = "\n".join(" ".join(str(c) for c in r) for r in report.rows if "failed" in str(r[2]))
             pytest.fail(f"awsemu: seed {seed.source} failed:\n{rows}", pytrace=False)

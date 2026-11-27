@@ -8,8 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from .commands.overview import collect
-from .services import all_services
+from .services import all_services, collect
 
 
 def resources(port: int) -> list[dict]:

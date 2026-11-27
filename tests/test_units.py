@@ -6,6 +6,7 @@ import pytest
 
 from awsemu import envvars, logs, runtime, settings
 from awsemu.commands import dynamodb as ddb
+from awsemu.services import dynamodb as ddb_svc
 from awsemu.commands.s3 import split_uri
 from awsemu.paths import InstanceFiles
 
@@ -235,16 +236,16 @@ def test_dynamodb_roundtrip():
         "tags": ["a", 1],
         "nested": {"x": {"y": [False]}},
     }
-    item = ddb.to_item(data)
+    item = ddb_svc.to_item(data)
     assert item["age"] == {"N": "30"}
     assert item["nested"]["M"]["x"]["M"]["y"]["L"][0] == {"BOOL": False}
-    back = ddb.from_item(item)
+    back = ddb_svc.from_item(item)
     assert back["age"] == 30 and back["score"] == 9.5 and back["nested"] == data["nested"]
 
 
 def test_dynamodb_sets_and_keys():
-    assert ddb.from_attr({"SS": ["b", "a"]}) == ["a", "b"]
-    assert ddb.from_attr({"NS": ["2", "1.5"]}) == [1.5, 2]
+    assert ddb_svc.from_attr({"SS": ["b", "a"]}) == ["a", "b"]
+    assert ddb_svc.from_attr({"NS": ["2", "1.5"]}) == [1.5, 2]
     assert ddb.parse_key_spec("id") == ("id", "S")
     assert ddb.parse_key_spec("ts:n") == ("ts", "N")
     with pytest.raises(click.BadParameter):

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import base64
+from decimal import Decimal
+from typing import Any
 
-from .. import clients
+
+from .. import clients, errors
 from ..runtime import RuntimeErrorWithHint
 from .. import realaccount
 from .. import seed as seedlib
@@ -12,6 +16,74 @@ from . import COMPLETE_MAX, Service, Snapshot, pages
 
 UI_ITEMS = 20  # items shown by `awsemu ui`
 WATCH_CAP = 10000  # items counted per table by `awsemu watch`
+
+
+# Plain JSON <-> DynamoDB's attribute-value format.
+
+
+def to_attr(value: Any) -> dict:
+    if value is None:
+        return {"NULL": True}
+    if isinstance(value, bool):
+        return {"BOOL": value}
+    if isinstance(value, (int, float, Decimal)):
+        return {"N": str(value)}
+    if isinstance(value, str):
+        return {"S": value}
+    if isinstance(value, (bytes, bytearray)):
+        return {"B": bytes(value)}
+    if isinstance(value, (list, tuple)):
+        return {"L": [to_attr(v) for v in value]}
+    if isinstance(value, set):
+        items = list(value)
+        if all(isinstance(v, str) for v in items):
+            return {"SS": items}
+        if all(isinstance(v, (int, float, Decimal)) and not isinstance(v, bool) for v in items):
+            return {"NS": [str(v) for v in items]}
+        raise TypeError("sets must be all strings or all numbers")
+    if isinstance(value, dict):
+        return {"M": {k: to_attr(v) for k, v in value.items()}}
+    raise TypeError(f"can't store {type(value).__name__} in DynamoDB")
+
+
+def to_item(data: dict) -> dict:
+    if not isinstance(data, dict):
+        raise errors.UsageError("an item must be a JSON object")
+    return {k: to_attr(v) for k, v in data.items()}
+
+
+def _num(text: str):
+    d = Decimal(text)
+    return int(d) if d == d.to_integral_value() and "e" not in text.lower() and "." not in text else float(d)
+
+
+def from_attr(attr: dict) -> Any:
+    ((kind, value),) = attr.items()
+    if kind == "S":
+        return value
+    if kind == "N":
+        return _num(value)
+    if kind == "BOOL":
+        return value
+    if kind == "NULL":
+        return None
+    if kind == "B":
+        return base64.b64encode(value if isinstance(value, bytes) else str(value).encode()).decode()
+    if kind == "L":
+        return [from_attr(v) for v in value]
+    if kind == "M":
+        return {k: from_attr(v) for k, v in value.items()}
+    if kind == "SS":
+        return sorted(value)
+    if kind == "NS":
+        return sorted(_num(v) for v in value)
+    if kind == "BS":
+        return [base64.b64encode(v).decode() for v in value]
+    raise ValueError(f"unknown attribute type {kind}")
+
+
+def from_item(item: dict) -> dict:
+    return {k: from_attr(v) for k, v in item.items()}
 
 
 def tables(c) -> list[str]:
@@ -26,8 +98,6 @@ def tables(c) -> list[str]:
 
 
 def details(port, name):
-    from ..commands.dynamodb import from_item
-
     d = clients.client("dynamodb", port)
     table = d.describe_table(TableName=name)["Table"]
     items = [from_item(i) for i in d.scan(TableName=name, Limit=UI_ITEMS).get("Items", [])]
@@ -56,18 +126,6 @@ def watch(c) -> Snapshot:
                 continue
             out[("table", name)] = count
     return out
-
-
-def _to_item(data):
-    from ..commands.dynamodb import to_item
-
-    return to_item(data)
-
-
-def _from_item(item):
-    from ..commands.dynamodb import from_item
-
-    return from_item(item)
 
 
 def apply(seed, port, report):
@@ -100,7 +158,7 @@ def apply(seed, port, report):
                 result = "created"
             items = seedlib.load_items(t, seed.base_dir)
             for i in range(0, len(items), 25):
-                pending: dict | None = {name: [{"PutRequest": {"Item": _to_item(it)}} for it in items[i : i + 25]]}
+                pending: dict | None = {name: [{"PutRequest": {"Item": to_item(it)}} for it in items[i : i + 25]]}
                 while pending:
                     pending = ddb.batch_write_item(RequestItems=pending).get("UnprocessedItems") or None
             if items and result == "unchanged":
@@ -125,7 +183,7 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
                 entry["pk" if k["KeyType"] == "HASH" else "sk"] = spec
             items = []
             for p in ddb.get_paginator("scan").paginate(TableName=name):
-                items += [_from_item(i) for i in p.get("Items", [])]
+                items += [from_item(i) for i in p.get("Items", [])]
             if items:
                 entry["items"] = items
             tables.append(entry)

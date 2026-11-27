@@ -46,6 +46,8 @@ src/awsemu/
   logs.py           parsing of the emulator's JSON log
   settings.py       editing config.toml while keeping comments
   seed.py           seed format: YAML parsing with a line map, and validation (no AWS calls)
+  seeding.py        apply and export a seed through the service registry (no printing)
+  grants.py         wiring services together: ARNs, service roles, queue policies, Lambda permissions
   project.py        awsemu.toml / [tool.awsemu]: upward lookup, validation, per-file cache
   pytest_plugin.py  pytest plugin (pytest11 entry point): aws_emulator and aws_emulator_fresh
   fidelity.py       download and cache of scores.json.gz from emulator releases; per-service
@@ -76,10 +78,11 @@ src/awsemu/
                     report, explain, iam, mcp
   services/         the service registry: one module per service (s3, sqs, dynamodb, sns, lambda_,
                     secretsmanager, ssm, kinesis, events, stepfunctions, logs, iam), each a Service
-                    with its hooks (names, details, describe, watch, completions)
+                    with its hooks (names, details, describe, watch, completions, seed apply, export
+                    and import, cost) and the service's own logic (Lambda packaging, DynamoDB items)
   arns.py           parse ARNs (used by describe)
   awserrors.py      recognise AWS error answers (error_code, is_error, client_error)
-  commands/_common.py  AliasedGroup, service roles, queue policies, Lambda permissions, error codes
+  commands/_common.py  AliasedGroup, KEY=VALUE and JSON arguments, error codes
 action.yml          composite GitHub Action (verified package, awsemu, seed, variables)
 scripts/            gen_reference.py (docs/reference.md), rename.py (package/repository rename)
 ```

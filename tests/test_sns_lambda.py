@@ -6,13 +6,15 @@ import json
 import zipfile
 from pathlib import Path
 
-import click
+
+from awsemu import errors
 
 import pytest
 
 from awsemu.cli import cli
 from tests.conftest import aws_error
 from awsemu.commands import lambda_ as lam_mod
+from awsemu.services import lambda_ as lam_svc
 from awsemu.commands import sns as sns_mod
 from tests.test_services import FakeClient
 
@@ -78,17 +80,17 @@ def test_build_zip_from_folder_skips_junk(tmp_path):
     (tmp_path / "pkg" / "util.py").write_text("X = 1\n")
     (tmp_path / "__pycache__").mkdir()
     (tmp_path / "__pycache__" / "app.cpython-312.pyc").write_bytes(b"x")
-    names = zipfile.ZipFile(io.BytesIO(lam_mod.build_zip(tmp_path))).namelist()
+    names = zipfile.ZipFile(io.BytesIO(lam_svc.build_zip(tmp_path))).namelist()
     assert sorted(names) == ["app.py", "pkg/util.py"]
 
 
 def test_build_zip_single_file_and_passthrough(tmp_path):
     f = tmp_path / "hello.py"
     f.write_text("def handler(e, c): pass\n")
-    assert zipfile.ZipFile(io.BytesIO(lam_mod.build_zip(f))).namelist() == ["hello.py"]
+    assert zipfile.ZipFile(io.BytesIO(lam_svc.build_zip(f))).namelist() == ["hello.py"]
     z = tmp_path / "code.zip"
     z.write_bytes(b"PK-already-a-zip")
-    assert lam_mod.build_zip(z) == b"PK-already-a-zip"
+    assert lam_svc.build_zip(z) == b"PK-already-a-zip"
 
 
 @pytest.mark.parametrize(
@@ -106,8 +108,8 @@ def test_build_zip_single_file_and_passthrough(tmp_path):
 )
 def test_guess_handler(tmp_path, filename, code, expected):
     (tmp_path / filename).write_text(code)
-    assert lam_mod.guess_handler_and_runtime(tmp_path) == expected
-    assert lam_mod.guess_handler_and_runtime(tmp_path / filename) == expected
+    assert lam_svc.guess_handler_and_runtime(tmp_path) == expected
+    assert lam_svc.guess_handler_and_runtime(tmp_path / filename) == expected
 
 
 # ---------------------------------------------------------------- Lambda commands
@@ -222,10 +224,10 @@ def test_dependencies_go_in_the_zip_and_your_files_win(tmp_path):
     (src / "app.py").write_text("mine")
     (deps / "app.py").write_text("theirs")
     (deps / "requests" / "__init__.py").write_text("")
-    zf = zipfile.ZipFile(io.BytesIO(lam_mod.build_zip(src, deps)))
+    zf = zipfile.ZipFile(io.BytesIO(lam_svc.build_zip(src, deps)))
     assert zf.namelist() == ["app.py", "requests/__init__.py"]
     assert zf.read("app.py") == b"mine"
-    assert lam_mod.build_zip(src, deps) == lam_mod.build_zip(src, deps)
+    assert lam_svc.build_zip(src, deps) == lam_svc.build_zip(src, deps)
 
 
 def test_requirements_are_installed_once_per_contents(monkeypatch, tmp_path, isolated_home):
@@ -248,25 +250,25 @@ def test_requirements_are_installed_once_per_contents(monkeypatch, tmp_path, iso
         (target / "tinylib" / "__init__.py").write_text("")
         return Done()
 
-    monkeypatch.setattr(lam_mod.subprocess, "run", fake_run)
-    names = zipfile.ZipFile(io.BytesIO(lam_mod.package(src, "python3.12"))).namelist()
+    monkeypatch.setattr(lam_svc.subprocess, "run", fake_run)
+    names = zipfile.ZipFile(io.BytesIO(lam_svc.package(src, "python3.12"))).namelist()
     assert "tinylib/__init__.py" in names and "requirements.txt" in names
-    lam_mod.package(src, "python3.12")
+    lam_svc.package(src, "python3.12")
     assert len(installs) == 1  # cached
     assert (
         "tinylib/__init__.py"
-        not in zipfile.ZipFile(io.BytesIO(lam_mod.package(src, "python3.12", deps=False))).namelist()
+        not in zipfile.ZipFile(io.BytesIO(lam_svc.package(src, "python3.12", deps=False))).namelist()
     )
-    assert lam_mod.python_dependencies(src, "nodejs20.x") is None
+    assert lam_svc.python_dependencies(src, "nodejs20.x") is None
 
     (src / "requirements.txt").write_text("missing-lib==9\n")
     monkeypatch.setattr(
-        lam_mod.subprocess,
+        lam_svc.subprocess,
         "run",
         lambda cmd, **kw: Done() if "--version" in cmd else Done(1, "No matching distribution"),
     )
-    with pytest.raises(click.ClickException, match="No matching distribution"):
-        lam_mod.package(src, "python3.12")
+    with pytest.raises(errors.AwsemuError, match="No matching distribution"):
+        lam_svc.package(src, "python3.12")
 
 
 def test_watch_redeploys_on_save_and_survives_errors(monkeypatch, tmp_path, capsys):
@@ -303,7 +305,7 @@ def test_watch_redeploys_on_save_and_survives_errors(monkeypatch, tmp_path, caps
         return {}
 
     lam.responses["update_function_code"] = update_function_code
-    code = lam_mod.build_zip(src)
+    code = lam_svc.build_zip(src)
     lam_mod._watch(lam, "fn", src, "python3.12", False, "{}", code, max_rounds=4)
     out = capsys.readouterr()
     text = out.out + out.err
