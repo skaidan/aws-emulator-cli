@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from ..awserrors import client_error, is_error
+import os
+from pathlib import Path
+
 from .. import clients
+from .. import seed as seedlib
+from ..awserrors import client_error, is_error
 from . import COMPLETE_MAX, Service, Snapshot, clean
 
 UI_OBJECTS = 50  # objects shown by `awsemu ui`
@@ -56,6 +60,68 @@ def s3_paths(c, incomplete: str) -> list[str]:
     return [f"{scheme}{bucket}/{k}" for k in keys]
 
 
+INLINE_LIMIT = 64 * 1024
+
+
+def apply(seed, port, report):
+    s3 = clients.client("s3", port)
+    for b in seed.section("buckets"):
+        name = b["name"]
+        try:
+            try:
+                s3.head_bucket(Bucket=name)
+                result = "unchanged"
+            except client_error() as exc:
+                if not is_error(exc, "404", "NoSuchBucket", "NotFound"):
+                    raise
+                s3.create_bucket(Bucket=name)
+                result = "created"
+            written = 0
+            for obj in b.get("objects") or []:
+                for key, payload in seedlib.object_payloads(obj, seed.base_dir):
+                    if isinstance(payload, Path):
+                        s3.upload_file(str(payload), name, key)
+                    else:
+                        s3.put_object(Bucket=name, Key=key, Body=payload)
+                    written += 1
+            if written and result == "unchanged":
+                result = "updated"
+            report.add("bucket", name, result, f"{written} object(s) written" if written else "")
+        except Exception as exc:
+            report.add("bucket", name, "failed", clients.describe_error(exc))
+
+
+def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
+    s3 = clients.client("s3", port)
+    buckets = []
+    for b in s3.list_buckets().get("Buckets", []):
+        entry: dict = {"name": b["Name"]}
+        objects = []
+        for page in s3.get_paginator("list_objects_v2").paginate(Bucket=b["Name"]):
+            for o in page.get("Contents", []):
+                key = o["Key"]
+                body = None
+                if o.get("Size", 0) <= INLINE_LIMIT:
+                    raw = s3.get_object(Bucket=b["Name"], Key=key)["Body"].read()
+                    try:
+                        body = raw.decode("utf-8")
+                    except UnicodeDecodeError:
+                        body = None
+                if body is not None:
+                    objects.append({"key": key, "content": body})
+                elif opts.objects_dir is not None:
+                    dest = opts.objects_dir / b["Name"] / key
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    s3.download_file(b["Name"], key, str(dest))
+                    objects.append({"key": key, "from": os.path.relpath(dest, opts.out_dir)})
+                else:
+                    opts.notes.append(f"skipped s3://{b['Name']}/{key} (binary or > 64 KiB; use --objects-dir)")
+        if objects:
+            entry["objects"] = objects
+        buckets.append(entry)
+    return buckets
+
+
 SERVICE = Service(
     name="s3",
     label="S3 buckets",
@@ -64,4 +130,7 @@ SERVICE = Service(
     describe=describe,
     watch=watch,
     completions={"s3path": s3_paths},
+    seed_section="buckets",
+    apply=apply,
+    export=export,
 )

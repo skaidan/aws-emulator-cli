@@ -107,6 +107,19 @@ class SeedError(errors.UsageError):
 
 
 @dataclass
+class ExportOptions:
+    """What every service's ``export`` hook needs besides the port (``awsemu.services``)."""
+
+    objects_dir: Path | None
+    """Where binary or large objects and function code go; None skips them, with a note."""
+    out_dir: Path
+    """The seed file's folder: ``from`` paths are relative to it."""
+    include_secrets: bool
+    notes: list[str] = field(default_factory=list)
+    """What was left out, and why."""
+
+
+@dataclass
 class Seed:
     data: dict[str, Any]
     base_dir: Path

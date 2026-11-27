@@ -332,9 +332,9 @@ def import_seed(sess, sections: set[str]) -> tuple[dict, list[str]]:
                 targets = []
                 for tp in ev.get_paginator("list_targets_by_rule").paginate(Rule=r["Name"]):
                     for t in tp.get("Targets", []):
-                        from .commands.seed import _target_from_arn
+                        from .services.events import target_from_arn
 
-                        target = _target_from_arn(t["Arn"])
+                        target = target_from_arn(t["Arn"])
                         kind = next(iter(target)) if target else ""
                         if not target or target[kind] not in local_targets.get(kind, set()):
                             notes.append(

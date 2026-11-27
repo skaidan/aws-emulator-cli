@@ -63,3 +63,12 @@ def test_the_commands_see_what_they_saw_before_the_registry():
         "rule",
         "statemachine",
     }
+
+
+def test_every_seed_section_has_one_service():
+    from awsemu import seed as seedlib
+    from awsemu.commands.seed import APPLY_ORDER
+    from awsemu.services import seed_sections
+
+    assert sorted(seed_sections()) == sorted(seedlib.SECTIONS) == sorted(APPLY_ORDER)
+    assert len([s for s in SERVICES if s.seed_section]) == len(seedlib.SECTIONS)
