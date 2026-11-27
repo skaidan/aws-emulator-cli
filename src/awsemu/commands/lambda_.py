@@ -4,216 +4,32 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import io
 import json
-import shutil
-import subprocess
-import sys
 import time
-import zipfile
 from datetime import datetime
 from pathlib import Path
 
 import click
 
-from .. import exitcodes
+from .. import errors, exitcodes
 from .. import ui
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
-from ..paths import cli_root
-from ._common import client_error, ensure_service_role, is_error, parse_kv
-
-DEFAULT_ROLE_NAME = "awsemu-lambda-role"
-SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules/.cache", ".pytest_cache", ".mypy_cache"}
-SKIP_SUFFIXES = (".pyc", ".pyo")
-
-# Guess the runtime from the handler file when --runtime isn't given.
-RUNTIME_BY_SUFFIX = {".py": "python3.12", ".js": "nodejs20.x", ".mjs": "nodejs20.x"}
-
-
-# --------------------------------------------------------------------------- packaging
-
-
-def _skip(rel: Path) -> bool:
-    return any(part in SKIP_DIRS for part in rel.parts) or rel.suffix in SKIP_SUFFIXES
-
-
-def _add(zf: zipfile.ZipFile, path: Path, name: str) -> None:
-    # A fixed date: the same files always give the same zip, so CodeSha256 tells
-    # whether the code changed (seeds don't redeploy unchanged functions).
-    info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
-    info.external_attr = (path.stat().st_mode & 0o777 | 0o100000) << 16
-    info.compress_type = zipfile.ZIP_DEFLATED
-    zf.writestr(info, path.read_bytes())
-
-
-def _files(folder: Path) -> list[tuple[Path, str]]:
-    """The files to package from a folder, as (path, name in the zip), sorted."""
-    out = []
-    for path in sorted(p for p in folder.rglob("*") if p.is_file()):
-        rel = path.relative_to(folder)
-        if not _skip(rel):
-            out.append((path, rel.as_posix()))
-    return out
-
-
-def build_zip(source: Path, dependencies: Path | None = None) -> bytes:
-    """Zip a folder (contents at the zip root), a single file, or pass a .zip through.
-
-    ``dependencies`` is a folder of installed packages added at the zip root too
-    (your own files win over a package's file with the same name).
-    The zip is reproducible: same files, same bytes."""
-    if source.is_file() and source.suffix == ".zip":
-        return source.read_bytes()
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        own = [(source, source.name)] if source.is_file() else _files(source)
-        names = {name for _, name in own}
-        extra = [(p, n) for p, n in _files(dependencies) if n not in names] if dependencies else []
-        for path, name in sorted(own + extra, key=lambda item: item[1]):
-            _add(zf, path, name)
-    data = buf.getvalue()
-    if len(zipfile.ZipFile(io.BytesIO(data)).namelist()) == 0:
-        raise click.BadParameter(f"nothing to package in {source}")
-    return data
-
-
-def requirements_file(source: Path) -> Path | None:
-    req = source / "requirements.txt" if source.is_dir() else None
-    return req if req and req.is_file() else None
-
-
-def _pip() -> list[str]:
-    probe = subprocess.run([sys.executable, "-m", "pip", "--version"], capture_output=True)
-    if probe.returncode == 0:
-        return [sys.executable, "-m", "pip"]
-    found = shutil.which("pip3") or shutil.which("pip")
-    if not found:
-        raise click.ClickException(
-            "requirements.txt needs pip, and there's none (install it, or pass --no-deps and package them yourself)"
-        )
-    return [found]
-
-
-def python_dependencies(source: Path, runtime: str | None) -> Path | None:
-    """Install requirements.txt once into a cache folder and return it (None without one).
-
-    The folder is keyed by the file's contents and the runtime, so it's reused until
-    either changes; the packages are installed for this machine, which is where the
-    emulator runs the function."""
-    req = requirements_file(source)
-    if req is None or (runtime and not runtime.startswith("python")):
-        return None
-    digest = hashlib.sha256(req.read_bytes() + (runtime or "").encode()).hexdigest()[:16]
-    target = cli_root() / "lambda-deps" / digest
-    if (target / ".awsemu-complete").exists():
-        return target
-    partial = target.with_name(digest + ".partial")
-    shutil.rmtree(partial, ignore_errors=True)
-    partial.mkdir(parents=True)
-    ui.info(f"installing {req.name} for the function…")
-    done = subprocess.run(
-        [
-            *_pip(),
-            "install",
-            "--quiet",
-            "--disable-pip-version-check",
-            "--no-compile",
-            "-r",
-            str(req),
-            "-t",
-            str(partial),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if done.returncode != 0:
-        shutil.rmtree(partial, ignore_errors=True)
-        tail = "\n".join((done.stderr or done.stdout).strip().splitlines()[-5:])
-        raise click.ClickException(f"pip couldn't install {req}:\n{tail}")
-    shutil.rmtree(target, ignore_errors=True)
-    partial.rename(target)
-    (target / ".awsemu-complete").touch()
-    return target
-
-
-def package(source: Path, runtime: str | None, deps: bool = True) -> bytes:
-    """The function's zip: the code plus, for Python, what requirements.txt asks for."""
-    return build_zip(source, python_dependencies(source, runtime) if deps else None)
-
-
-def fingerprint(source: Path) -> tuple:
-    """What changes when a packaged file is saved, added or removed (cheap to poll)."""
-    files = [(source, source.name)] if source.is_file() else _files(source)
-    out = []
-    for path, name in files:
-        try:
-            st = path.stat()
-        except OSError:  # removed while listing
-            continue
-        out.append((name, st.st_mtime_ns, st.st_size))
-    return tuple(out)
-
-
-def guess_handler_and_runtime(source: Path) -> tuple[str | None, str | None]:
-    """``app.py`` with ``def handler`` -> ``("app.handler", "python3.12")``."""
-    if source.is_file() and source.suffix != ".zip":
-        candidates = [source]
-    elif source.is_dir():
-        preferred = [
-            source / n
-            for n in ("lambda_function.py", "app.py", "handler.py", "main.py", "index.mjs", "index.js", "app.js")
-        ]
-        others = sorted(
-            p for p in source.iterdir() if p.is_file() and p.suffix in RUNTIME_BY_SUFFIX and p not in preferred
-        )
-        candidates = preferred + others
-    else:
-        return None, None
-    for path in candidates:
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for fn in ("lambda_handler", "handler", "main"):
-            if (path.suffix == ".py" and f"def {fn}(" in text) or (
-                path.suffix in (".js", ".mjs")
-                and (
-                    f"exports.{fn}" in text
-                    or f"export const {fn}" in text
-                    or f"export async function {fn}" in text
-                    or f"export function {fn}" in text
-                )
-            ):
-                return f"{path.stem}.{fn}", RUNTIME_BY_SUFFIX.get(path.suffix)
-    return None, None
+from ._common import client_error, is_error, parse_kv
+from ..services.lambda_ import (
+    DEFAULT_ROLE_NAME,
+    ensure_role,
+    fingerprint,
+    function_exists,
+    guess_handler_and_runtime,
+    package,
+    wait_function,
+)
 
 
 def parse_env(pairs) -> dict[str, str]:
     return parse_kv(pairs, "--env")
-
-
-def ensure_role(iam) -> str:
-    return ensure_service_role(iam, DEFAULT_ROLE_NAME, "lambda.amazonaws.com", "Created by awsemu for Lambda functions")
-
-
-def _wait(lam, waiter_name: str, name: str) -> None:
-    """Wait until the function is ready (no-op if this botocore lacks the waiter)."""
-    try:
-        waiter = lam.get_waiter(waiter_name)
-    except ValueError:
-        return
-    waiter.wait(FunctionName=name, WaiterConfig={"Delay": 1, "MaxAttempts": 60})
-
-
-def _exists(lam, name: str) -> bool:
-    try:
-        lam.get_function(FunctionName=name)
-        return True
-    except Exception as exc:
-        if is_error(exc, "ResourceNotFound"):
-            return False
-        raise
 
 
 # --------------------------------------------------------------------------- commands
@@ -319,22 +135,22 @@ def deploy(c: Ctx, name, source, handler, runtime, role, env_pairs, timeout, mem
     if env:
         config["Environment"] = {"Variables": env}
 
-    code = package(source, runtime, deps)
-    if _exists(lam, name):
+    code = package(source, runtime, deps, ui.info)
+    if function_exists(lam, name):
         lam.update_function_code(FunctionName=name, ZipFile=code)
-        _wait(lam, "function_updated_v2", name)
+        wait_function(lam, "function_updated_v2", name)
         if role:
             config["Role"] = role
         if config:
             lam.update_function_configuration(FunctionName=name, **config)
-            _wait(lam, "function_updated_v2", name)
+            wait_function(lam, "function_updated_v2", name)
         ui.success(f"updated {name} ({ui.human_size(len(code))})")
     else:
         if not handler or not runtime:
             raise click.UsageError("couldn't guess the handler/runtime; pass --handler and --runtime")
         config["Role"] = role or ensure_role(client("iam", c.port))
         lam.create_function(FunctionName=name, Code={"ZipFile": code}, **config)
-        _wait(lam, "function_active_v2", name)
+        wait_function(lam, "function_active_v2", name)
         ui.success(f"created {name}: {runtime}, handler {handler} ({ui.human_size(len(code))})")
         if not watch and invoke_payload is None:
             ui.echo(f"Try: awsemu lambda invoke {name} '{{}}'", "muted")
@@ -395,16 +211,16 @@ def _watch(lam, name, source, runtime, deps, invoke_payload, code, *, max_rounds
             last_print = current
             stamp = datetime.now().strftime("%H:%M:%S")
             try:
-                code = package(source, runtime, deps)
-            except click.ClickException as exc:
-                ui.error(f"{stamp} {exc.format_message()}")
+                code = package(source, runtime, deps, ui.info)
+            except errors.AwsemuError as exc:  # nothing to package, or pip failed: keep watching
+                ui.error(f"{stamp} {exc}")
                 continue
             sha = hashlib.sha256(code).digest()
             if sha == last_sha:
                 continue  # only a skipped file, or a save without changes
             try:
                 lam.update_function_code(FunctionName=name, ZipFile=code)
-                _wait(lam, "function_updated_v2", name)
+                wait_function(lam, "function_updated_v2", name)
             except Exception as exc:  # keep watching; the next save retries
                 ui.error(f"{stamp} couldn't update {name}: {exc}")
                 continue

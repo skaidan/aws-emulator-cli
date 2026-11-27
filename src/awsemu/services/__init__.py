@@ -108,6 +108,23 @@ def all_services() -> list[Service]:
     return list(registry().values())
 
 
+def collect(port: int, only: set[str] | None = None) -> list[dict]:
+    """``[{"service", "label", "items", "error"}]`` for each service (or those in ``only``), listed in parallel."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .. import clients
+
+    def run(s: Service) -> dict:
+        try:
+            items = s.names(clients.client(s.name, port))
+            return {"service": s.name, "label": s.label, "items": items, "error": None}
+        except Exception as exc:  # one failing service must not hide the others
+            return {"service": s.name, "label": s.label, "items": [], "error": clients.describe_error(exc)}
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        return list(pool.map(run, [s for s in all_services() if not only or s.name in only]))
+
+
 def seed_sections() -> dict[str, Service]:
     """``{seed section: Service}`` for the services seeds know."""
     return {s.seed_section: s for s in all_services() if s.seed_section}

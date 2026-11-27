@@ -10,7 +10,8 @@ from .. import ui
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
-from ._common import allow_lambda, allow_queue, client_error, is_error, load_json_arg
+from ..grants import allow_lambda, allow_queue
+from ._common import client_error, is_error, load_json_arg
 
 bus_option = click.option("--bus", default="default", show_default=True, help="Event bus name.")
 
@@ -126,7 +127,7 @@ def rule(c: Ctx, name: str, pattern, sources, schedule, queue, function, topic, 
     elif function:
         target = allow_lambda(client("lambda", c.port), function, "events.amazonaws.com", rule_arn, sid)
     elif topic:
-        from .sns import topic_arn
+        from ..services.sns import topic_arn
 
         target = topic_arn(topic)
     if target:

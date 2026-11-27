@@ -9,51 +9,14 @@ from pathlib import Path
 
 import click
 
-from .. import exitcodes, services
+from .. import exitcodes, seeding
 from .. import seed as seedlib
 from .. import ui
 from ..context import Ctx, handle_errors, pass_ctx
 from ..runtime import RuntimeErrorWithHint
 
 
-class Report:
-    def __init__(self):
-        self.rows: list[list] = []
-        self.failures = 0
-
-    def add(self, kind: str, name: str, result: str, detail: str = "") -> None:
-        style = {"created": "ok", "updated": "info", "unchanged": "muted", "failed": "error"}.get(result)
-        if result == "failed":
-            self.failures += 1
-        self.rows.append([kind, name, ui.styled(result, style), detail])
-
-
-# =========================================================================== apply
-
-
-# What others point at first: queues and streams, then functions, then the wiring.
-APPLY_ORDER = (
-    "buckets",
-    "queues",
-    "tables",
-    "streams",
-    "secrets",
-    "parameters",
-    "functions",
-    "state_machines",
-    "topics",
-    "rules",
-)
-
-
-def apply_seed(seed: seedlib.Seed, port: int) -> Report:
-    report = Report()
-    by_section = services.seed_sections()
-    for section in APPLY_ORDER:
-        apply = by_section[section].apply
-        if seed.section(section) and apply:  # every seed section has one (tests/test_services_registry.py)
-            apply(seed, port, report)
-    return report
+RESULT_STYLE = {"created": "ok", "updated": "info", "unchanged": "muted", "failed": "error"}
 
 
 def load_or_fail(path: str) -> seedlib.Seed:
@@ -71,8 +34,11 @@ def load_or_fail(path: str) -> seedlib.Seed:
 def run_apply(seed: seedlib.Seed, port: int) -> None:
     """Apply and print the report; exits 1 if anything failed."""
     started = time.monotonic()
-    report = apply_seed(seed, port)
-    ui.table(["kind", "name", "result", "detail"], report.rows, title=f"seed {seed.source}")
+    report = seeding.apply(seed, port, say=ui.info)
+    rows = [
+        [kind, name, ui.styled(result, RESULT_STYLE.get(result)), detail] for kind, name, result, detail in report.rows
+    ]
+    ui.table(["kind", "name", "result", "detail"], rows, title=f"seed {seed.source}")
     counts: dict[str, int] = {}
     for row in report.rows:
         key = str(row[2])
@@ -82,24 +48,6 @@ def run_apply(seed: seedlib.Seed, port: int) -> None:
         ui.error(f"seed applied with errors ({summary})")
         raise SystemExit(exitcodes.FAILED)
     ui.success(f"seed applied in {time.monotonic() - started:.1f}s ({summary})")
-
-
-# =========================================================================== export
-
-
-def _export(
-    port: int, sections: set[str], objects_dir: Path | None, out_dir: Path, include_secrets: bool
-) -> tuple[dict, list[str]]:
-    data: dict = {"version": seedlib.VERSION}
-    opts = seedlib.ExportOptions(objects_dir, out_dir, include_secrets)
-    by_section = services.seed_sections()
-    for section in seedlib.SECTIONS:
-        export = by_section[section].export
-        if section in sections and export:
-            items = export(port, opts)
-            if items:
-                data[section] = items
-    return data, opts.notes
 
 
 # =========================================================================== commands
@@ -161,7 +109,7 @@ def export_cmd(c: Ctx, output: Path | None, objects_dir: Path | None, no_secrets
     unless --no-secrets.
     """
     out_dir = (output.parent if output else Path(".")).resolve()
-    data, notes = _export(
+    data, notes = seeding.export(
         c.port,
         set(sections) or set(seedlib.SECTIONS),
         objects_dir.resolve() if objects_dir else None,

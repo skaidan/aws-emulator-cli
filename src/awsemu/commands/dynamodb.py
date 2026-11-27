@@ -6,10 +6,8 @@ from DynamoDB's attribute-value format, so you never write ``{"S": ...}`` by han
 
 from __future__ import annotations
 
-import base64
 import json
 from decimal import Decimal
-from typing import Any
 
 import click
 
@@ -18,76 +16,9 @@ from .. import ui
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
+from ..services.dynamodb import from_item, to_item
 
 TYPES = {"S": "S", "N": "N", "B": "B", "STRING": "S", "NUMBER": "N", "BINARY": "B"}
-
-
-# --------------------------------------------------------------------------- conversion
-
-
-def to_attr(value: Any) -> dict:
-    if value is None:
-        return {"NULL": True}
-    if isinstance(value, bool):
-        return {"BOOL": value}
-    if isinstance(value, (int, float, Decimal)):
-        return {"N": str(value)}
-    if isinstance(value, str):
-        return {"S": value}
-    if isinstance(value, (bytes, bytearray)):
-        return {"B": bytes(value)}
-    if isinstance(value, (list, tuple)):
-        return {"L": [to_attr(v) for v in value]}
-    if isinstance(value, set):
-        items = list(value)
-        if all(isinstance(v, str) for v in items):
-            return {"SS": items}
-        if all(isinstance(v, (int, float, Decimal)) and not isinstance(v, bool) for v in items):
-            return {"NS": [str(v) for v in items]}
-        raise TypeError("sets must be all strings or all numbers")
-    if isinstance(value, dict):
-        return {"M": {k: to_attr(v) for k, v in value.items()}}
-    raise TypeError(f"can't store {type(value).__name__} in DynamoDB")
-
-
-def to_item(data: dict) -> dict:
-    if not isinstance(data, dict):
-        raise click.BadParameter("an item must be a JSON object")
-    return {k: to_attr(v) for k, v in data.items()}
-
-
-def _num(text: str):
-    d = Decimal(text)
-    return int(d) if d == d.to_integral_value() and "e" not in text.lower() and "." not in text else float(d)
-
-
-def from_attr(attr: dict) -> Any:
-    ((kind, value),) = attr.items()
-    if kind == "S":
-        return value
-    if kind == "N":
-        return _num(value)
-    if kind == "BOOL":
-        return value
-    if kind == "NULL":
-        return None
-    if kind == "B":
-        return base64.b64encode(value if isinstance(value, bytes) else str(value).encode()).decode()
-    if kind == "L":
-        return [from_attr(v) for v in value]
-    if kind == "M":
-        return {k: from_attr(v) for k, v in value.items()}
-    if kind == "SS":
-        return sorted(value)
-    if kind == "NS":
-        return sorted(_num(v) for v in value)
-    if kind == "BS":
-        return [base64.b64encode(v).decode() for v in value]
-    raise ValueError(f"unknown attribute type {kind}")
-
-
-def from_item(item: dict) -> dict:
-    return {k: from_attr(v) for k, v in item.items()}
 
 
 def parse_key_spec(spec: str) -> tuple[str, str]:

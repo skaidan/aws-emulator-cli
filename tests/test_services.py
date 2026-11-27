@@ -5,7 +5,7 @@ from datetime import datetime
 
 
 from awsemu.cli import cli
-from awsemu.commands import dynamodb, overview, s3, sqs
+from awsemu.commands import dynamodb, s3, sqs
 
 
 class FakePaginator:
@@ -138,7 +138,7 @@ def test_overview_survives_failing_service(runner, monkeypatch, running):
             },
         )
 
-    monkeypatch.setattr(overview, "client", fake_client)
+    monkeypatch.setattr("awsemu.clients.client", fake_client)
     result = runner.invoke(cli, ["overview"])
     assert result.exit_code == 0, result.output
     assert "S3 buckets" in result.output and "b1" in result.output

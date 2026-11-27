@@ -12,7 +12,6 @@ import pytest
 from awsemu.cli import cli
 from awsemu.commands import dynamodb as ddb_mod
 from awsemu.commands import kinesis as kinesis_mod
-from awsemu.commands import overview as overview_mod
 from awsemu.commands import s3 as s3_mod
 from awsemu.commands import sns as sns_mod
 from awsemu.commands import sqs as sqs_mod
@@ -89,7 +88,7 @@ def test_overview(runner, monkeypatch, running):
             },
         )
 
-    monkeypatch.setattr(overview_mod, "client", fake)
+    monkeypatch.setattr("awsemu.clients.client", fake)
     data = run_json(runner, "overview", "--json")
     assert data["s3"] == {"label": "S3 buckets", "items": ["b1"], "error": None}
     assert data["sqs"]["items"] == [] and "nope" in data["sqs"]["error"]
@@ -467,9 +466,8 @@ def test_proxy(runner, monkeypatch):
 
 
 def test_snapshot_ls(runner, monkeypatch):
-    from awsemu.commands import seed as seed_cmd
 
-    monkeypatch.setattr(seed_cmd, "_export", lambda *a, **k: ({"version": 1, "queues": [{"name": "q"}]}, []))
+    monkeypatch.setattr("awsemu.seeding.export", lambda *a, **k: ({"version": 1, "queues": [{"name": "q"}]}, []))
     monkeypatch.setattr("awsemu.fidelity.installed_version", lambda binary=None: None)
     assert runner.invoke(cli, ["snapshot", "save", "s1"]).exit_code == 0
     (row,) = run_json(runner, "snapshot", "ls", "--json")

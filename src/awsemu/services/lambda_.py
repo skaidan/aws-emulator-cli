@@ -2,17 +2,218 @@
 
 from __future__ import annotations
 
+import io
+import shutil
+import subprocess
+import sys
+import zipfile
+from collections.abc import Callable
 import base64
 import hashlib
 import json
 import os
 from pathlib import Path
 
-from .. import clients
+from .. import clients, errors
+from ..awserrors import is_error
+from ..paths import cli_root
+from ..grants import ensure_service_role
 from .. import seed as seedlib
-from ..commands._common import arn
+from ..grants import arn
 
 from . import COMPLETE_MAX, Service, names_snapshot, pages
+
+
+# --------------------------------------------------------------------------- packaging
+
+
+DEFAULT_ROLE_NAME = "awsemu-lambda-role"
+SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules/.cache", ".pytest_cache", ".mypy_cache"}
+SKIP_SUFFIXES = (".pyc", ".pyo")
+
+# Guess the runtime from the handler file when --runtime isn't given.
+RUNTIME_BY_SUFFIX = {".py": "python3.12", ".js": "nodejs20.x", ".mjs": "nodejs20.x"}
+
+
+# --------------------------------------------------------------------------- packaging
+
+
+def _skip(rel: Path) -> bool:
+    return any(part in SKIP_DIRS for part in rel.parts) or rel.suffix in SKIP_SUFFIXES
+
+
+def _add(zf: zipfile.ZipFile, path: Path, name: str) -> None:
+    # A fixed date: the same files always give the same zip, so CodeSha256 tells
+    # whether the code changed (seeds don't redeploy unchanged functions).
+    info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.external_attr = (path.stat().st_mode & 0o777 | 0o100000) << 16
+    info.compress_type = zipfile.ZIP_DEFLATED
+    zf.writestr(info, path.read_bytes())
+
+
+def _files(folder: Path) -> list[tuple[Path, str]]:
+    """The files to package from a folder, as (path, name in the zip), sorted."""
+    out = []
+    for path in sorted(p for p in folder.rglob("*") if p.is_file()):
+        rel = path.relative_to(folder)
+        if not _skip(rel):
+            out.append((path, rel.as_posix()))
+    return out
+
+
+def build_zip(source: Path, dependencies: Path | None = None) -> bytes:
+    """Zip a folder (contents at the zip root), a single file, or pass a .zip through.
+
+    ``dependencies`` is a folder of installed packages added at the zip root too
+    (your own files win over a package's file with the same name).
+    The zip is reproducible: same files, same bytes."""
+    if source.is_file() and source.suffix == ".zip":
+        return source.read_bytes()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        own = [(source, source.name)] if source.is_file() else _files(source)
+        names = {name for _, name in own}
+        extra = [(p, n) for p, n in _files(dependencies) if n not in names] if dependencies else []
+        for path, name in sorted(own + extra, key=lambda item: item[1]):
+            _add(zf, path, name)
+    data = buf.getvalue()
+    if len(zipfile.ZipFile(io.BytesIO(data)).namelist()) == 0:
+        raise errors.UsageError(f"nothing to package in {source}")
+    return data
+
+
+def requirements_file(source: Path) -> Path | None:
+    req = source / "requirements.txt" if source.is_dir() else None
+    return req if req and req.is_file() else None
+
+
+def _pip() -> list[str]:
+    probe = subprocess.run([sys.executable, "-m", "pip", "--version"], capture_output=True)
+    if probe.returncode == 0:
+        return [sys.executable, "-m", "pip"]
+    found = shutil.which("pip3") or shutil.which("pip")
+    if not found:
+        raise errors.RuntimeErrorWithHint(
+            "requirements.txt needs pip, and there's none (install it, or pass --no-deps and package them yourself)"
+        )
+    return [found]
+
+
+def python_dependencies(source: Path, runtime: str | None, say: Callable[[str], None] | None = None) -> Path | None:
+    """Install requirements.txt once into a cache folder and return it (None without one).
+
+    The folder is keyed by the file's contents and the runtime, so it's reused until
+    either changes; the packages are installed for this machine, which is where the
+    emulator runs the function."""
+    req = requirements_file(source)
+    if req is None or (runtime and not runtime.startswith("python")):
+        return None
+    digest = hashlib.sha256(req.read_bytes() + (runtime or "").encode()).hexdigest()[:16]
+    target = cli_root() / "lambda-deps" / digest
+    if (target / ".awsemu-complete").exists():
+        return target
+    partial = target.with_name(digest + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    partial.mkdir(parents=True)
+    if say:
+        say(f"installing {req.name} for the function…")
+    done = subprocess.run(
+        [
+            *_pip(),
+            "install",
+            "--quiet",
+            "--disable-pip-version-check",
+            "--no-compile",
+            "-r",
+            str(req),
+            "-t",
+            str(partial),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if done.returncode != 0:
+        shutil.rmtree(partial, ignore_errors=True)
+        tail = "\n".join((done.stderr or done.stdout).strip().splitlines()[-5:])
+        raise errors.RuntimeErrorWithHint(f"pip couldn't install {req}:\n{tail}")
+    shutil.rmtree(target, ignore_errors=True)
+    partial.rename(target)
+    (target / ".awsemu-complete").touch()
+    return target
+
+
+def package(source: Path, runtime: str | None, deps: bool = True, say: Callable[[str], None] | None = None) -> bytes:
+    """The function's zip: the code plus, for Python, what requirements.txt asks for."""
+    return build_zip(source, python_dependencies(source, runtime, say) if deps else None)
+
+
+def fingerprint(source: Path) -> tuple:
+    """What changes when a packaged file is saved, added or removed (cheap to poll)."""
+    files = [(source, source.name)] if source.is_file() else _files(source)
+    out = []
+    for path, name in files:
+        try:
+            st = path.stat()
+        except OSError:  # removed while listing
+            continue
+        out.append((name, st.st_mtime_ns, st.st_size))
+    return tuple(out)
+
+
+def guess_handler_and_runtime(source: Path) -> tuple[str | None, str | None]:
+    """``app.py`` with ``def handler`` -> ``("app.handler", "python3.12")``."""
+    if source.is_file() and source.suffix != ".zip":
+        candidates = [source]
+    elif source.is_dir():
+        preferred = [
+            source / n
+            for n in ("lambda_function.py", "app.py", "handler.py", "main.py", "index.mjs", "index.js", "app.js")
+        ]
+        others = sorted(
+            p for p in source.iterdir() if p.is_file() and p.suffix in RUNTIME_BY_SUFFIX and p not in preferred
+        )
+        candidates = preferred + others
+    else:
+        return None, None
+    for path in candidates:
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for fn in ("lambda_handler", "handler", "main"):
+            if (path.suffix == ".py" and f"def {fn}(" in text) or (
+                path.suffix in (".js", ".mjs")
+                and (
+                    f"exports.{fn}" in text
+                    or f"export const {fn}" in text
+                    or f"export async function {fn}" in text
+                    or f"export function {fn}" in text
+                )
+            ):
+                return f"{path.stem}.{fn}", RUNTIME_BY_SUFFIX.get(path.suffix)
+    return None, None
+
+
+def ensure_role(iam) -> str:
+    return ensure_service_role(iam, DEFAULT_ROLE_NAME, "lambda.amazonaws.com", "Created by awsemu for Lambda functions")
+
+
+def wait_function(lam, waiter_name: str, name: str) -> None:
+    """Wait until the function is ready (no-op if this botocore lacks the waiter)."""
+    try:
+        waiter = lam.get_waiter(waiter_name)
+    except ValueError:
+        return
+    waiter.wait(FunctionName=name, WaiterConfig={"Delay": 1, "MaxAttempts": 60})
+
+
+def function_exists(lam, name: str) -> bool:
+    try:
+        lam.get_function(FunctionName=name)
+        return True
+    except Exception as exc:
+        if is_error(exc, "ResourceNotFound"):
+            return False
+        raise
 
 
 def functions(c) -> list[str]:
@@ -120,8 +321,6 @@ def _apply_triggers(fn: dict, lam, port: int) -> list[str]:
 
 
 def apply(seed, port, report):
-    from ..commands.lambda_ import _exists, _wait, ensure_role, guess_handler_and_runtime, package
-
     lam = clients.client("lambda", port)
     for fn in seed.section("functions"):
         name = fn["name"]
@@ -130,9 +329,9 @@ def apply(seed, port, report):
             guessed_handler, guessed_runtime = guess_handler_and_runtime(source)
             handler = fn.get("handler") or guessed_handler
             runtime = fn.get("runtime") or guessed_runtime
-            code = package(source, runtime, fn.get("deps", True))
+            code = package(source, runtime, fn.get("deps", True), report.say)
             sha = base64.b64encode(hashlib.sha256(code).digest()).decode()
-            exists = _exists(lam, name)
+            exists = function_exists(lam, name)
             # An existing function keeps its handler/runtime unless the seed sets them
             wanted = _function_config(
                 fn,
@@ -144,12 +343,12 @@ def apply(seed, port, report):
                 current = lam.get_function_configuration(FunctionName=name)
                 if current.get("CodeSha256") != sha:
                     lam.update_function_code(FunctionName=name, ZipFile=code)
-                    _wait(lam, "function_updated_v2", name)
+                    wait_function(lam, "function_updated_v2", name)
                     changes.append("code")
                 diff = _config_changes(current, wanted)
                 if diff:
                     lam.update_function_configuration(FunctionName=name, **diff)
-                    _wait(lam, "function_updated_v2", name)
+                    wait_function(lam, "function_updated_v2", name)
                     changes += [k.lower() for k in diff]
                 result = "updated" if changes else "unchanged"
             else:
@@ -164,7 +363,7 @@ def apply(seed, port, report):
                 lam.create_function(
                     FunctionName=name, Code={"ZipFile": code}, Role=ensure_role(clients.client("iam", port)), **wanted
                 )
-                _wait(lam, "function_active_v2", name)
+                wait_function(lam, "function_active_v2", name)
                 result = "created"
             triggers = _apply_triggers(fn, lam, port)
             if triggers and result == "unchanged":

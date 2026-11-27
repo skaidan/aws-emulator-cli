@@ -22,7 +22,7 @@ from pathlib import Path
 
 import click
 
-from .. import __version__, exitcodes, ui
+from .. import __version__, exitcodes, ui, seeding
 from .. import seed as seedlib
 from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
 from ..paths import cli_root
@@ -91,8 +91,6 @@ def snapshot():
 @handle_errors
 def save(c: Ctx, name: str, base: Path | None, no_secrets: bool, force: bool):
     """Save everything in the emulator as snapshot NAME."""
-    from .seed import _export
-
     folder = _folder(base, name)
     if folder.exists() and not force:
         raise RuntimeErrorWithHint(f"snapshot '{name}' already exists ({folder})", "Use --force to replace it.")
@@ -100,7 +98,7 @@ def save(c: Ctx, name: str, base: Path | None, no_secrets: bool, force: bool):
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(parents=True)
     try:
-        data, notes = _export(c.port, set(seedlib.SECTIONS), staging / "files", staging, not no_secrets)
+        data, notes = seeding.export(c.port, set(seedlib.SECTIONS), staging / "files", staging, not no_secrets)
         text = (
             f"# awsemu snapshot '{name}', saved from port {c.port} on "
             f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M')}.\n"

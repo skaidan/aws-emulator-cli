@@ -2,33 +2,17 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 
 import click
 
 from .. import ui
-from ..clients import client, describe_error, ensure_running
+from ..clients import ensure_running
 from ..context import Ctx, handle_errors, pass_ctx, json_option
-from ..services import all_services
+from ..services import all_services, collect
 
 
 # (label, boto3 service, lister), from the service registry.
 SERVICES = [(s.label, s.name, s.names) for s in all_services()]
-
-
-def collect(port: int, only: set[str] | None = None) -> list[dict]:
-    selected = [s for s in SERVICES if not only or s[1] in only]
-
-    def run(entry):
-        label, service, lister = entry
-        try:
-            items = lister(client(service, port))
-            return {"service": service, "label": label, "items": items, "error": None}
-        except Exception as exc:  # one failing service must not hide the others
-            return {"service": service, "label": label, "items": [], "error": describe_error(exc)}
-
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        return list(pool.map(run, selected))
 
 
 @click.command()

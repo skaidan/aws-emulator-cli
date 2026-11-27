@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 
+from ..paths import ACCOUNT_ID, REGION
 from .. import clients
 from .. import realaccount
 from .. import seed as seedlib
-from ..commands._common import allow_lambda, allow_queue
+from ..grants import allow_lambda, allow_queue
 
 from . import COMPLETE_MAX, Service, names_snapshot, pages
+
+
+def topic_arn(topic: str) -> str:
+    """Accept a topic name or ARN."""
+    if topic.startswith("arn:"):
+        return topic
+    return f"arn:aws:sns:{REGION}:{ACCOUNT_ID}:{topic}"
 
 
 def topics(c) -> list[str]:
@@ -17,8 +25,6 @@ def topics(c) -> list[str]:
 
 
 def details(port, name):
-    from ..commands.sns import topic_arn
-
     s = clients.client("sns", port)
     arn = topic_arn(name)
     subs = s.list_subscriptions_by_topic(TopicArn=arn).get("Subscriptions", [])

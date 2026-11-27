@@ -21,7 +21,7 @@ def exported(monkeypatch):
         data = dict(DATA) if include_secrets else {"version": 1, "queues": DATA["queues"]}
         return data, ["skipped something"]
 
-    monkeypatch.setattr(seed_cmd, "_export", fake_export)
+    monkeypatch.setattr("awsemu.seeding.export", fake_export)
     monkeypatch.setattr("awsemu.fidelity.installed_version", lambda binary=None: "1.0.611")
     return calls
 
@@ -64,7 +64,7 @@ def test_a_failed_save_leaves_nothing(runner, monkeypatch, isolated_home):
     def broken(*a, **k):
         raise RuntimeError("emulator went away")
 
-    monkeypatch.setattr(seed_cmd, "_export", broken)
+    monkeypatch.setattr("awsemu.seeding.export", broken)
     assert runner.invoke(cli, ["snapshot", "save", "x"]).exit_code != 0
     root = isolated_home / ".aws" / "emulator-cli" / "snapshots"
     assert not any(root.iterdir()) if root.exists() else True

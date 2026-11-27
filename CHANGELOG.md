@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **The core no longer imports the commands**: what the service registry, the pytest plugin and `awsemu ui` took from command modules moved to the core: `awsemu.grants` (ARNs, service roles, queue and Lambda permissions), `awsemu.seeding` (seed apply and export), Lambda packaging and DynamoDB item conversion in their service modules, and `services.collect` (what `overview` lists). `lint-imports` now allows no exception for the core. Errors while packaging a function are awsemu errors (same exit codes, one-line message).
+
 ## 0.14.0 — 2026-11-27
 
 ### Changed
