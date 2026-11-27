@@ -165,7 +165,7 @@ Goal: what a project people depend on needs, beyond features.
 - ✅ **A deprecation policy**: how long a flag, setting or JSON field keeps working after it's replaced, and warnings when it's used, written down before 1.0 promises stability.
 - ✅ **Lighter installs**: check whether `boto3` and `cryptography` can become extras (for example, `awsemu start`/`env` without them) without making the common case worse. Checked: they stay dependencies (pip has no default extras, so making them optional would make the usual install worse); a minimal install without them is documented and tested, and commands that need them say what to install. Revisit if default extras (PEP 771) land.
 
-## v0.14 — Deep refactor: architecture and performance
+## v0.14 — Deep refactor: architecture and performance 🚧 (first part released in 0.14.0)
 
 Goal: before adding dozens of services (v0.15 to v0.18), make adding one cheap and safe, and make the code faster and easier to change. **No change in behaviour**: every `--json` output is already checked against its JSON Schema, the reference is generated from the code and the real-emulator tests run in CI, so they are the safety net. Small pull requests, each one green; a benchmark before and after for the performance items.
 
