@@ -198,7 +198,7 @@ Where we are (measured on 0.13.0): 18,400 lines in 73 modules; `cli.py` has 1,16
 - ⬜ mypy `strict` on the core and the adapters; coverage target from 65% to 80%.
 - ⬜ Property-based tests (Hypothesis) for the parsers: fault rules, durations, seeds and redaction.
 - ⬜ Mutation testing (mutmut) on the core once, to find tests that don't really check anything.
-- ⬜ An architecture test (import-linter) that stops the core importing Click or Rich, and commands importing each other.
+- ✅ An architecture test (import-linter, `lint-imports` in CI) that stops the core importing Click or Rich, and commands importing each other. Today's exceptions are listed in `pyproject.toml`, to remove with **Layers**.
 - ⬜ Update `docs/architecture.md` with the new layers and the service registry, and a "how to add a service" guide in CONTRIBUTING.md.
 
 ## v0.15 — More services

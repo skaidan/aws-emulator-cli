@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import click
 
-from .. import clients
+from .. import clients, errors
 from . import Service, pages
 
 
@@ -22,7 +21,7 @@ def describe(a, port, full):
     found = clients.client("logs", port).describe_log_groups(logGroupNamePrefix=name).get("logGroups", [])
     match = [g for g in found if g["logGroupName"] == name]
     if not match:
-        raise click.ClickException(f"log group not found: {name}")
+        raise errors.AwsemuError(f"log group not found: {name}")
     return match[0]
 
 

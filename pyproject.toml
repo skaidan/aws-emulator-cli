@@ -89,3 +89,68 @@ exclude_also = ["if TYPE_CHECKING:", "raise AssertionError", "pragma: no cover"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 markers = ["real: runs against the real aws-emulator (set AWSEMU_REAL_TESTS=1)"]
+
+# Architecture rules, checked by `lint-imports` (CONTRIBUTING.md). The ignore_imports
+# lists are today's exceptions, to remove as ROADMAP v0.14 "Layers" moves the code;
+# a new exception needs a reason in review.
+[tool.importlinter]
+root_packages = ["awsemu"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Only the presentation layer imports Click, Rich and the commands"
+type = "protected"
+protected_modules = ["click", "rich", "awsemu.cli", "awsemu.commands", "awsemu.context", "awsemu.ui", "awsemu.tui"]
+allowed_importers = [
+    "awsemu.__main__",
+    "awsemu.cli",
+    "awsemu.commands",
+    "awsemu.completion",
+    "awsemu.context",
+    "awsemu.deprecation",
+    "awsemu.tui",
+    "awsemu.ui",
+]
+ignore_imports = [
+    "awsemu.browse -> awsemu.commands.overview",
+    "awsemu.pytest_plugin -> awsemu.commands.seed",
+    "awsemu.services.* -> awsemu.commands._common",
+    "awsemu.services.dynamodb -> awsemu.commands.dynamodb",
+    "awsemu.services.lambda_ -> awsemu.commands.lambda_",
+    "awsemu.services.sns -> awsemu.commands.sns",
+    "awsemu.services.stepfunctions -> awsemu.commands.sfn",
+]
+
+[[tool.importlinter.contracts]]
+name = "Commands don't import each other (shared code goes in _common or the core)"
+type = "independence"
+modules = ["awsemu.commands.*"]
+ignore_imports = [
+    "awsemu.** -> awsemu.commands._common",
+    # the core's exceptions from the contract above, which also link commands through the core:
+    "awsemu.browse -> awsemu.commands.overview",
+    "awsemu.pytest_plugin -> awsemu.commands.seed",
+    "awsemu.services.dynamodb -> awsemu.commands.dynamodb",
+    "awsemu.services.lambda_ -> awsemu.commands.lambda_",
+    "awsemu.services.sns -> awsemu.commands.sns",
+    "awsemu.services.stepfunctions -> awsemu.commands.sfn",
+    # commands importing commands:
+    "awsemu.commands.check -> awsemu.commands.fidelity",
+    "awsemu.commands.check -> awsemu.commands.iam",
+    "awsemu.commands.check -> awsemu.commands.proxy",
+    "awsemu.commands.compose -> awsemu.commands.proxy",
+    "awsemu.commands.doctor -> awsemu.commands.lifecycle",
+    "awsemu.commands.events -> awsemu.commands.sns",
+    "awsemu.commands.explain -> awsemu.commands.check",
+    "awsemu.commands.explain -> awsemu.commands.proxy",
+    "awsemu.commands.iam -> awsemu.commands.proxy",
+    "awsemu.commands.issues -> awsemu.commands.fidelity",
+    "awsemu.commands.lifecycle -> awsemu.commands.proxy",
+    "awsemu.commands.lifecycle -> awsemu.commands.seed",
+    "awsemu.commands.proxy -> awsemu.commands.iam",
+    "awsemu.commands.report -> awsemu.commands.proxy",
+    "awsemu.commands.snapshot -> awsemu.commands.lifecycle",
+    "awsemu.commands.snapshot -> awsemu.commands.seed",
+    "awsemu.commands.ui -> awsemu.commands.env",
+    "awsemu.commands.watch -> awsemu.commands.proxy",
+]

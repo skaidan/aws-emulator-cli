@@ -10,19 +10,13 @@ from .. import ui
 from ..clients import client
 from ..completion import complete
 from ..context import Ctx, handle_errors, pass_ctx, json_option, yes_option
+from ..services.sqs import queue_url
 
 COUNT_ATTRS = [
     "ApproximateNumberOfMessages",
     "ApproximateNumberOfMessagesNotVisible",
     "ApproximateNumberOfMessagesDelayed",
 ]
-
-
-def queue_url(sqs, queue: str) -> str:
-    """Accept a queue name or a full URL."""
-    if queue.startswith(("http://", "https://")):
-        return queue
-    return sqs.get_queue_url(QueueName=queue)["QueueUrl"]
 
 
 @click.group()

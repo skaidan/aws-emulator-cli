@@ -11,6 +11,8 @@
 - **A service registry** (`awsemu/services/`): one module per service says how to list its resources, what `awsemu ui` and `describe` show, what `watch` compares and which names the shell completes. `overview`, `ui`, `describe`, `watch`, completion, `seed apply`, `seed export` and `snapshot save` read it instead of keeping their own lists, and a test checks every service implements every hook or says why not. Tests that fake the emulator patch one place: `awsemu.clients.client`.
 - One place for the boto3 client configuration of the emulator and of a real account (`awsemu.clients.emulator_config` and `real_account_config`), also used by the Testcontainers module.
 
+- **An architecture check** (`lint-imports`, in CI): the core can't import Click, Rich or the commands, and commands can't import each other; the exceptions left are listed in `pyproject.toml`. On the way, `awsemu describe` reports a malformed ARN or an unsupported IAM or log resource in the same one-line format as every other error (exit codes unchanged).
+
 ### Deprecated
 
 - `awsemu.paths.default_port` moved to `awsemu.project.default_port` (it reads `awsemu.toml`, which `paths` shouldn't know about; this also removes an import cycle between `paths`, `project` and `settings`). The old import still works with a `DeprecationWarning` until awsemu 0.16.

@@ -10,6 +10,13 @@ from ..awserrors import client_error, is_error
 from . import Service, Snapshot
 
 
+def queue_url(sqs, queue: str) -> str:
+    """Accept a queue name or a full URL."""
+    if queue.startswith(("http://", "https://")):
+        return queue
+    return sqs.get_queue_url(QueueName=queue)["QueueUrl"]
+
+
 def queues(c) -> list[str]:
     return [u.rsplit("/", 1)[-1] for u in c.list_queues().get("QueueUrls", [])]
 

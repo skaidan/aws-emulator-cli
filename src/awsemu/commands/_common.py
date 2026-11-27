@@ -73,7 +73,7 @@ def queue_policy_allowing(queue_arn: str, service: str, source_arn: str, sid: st
 
 def allow_queue(sqs, queue: str, service: str, source_arn: str, sid: str) -> str:
     """Grant ``service`` permission to send to ``queue`` (name or URL); returns the queue ARN."""
-    from .sqs import queue_url
+    from ..services.sqs import queue_url
 
     url = queue_url(sqs, queue)
     attrs = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["QueueArn", "Policy"])["Attributes"]
