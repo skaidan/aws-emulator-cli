@@ -535,24 +535,46 @@ def build_image(image: str = DEFAULT_IMAGE, arch: str | None = None, version: st
         return subprocess.call(["docker", "build", "-t", image, tmp])
 
 
-def instance_info(port: int) -> dict:
+@dataclass
+class Instance:
+    """Everything we know about the instance on a port (``awsemu status``)."""
+
+    port: int
+    status: str
+    """healthy, unhealthy, starting or stopped (``health.Health.label``)."""
+    detail: str
+    endpoint: str
+    mode: str
+    """native, docker, external (running, not started by awsemu) or ``-``."""
+    pid: int | None
+    container: str | None
+    uptime_seconds: float | None
+    auth: bool | None
+    files: str
+    log: str | None
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+def instance_info(port: int) -> Instance:
     """Everything we know about the instance on ``port`` (for ``status``)."""
     state = State.load(port)
     files = InstanceFiles(port)
     h = health.check(port)
-    info = {
-        "port": port,
-        "status": h.label,
-        "detail": h.detail,
-        "endpoint": files.endpoint_url,
-        "mode": state.mode if state else ("external" if h.port_open else "-"),
-        "pid": state.pid if state else None,
-        "container": state.container if state else None,
-        "uptime_seconds": round(time.time() - state.started_at, 1) if state and state.started_at else None,
-        "auth": files.auth_enabled() if files.exists() else None,
-        "files": str(files.dir),
-        "log": state.log if state else None,
-    }
+    detail = h.detail
     if state and not h.port_open and state.mode == "native" and state.pid and not pid_alive(state.pid):
-        info["detail"] = "stale state: process is gone"
-    return info
+        detail = "stale state: process is gone"
+    return Instance(
+        port=port,
+        status=h.label,
+        detail=detail,
+        endpoint=files.endpoint_url,
+        mode=state.mode if state else ("external" if h.port_open else "-"),
+        pid=state.pid if state else None,
+        container=state.container if state else None,
+        uptime_seconds=round(time.time() - state.started_at, 1) if state and state.started_at else None,
+        auth=files.auth_enabled() if files.exists() else None,
+        files=str(files.dir),
+        log=state.log if state else None,
+    )
