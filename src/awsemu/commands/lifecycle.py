@@ -9,7 +9,7 @@ import click
 
 from .. import exitcodes, health, logs, project, runtime, ui
 from ..context import Ctx, handle_errors, json_option, pass_ctx
-from ..paths import InstanceFiles, default_port, known_ports
+from ..paths import InstanceFiles, known_ports
 
 
 def _pick(flag, project_value, default):
@@ -174,7 +174,7 @@ def _do_start(
         ui.echo()
         run_apply(seed, port)
     ui.echo()
-    flag = "" if port == default_port() else f" --port {port}"
+    flag = "" if port == project.default_port() else f" --port {port}"
     ui.echo("Next steps:", "muted")
     ui.echo(f'  eval "$(awsemu{flag} env)"   # point this shell at the emulator', "muted")
     ui.echo(f"  awsemu{flag} overview          # see what's inside", "muted")
@@ -363,7 +363,7 @@ def init(ctx: click.Context, seed_rel: str | None, force: bool):
         port = 9300 + sum(Path.cwd().name.encode()) % 100
     else:
         found = ctx.find_object(Ctx)
-        port = found.port if found else default_port()
+        port = found.port if found else project.default_port()
     if seed_rel is None:
         for candidate in ("tests/seed.yaml", "seed.yaml", "awsemu-seed.yaml"):
             if (Path.cwd() / candidate).is_file():

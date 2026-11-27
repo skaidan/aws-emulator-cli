@@ -20,3 +20,6 @@ examples/sdks/go/go.sum
 terraform.tfstate*
 cdk.out/
 testcontainers/java/target/
+
+# graphify knowledge graph (local)
+graphify-out/

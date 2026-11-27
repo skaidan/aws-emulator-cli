@@ -12,7 +12,7 @@ import click
 
 from .. import envvars, exitcodes, health, project, runtime, ui
 from ..context import Ctx, handle_errors, pass_ctx, proxy_option
-from ..paths import ACCOUNT_ID, InstanceFiles, default_port
+from ..paths import ACCOUNT_ID, InstanceFiles
 
 
 @click.command()
@@ -194,7 +194,7 @@ def _sdk(extras) -> list[str]:
 def _require_healthy(port: int) -> None:
     h = health.check(port)
     if not h.healthy:
-        flag = "" if port == default_port() else f" --port {port}"
+        flag = "" if port == project.default_port() else f" --port {port}"
         raise runtime.RuntimeErrorWithHint(
             f"No healthy emulator on port {port} ({h.detail}).", f"Start one with 'awsemu{flag} start'."
         )

@@ -53,7 +53,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from . import envvars, health, project, runtime
-from .paths import InstanceFiles, default_port
+from .paths import InstanceFiles
 
 if TYPE_CHECKING:
     from .seed import Seed
@@ -278,7 +278,7 @@ def aws_emulator(request):
     seed = _load_seed(seed_path) if seed_path else None  # validate before starting anything
 
     if reuse:
-        port = int(port_setting) if port_setting else default_port()
+        port = int(port_setting) if port_setting else project.default_port()
         h = health.check(port)
         if not h.healthy:
             pytest.fail(

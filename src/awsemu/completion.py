@@ -11,7 +11,7 @@ from collections.abc import Callable
 from click.shell_completion import CompletionItem
 
 from . import health
-from .paths import default_port
+from .project import default_port
 
 MAX_ITEMS = 200  # also services.COMPLETE_MAX
 
