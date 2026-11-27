@@ -25,14 +25,9 @@ import click
 from .. import __version__, exitcodes, ui, seeding
 from .. import seed as seedlib
 from ..context import Ctx, handle_errors, json_option, pass_ctx, yes_option
-from ..paths import cli_root
 from ..runtime import RuntimeErrorWithHint
 
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-
-
-def default_dir() -> Path:
-    return cli_root() / "snapshots"
 
 
 def _dir_option(fn):
@@ -48,14 +43,7 @@ def _dir_option(fn):
 def _folder(base: Path | None, name: str) -> Path:
     if not NAME_RE.match(name):
         raise click.BadParameter("use letters, digits, '.', '_' and '-' (up to 64)", param_hint="'NAME'")
-    return (base or default_dir()) / name
-
-
-def _meta(folder: Path) -> dict:
-    try:
-        return json.loads((folder / "snapshot.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
+    return (base or seeding.snapshots_dir()) / name
 
 
 def _installed_version() -> str | None:
@@ -150,7 +138,7 @@ def restore(ctx, c: Ctx, name: str, base: Path | None, no_reset: bool):
     folder = _folder(base, name)
     if not (folder / "seed.yaml").is_file():
         raise RuntimeErrorWithHint(f"no snapshot '{name}' in {folder.parent}", "List them with: awsemu snapshot ls")
-    meta = _meta(folder)
+    meta = seeding.snapshot_meta(folder)
     saved_with, now = meta.get("emulator_version"), _installed_version()
     if saved_with and now and saved_with != now:
         ui.warn(f"saved with emulator {saved_with}, restoring into {now}: behaviour may differ")
@@ -168,38 +156,24 @@ def restore(ctx, c: Ctx, name: str, base: Path | None, no_reset: bool):
 @handle_errors
 def ls(base: Path | None, as_json: bool):
     """List the saved snapshots."""
-    root = base or default_dir()
-    folders = sorted(p for p in root.iterdir() if (p / "seed.yaml").is_file()) if root.is_dir() else []
-    rows = []
-    for folder in folders:
-        meta = _meta(folder)
-        rows.append(
-            {
-                "name": folder.name,
-                "created_at": meta.get("created_at"),
-                "port": meta.get("port"),
-                "emulator_version": meta.get("emulator_version"),
-                "counts": meta.get("counts", {}),
-                "secrets": meta.get("secrets"),
-                "path": str(folder),
-            }
-        )
+    root = base or seeding.snapshots_dir()
+    snaps = seeding.list_snapshots(root)
     if as_json:
-        ui.print_json(rows)
+        ui.print_json([x.as_dict() for x in snaps])
         return
-    if not rows:
+    if not snaps:
         ui.echo(f"No snapshots in {root}. Save one with: awsemu snapshot save NAME", "muted")
         return
     ui.table(
         ["name", "saved", "emulator", "contents"],
         [
             [
-                r["name"],
-                (r["created_at"] or "")[:16].replace("T", " "),
-                r["emulator_version"] or "-",
-                ", ".join(f"{n} {k}" for k, n in r["counts"].items()) or "empty",
+                x.name,
+                (x.created_at or "")[:16].replace("T", " "),
+                x.emulator_version or "-",
+                ", ".join(f"{n} {k}" for k, n in x.counts.items()) or "empty",
             ]
-            for r in rows
+            for x in snaps
         ],
     )
 

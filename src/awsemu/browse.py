@@ -6,6 +6,7 @@ Kept apart from the Textual app so it can be tested without Textual.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import Any
 
 from .services import all_services, collect
@@ -13,7 +14,7 @@ from .services import all_services, collect
 
 def resources(port: int) -> list[dict]:
     """``[{"service", "label", "items": [names], "error"}]`` for every service in overview."""
-    return collect(port)
+    return [asdict(x) for x in collect(port)]
 
 
 DETAILS: dict[str, Callable[[int, str], Any]] = {s.name: s.details for s in all_services() if s.details}

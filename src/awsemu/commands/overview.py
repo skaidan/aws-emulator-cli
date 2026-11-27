@@ -33,19 +33,19 @@ def overview(c: Ctx, services, show_empty: bool, as_json: bool):
     ensure_running(c.port)
     results = collect(c.port, set(services) or None)
     if as_json:
-        ui.print_json({r["service"]: {"label": r["label"], "items": r["items"], "error": r["error"]} for r in results})
+        ui.print_json({r.service: {"label": r.label, "items": r.items, "error": r.error} for r in results})
         return
     rows = []
     for r in results:
-        if r["error"]:
-            rows.append([r["label"], ui.styled("?", "warn"), ui.styled(r["error"][:80], "warn")])
+        if r.error:
+            rows.append([r.label, ui.styled("?", "warn"), ui.styled(r.error[:80], "warn")])
             continue
-        if not r["items"] and not show_empty and not services:
+        if not r.items and not show_empty and not services:
             continue
-        names = ", ".join(map(str, r["items"][:8]))
-        if len(r["items"]) > 8:
-            names += f", … (+{len(r['items']) - 8})"
-        rows.append([r["label"], len(r["items"]), names])
+        names = ", ".join(map(str, r.items[:8]))
+        if len(r.items) > 8:
+            names += f", … (+{len(r.items) - 8})"
+        rows.append([r.label, len(r.items), names])
     ui.table(
         ["resource", "count", "names"],
         rows,
