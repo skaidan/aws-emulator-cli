@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.14.0 — 2026-11-27
+
 ### Changed
 
 - **Faster startup**: commands are imported only when they run, so `awsemu --version` and `awsemu --help`'s first line no longer load every module (about 170 ms → 40 ms on a laptop). The commands that lived in `cli.py` moved to `awsemu/commands/` (`lifecycle`, `env`, `logs_`, `doctor`, `image`, `config`, `ui`, `completion_`); nothing changes on the command line.
