@@ -33,4 +33,6 @@ awsemu supports the Python versions that still get security fixes from the Pytho
 
 ## Deprecated today
 
-Nothing.
+| What | Use instead | Stops working in |
+| --- | --- | --- |
+| `awsemu.paths.default_port` (Python) | `awsemu.project.default_port` | 0.16 |

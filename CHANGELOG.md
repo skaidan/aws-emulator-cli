@@ -11,6 +11,10 @@
 - **A service registry** (`awsemu/services/`): one module per service says how to list its resources, what `awsemu ui` and `describe` show, what `watch` compares and which names the shell completes. `overview`, `ui`, `describe`, `watch` and completion read it instead of keeping their own lists, and a test checks every service implements every hook or says why not. Tests that fake the emulator patch one place: `awsemu.clients.client`.
 - One place for the boto3 client configuration of the emulator and of a real account (`awsemu.clients.emulator_config` and `real_account_config`), also used by the Testcontainers module.
 
+### Deprecated
+
+- `awsemu.paths.default_port` moved to `awsemu.project.default_port` (it reads `awsemu.toml`, which `paths` shouldn't know about; this also removes an import cycle between `paths`, `project` and `settings`). The old import still works with a `DeprecationWarning` until awsemu 0.16.
+
 ### Breaking
 
 - **Python 3.11 or later** is now required: Python 3.10 reached its end of life in October 2026. pip keeps installing awsemu 0.13.0 on Python 3.10. `tomli` is no longer a dependency (awsemu uses the standard library's `tomllib`). The policy for Python versions is now in [docs/deprecations.md](docs/deprecations.md).

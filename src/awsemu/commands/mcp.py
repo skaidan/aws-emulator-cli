@@ -59,6 +59,6 @@ def mcp(ctx, c: Ctx):
 @pass_ctx
 def config(c: Ctx, client: str):
     """Print how to add the server to an agent: claude-code, claude-desktop, cursor, vscode or json."""
-    from ..paths import default_port
+    from ..project import default_port
 
     click.echo(config_text(client, c.port if c.port != default_port() else None))

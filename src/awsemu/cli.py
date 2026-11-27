@@ -10,7 +10,7 @@ import click
 
 from . import __version__
 from .commands._common import AliasedGroup
-from .paths import default_port
+from .project import default_port
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"], "max_content_width": 100}
 

@@ -6,7 +6,7 @@ import pytest
 
 from awsemu import project, runtime
 from awsemu.cli import cli
-from awsemu.paths import default_port
+from awsemu.project import default_port
 
 
 @pytest.fixture
@@ -122,3 +122,10 @@ def test_example_project_file_is_valid():
     example = Path(__file__).resolve().parents[1] / "examples" / "awsemu.toml"
     p = project.parse(example)
     assert p.port == 9343 and p.seed == example.parent / "seed.yaml" and p.seed.is_file()
+
+
+def test_old_default_port_import_warns():
+    from awsemu import paths
+
+    with pytest.warns(DeprecationWarning, match="awsemu.project.default_port"):
+        assert paths.default_port is default_port

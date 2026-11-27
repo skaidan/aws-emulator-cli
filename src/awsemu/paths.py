@@ -46,25 +46,6 @@ def emulator_settings_file() -> Path:
     return emulator_root() / "config.toml"
 
 
-def default_port() -> int:
-    """``$AWSEMU_PORT``, else the project's ``port`` (awsemu.toml), else 9297."""
-    raw = os.environ.get("AWSEMU_PORT")
-    if raw:
-        try:
-            return int(raw)
-        except ValueError:
-            pass
-    from . import project
-
-    try:
-        proj = project.load()
-    except project.ProjectError:
-        return DEFAULT_PORT  # reported by the CLI when it loads the project
-    if proj and proj.port:
-        return proj.port
-    return DEFAULT_PORT
-
-
 @dataclass(frozen=True)
 class InstanceFiles:
     """The files AWS Emulator writes for one port."""
@@ -135,3 +116,19 @@ def known_ports() -> list[int]:
             if child.is_dir() and child.name.isdigit():
                 ports.add(int(child.name))
     return sorted(ports)
+
+
+def __getattr__(name: str):
+    # default_port moved to awsemu.project in 0.14; keep the old import working until 0.16.
+    if name == "default_port":
+        import warnings
+
+        warnings.warn(
+            "awsemu.paths.default_port is deprecated, use awsemu.project.default_port; it stops working in awsemu 0.16",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from .project import default_port
+
+        return default_port
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
