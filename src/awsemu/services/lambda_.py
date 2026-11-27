@@ -6,8 +6,6 @@ import base64
 import hashlib
 import json
 import os
-import ssl
-import urllib.request
 from pathlib import Path
 
 from .. import clients
@@ -179,6 +177,9 @@ def apply(seed, port, report):
 
 def _download_code(location: str, dest: Path, port: int) -> None:
     """Fetch a function's code zip from the URL Lambda returns (served by the emulator)."""
+    import ssl
+    import urllib.request
+
     from ..paths import InstanceFiles
 
     ctx = ssl.create_default_context(cafile=str(InstanceFiles(port).ca))
@@ -242,6 +243,22 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return functions
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``functions`` of a real account (read-only), for ``awsemu seed import``."""
+    opts.notes.append("functions aren't imported: their code isn't read from the account")
+    return []
+
+
+MEMORY_GB = 0.125  # what the cost estimate assumes
+
+
+def cost(call) -> list[tuple[str, float]]:
+    """Requests, plus duration from the proxy's latency (which errs high: it includes the emulator's)."""
+    if call["operation"] not in ("Invoke", "InvokeWithResponseStream", "InvokeAsync"):
+        return []
+    return [("lambda.request", 1), ("lambda.gb_second", MEMORY_GB * float(call.get("latency_ms") or 0) / 1000)]
+
+
 SERVICE = Service(
     name="lambda",
     label="Lambda functions",
@@ -253,4 +270,6 @@ SERVICE = Service(
     seed_section="functions",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )

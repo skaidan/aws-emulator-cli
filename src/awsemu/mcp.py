@@ -30,7 +30,7 @@ from urllib.parse import urlsplit
 
 from . import __version__
 from .paths import InstanceFiles
-from . import errors
+from . import errors, services
 
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
@@ -249,8 +249,7 @@ TOOLS: list[Tool] = [
             "services": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Only these services (s3, sqs, dynamodb, sns, lambda, secretsmanager, ssm, "
-                "kinesis, events, stepfunctions, logs, iam).",
+                "description": f"Only these services ({', '.join(s.name for s in services.all_services())}).",
             }
         },
         lambda s, a: (["overview", "--json", *[x for svc in a.get("services") or [] for x in ("-s", svc)]], True),

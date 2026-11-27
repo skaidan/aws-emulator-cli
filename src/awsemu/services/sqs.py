@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from .. import clients
+from .. import realaccount
 from .. import seed as seedlib
 from ..awserrors import client_error, is_error
 from . import Service, Snapshot
@@ -134,6 +135,39 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return queues
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``queues`` of a real account (read-only), for ``awsemu seed import``."""
+    sqs = realaccount.client(sess, "sqs")
+    queues = []
+    for page in sqs.get_paginator("list_queues").paginate():
+        for url in page.get("QueueUrls", []):
+            a = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["All"])["Attributes"]
+            entry: dict = {"name": url.rsplit("/", 1)[-1]}
+            if a.get("FifoQueue") == "true":
+                entry["fifo"] = True
+                if a.get("ContentBasedDeduplication") == "true":
+                    entry["content_dedup"] = True
+            if a.get("VisibilityTimeout", "30") != "30":
+                entry["visibility_timeout"] = int(a["VisibilityTimeout"])
+            if a.get("DelaySeconds", "0") != "0":
+                entry["delay"] = int(a["DelaySeconds"])
+            if a.get("RedrivePolicy"):
+                rp = json.loads(a["RedrivePolicy"])
+                entry["dlq"] = rp["deadLetterTargetArn"].rsplit(":", 1)[-1]
+                entry["max_receive"] = int(rp.get("maxReceiveCount", 5))
+            queues.append(entry)
+    names = {q["name"] for q in queues}
+    for q in queues:
+        if q.get("dlq") and q["dlq"] not in names:
+            opts.notes.append(f"queue {q['name']}: its dead-letter queue {q['dlq']} is elsewhere; left out")
+            q.pop("dlq"), q.pop("max_receive", None)
+    return queues
+
+
+def cost(call) -> list[tuple[str, float]]:
+    return [("sqs.fifo" if (call.get("resource") or "").endswith(".fifo") else "sqs.standard", 1)]
+
+
 SERVICE = Service(
     name="sqs",
     label="SQS queues",
@@ -145,4 +179,6 @@ SERVICE = Service(
     seed_section="queues",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )

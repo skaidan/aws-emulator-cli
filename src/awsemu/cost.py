@@ -19,7 +19,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from collections.abc import Callable
 from pathlib import Path
+
+from . import services
 
 PRICES_AS_OF = "2026-11"
 REGION = "us-east-1"
@@ -44,28 +47,12 @@ PRICES: dict[str, tuple[float, str]] = {
     "kinesis.put_unit": (0.014 / 1e6, "PUT payload unit (provisioned)"),
     "ssm.standard": (0.0, "standard parameter call"),
 }
-FREE = {"sts", "iam", "ssm"}  # API calls without a request charge (SSM standard parameters)
-DDB_WRITES = {"PutItem", "UpdateItem", "DeleteItem", "BatchWriteItem"}
-DDB_TX_WRITES = {"TransactWriteItems"}
-DDB_READS = {"GetItem", "Query", "Scan", "BatchGetItem"}
-DDB_TX_READS = {"TransactGetItems"}
-S3_FREE = {"DeleteObject", "DeleteObjects", "AbortMultipartUpload", "DeleteBucket"}
-S3_PUT_CLASS = {
-    "PutObject",
-    "CopyObject",
-    "CompleteMultipartUpload",
-    "CreateMultipartUpload",
-    "UploadPart",
-    "UploadPartCopy",
-    "ListObjects",
-    "ListObjectsV2",
-    "ListObjectVersions",
-    "ListBuckets",
-    "ListMultipartUploads",
-    "ListParts",
-    "CreateBucket",
+# Priced services awsemu has no registry module for (the others: each service's ``cost`` hook).
+OTHER: dict[str, Callable[[dict], list[tuple[str, float]]]] = {
+    "kms": lambda call: [("kms.request", 1)],
+    "cloudwatch": lambda call: [("cloudwatch.put_metric", 1)] if call["operation"] == "PutMetricData" else [],
+    "sts": lambda call: [],  # no request charge
 }
-LAMBDA_MEMORY_GB = 0.125
 
 
 @dataclass
@@ -138,48 +125,18 @@ def estimate(calls: list[dict], prices: dict[str, tuple[float, str]] | None = No
     def add(service: str, key: str, n: float = 1.0) -> None:
         units[(service, key)] = units.get((service, key), 0.0) + n
 
+    hooks = {**OTHER, **{s.name: s.cost for s in services.all_services() if s.cost}}
     for call in calls:
         service, op = call.get("service") or "", call.get("operation") or ""
         if not service or not op or call.get("status") == 0:  # unknown, or never answered
             continue
         out.calls += 1
-        if service == "dynamodb":
-            if op in DDB_WRITES:
-                add(service, "dynamodb.write")
-            elif op in DDB_TX_WRITES:
-                add(service, "dynamodb.write", 2)
-            elif op in DDB_READS:
-                add(service, "dynamodb.read")
-            elif op in DDB_TX_READS:
-                add(service, "dynamodb.read", 2)
-        elif service == "sqs":
-            add(service, "sqs.fifo" if (call.get("resource") or "").endswith(".fifo") else "sqs.standard")
-        elif service == "s3":
-            if op not in S3_FREE:
-                add(service, "s3.put" if op in S3_PUT_CLASS or op.startswith("Put") else "s3.get")
-        elif service == "sns" and op in ("Publish", "PublishBatch"):
-            add(service, "sns.publish")
-        elif service == "lambda" and op in ("Invoke", "InvokeWithResponseStream", "InvokeAsync"):
-            add(service, "lambda.request")
-            add(service, "lambda.gb_second", LAMBDA_MEMORY_GB * float(call.get("latency_ms") or 0) / 1000)
-        elif service == "secretsmanager":
-            add(service, "secretsmanager.api")
-        elif service == "kms":
-            add(service, "kms.request")
-        elif service == "events" and op == "PutEvents":
-            add(service, "events.put")
-        elif service == "stepfunctions" and op in ("StartExecution", "StartSyncExecution"):
-            add(service, "stepfunctions.transition")
-        elif service == "logs" and op == "PutLogEvents":
-            add(service, "logs.ingest_gb", float(call.get("bytes_in") or 0) / 1e9)
-        elif service == "cloudwatch" and op == "PutMetricData":
-            add(service, "cloudwatch.put_metric")
-        elif service == "kinesis" and op in ("PutRecord", "PutRecords"):
-            add(service, "kinesis.put_unit", max(1.0, float(call.get("bytes_in") or 0) / 25_000))
-        elif service in FREE:
-            continue
-        elif service not in ("dynamodb", "sns", "lambda", "events", "stepfunctions", "logs", "cloudwatch", "kinesis"):
+        hook = hooks.get(service)
+        if hook is None:
             out.unpriced[service] = out.unpriced.get(service, 0) + 1
+            continue
+        for key, n in hook(call):
+            add(service, key, n)
     for (service, key), n in sorted(units.items()):
         price, label = prices.get(key, (0.0, "unit"))
         out.lines.append(Line(service, key.split(".", 1)[1], n, price, label))

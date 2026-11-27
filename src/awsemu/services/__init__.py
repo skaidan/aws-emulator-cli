@@ -11,6 +11,8 @@ across services read the registry instead of keeping their own lists:
 completion          ``completions``: resource names by kind, for the shell
 ``seed apply``      ``seed_section`` and ``apply``: create what a seed section lists
 ``seed export``     ``export``: a seed section from what's there (also ``snapshot``)
+``seed import``     ``seed_import``: a seed section from a real account, read-only
+``proxy cost``      ``cost``: the price keys (``awsemu.cost.PRICES``) and units of one call
 ==================  ============================================================
 
 A hook a service doesn't have is ``None`` and must be listed in ``missing``
@@ -30,7 +32,7 @@ from typing import Any
 # A snapshot maps (kind, name) -> a number to compare (messages, items, objects) or None.
 Snapshot = dict[tuple[str, str], "int | None"]
 
-HOOKS = ("names", "details", "describe", "watch", "completions", "apply", "export")
+HOOKS = ("names", "details", "describe", "watch", "completions", "apply", "export", "seed_import", "cost")
 COMPLETE_MAX = 200  # names offered by shell completion
 
 
@@ -60,6 +62,10 @@ class Service:
     """``(seed, port, report)``: create or update what ``seed_section`` lists; never deletes."""
     export: Callable[..., list[dict]] | None = None
     """``(port, opts: seed.ExportOptions) -> entries`` of ``seed_section`` from the emulator."""
+    seed_import: Callable[..., list[dict]] | None = None
+    """``(session, opts: seed.ImportOptions) -> entries`` of ``seed_section`` from a real account."""
+    cost: Callable[[dict], list[tuple[str, float]]] | None = None
+    """``call -> [(price key, units)]`` for a call in the proxy's log; ``[]`` when it's free."""
     missing: Mapping[str, str] = field(default_factory=dict)
     """``{hook: why}`` for each hook this service doesn't have."""
 

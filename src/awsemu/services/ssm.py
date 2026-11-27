@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 from .. import clients
+from .. import realaccount
 from .. import seed as seedlib
 from ..awserrors import client_error, is_error
 from . import COMPLETE_MAX, Service, names_snapshot, pages
@@ -84,6 +85,38 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return params
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``parameters`` of a real account (read-only), for ``awsemu seed import``."""
+    ssm = realaccount.client(sess, "ssm")
+    params = []
+    for page in ssm.get_paginator("describe_parameters").paginate():
+        for d in page.get("Parameters", []):
+            entry = {"name": d["Name"]}
+            if d.get("Type") == "SecureString":
+                entry.update(value=realaccount.PLACEHOLDER, type="SecureString")
+            else:
+                entry["value"] = None  # filled below, without decryption
+                if d.get("Type") == "StringList":
+                    entry["type"] = "StringList"
+            if d.get("Description"):
+                entry["description"] = d["Description"]
+            params.append(entry)
+    plain = [p for p in params if p["value"] is None]
+    for i in range(0, len(plain), 10):
+        batch = {p["name"]: p for p in plain[i : i + 10]}
+        # DescribeParameters doesn't return values; GetParameters without decryption is allowed
+        for p in ssm.get_parameters(Names=list(batch), WithDecryption=False).get("Parameters", []):
+            if p["Type"] in ("String", "StringList") and p["Name"] in batch:
+                batch[p["Name"]]["value"] = p["Value"].split(",") if p["Type"] == "StringList" else p["Value"]
+                batch[p["Name"]].pop("type", None)
+    params = [p for p in params if p["value"] is not None]
+    return params
+
+
+def cost(call) -> list[tuple[str, float]]:
+    return []  # standard parameters have no request charge
+
+
 SERVICE = Service(
     name="ssm",
     label="SSM parameters",
@@ -95,4 +128,6 @@ SERVICE = Service(
     seed_section="parameters",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )

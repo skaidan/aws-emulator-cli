@@ -49,7 +49,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
 from . import errors
 
 VERSION = 1
@@ -120,6 +119,18 @@ class ExportOptions:
 
 
 @dataclass
+class ImportOptions:
+    """What every service's ``seed_import`` hook needs besides the session (``awsemu.services``)."""
+
+    region: str
+    account: str
+    """The real account's id: its ARNs are rewritten to the emulator's."""
+    data: dict
+    """The sections imported so far, so a section keeps only targets that exist locally."""
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Seed:
     data: dict[str, Any]
     base_dir: Path
@@ -138,6 +149,8 @@ class Seed:
 
 def _node_lines(node, path: tuple = (), out: dict | None = None) -> dict[tuple, int]:
     """Map each path (keys / indexes) to the 1-based line where its value starts."""
+    import yaml  # here, not at the top: the service registry imports this module
+
     out = {} if out is None else out
     out.setdefault(path, node.start_mark.line + 1)
     if isinstance(node, yaml.MappingNode):
@@ -162,6 +175,8 @@ def _fmt_path(path: tuple) -> str:
 
 
 def load_text(text: str, source: str = "seed", base_dir: Path | None = None) -> Seed:
+    import yaml
+
     try:
         node = yaml.compose(text, Loader=yaml.SafeLoader)
         data = yaml.safe_load(text)
@@ -517,6 +532,8 @@ def _validate(data: Any, lines: dict[tuple, int], seed: Seed) -> list[Problem]:
 
 def read_definition(sm: dict, base_dir: Path) -> dict:
     """A state machine's definition: inline, or from a .json/.yaml file."""
+    import yaml
+
     definition = sm["definition"]
     if isinstance(definition, dict):
         return definition
@@ -557,6 +574,8 @@ def object_payloads(obj: dict, base_dir: Path) -> list[tuple[str, bytes | Path]]
 
 
 def load_items(t: dict, base_dir: Path) -> list[dict]:
+    import yaml
+
     items = list(t.get("items") or [])
     if t.get("items_from"):
         data = yaml.safe_load((base_dir / t["items_from"]).read_text(encoding="utf-8"))
@@ -570,6 +589,7 @@ def load_items(t: dict, base_dir: Path) -> list[dict]:
 
 def dump(data: dict) -> str:
     """YAML for ``seed export``: readable, key order kept, unicode as-is."""
+    import yaml
 
     class _Dumper(yaml.SafeDumper):
         pass

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 from .. import clients
+from .. import realaccount
 from .. import seed as seedlib
 from ..awserrors import client_error, is_error
 from . import COMPLETE_MAX, Service, names_snapshot, pages
@@ -70,6 +71,28 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return streams
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``streams`` of a real account (read-only), for ``awsemu seed import``."""
+    k = realaccount.client(sess, "kinesis")
+    streams = []
+    for page in k.get_paginator("list_streams").paginate():
+        for name in page.get("StreamNames", []):
+            summary = k.describe_stream_summary(StreamName=name)["StreamDescriptionSummary"]
+            entry = {"name": name}
+            if summary.get("OpenShardCount", 1) != 1:
+                entry["shards"] = summary["OpenShardCount"]
+            if summary.get("RetentionPeriodHours", 24) != 24:
+                entry["retention_hours"] = summary["RetentionPeriodHours"]
+            streams.append(entry)
+    return streams
+
+
+def cost(call) -> list[tuple[str, float]]:
+    if call["operation"] not in ("PutRecord", "PutRecords"):
+        return []
+    return [("kinesis.put_unit", max(1.0, float(call.get("bytes_in") or 0) / 25_000))]
+
+
 SERVICE = Service(
     name="kinesis",
     label="Kinesis streams",
@@ -81,4 +104,6 @@ SERVICE = Service(
     seed_section="streams",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from .. import clients
+from .. import realaccount
 from .. import seed as seedlib
 from ..commands._common import allow_lambda, allow_queue, arn, ensure_service_role
 from ..awserrors import client_error, is_error
@@ -174,6 +175,54 @@ def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
     return rules
 
 
+def seed_import(sess, opts: seedlib.ImportOptions) -> list[dict]:
+    """``rules`` of a real account (read-only), for ``awsemu seed import``."""
+    ev = realaccount.client(sess, "events")
+    local_targets = {
+        "sqs": {q["name"] for q in opts.data.get("queues", [])},
+        "sns": {t["name"] for t in opts.data.get("topics", [])},
+        "stepfunctions": {m["name"] for m in opts.data.get("state_machines", [])},
+        "kinesis": {s["name"] for s in opts.data.get("streams", [])},
+    }
+    rules = []
+    for page in ev.get_paginator("list_rules").paginate():
+        for r in page.get("Rules", []):
+            if r.get("ManagedBy"):
+                continue
+            rule: dict = {"name": r["Name"]}
+            if r.get("EventPattern"):
+                rule["pattern"] = json.loads(r["EventPattern"])
+            elif r.get("ScheduleExpression"):
+                rule["schedule"] = r["ScheduleExpression"]
+            if r.get("State") == "DISABLED":
+                rule["enabled"] = False
+            if r.get("Description"):
+                rule["description"] = r["Description"]
+            targets = []
+            for tp in ev.get_paginator("list_targets_by_rule").paginate(Rule=r["Name"]):
+                for t in tp.get("Targets", []):
+                    from .services.events import target_from_arn
+
+                    target = target_from_arn(t["Arn"])
+                    kind = next(iter(target)) if target else ""
+                    if not target or target[kind] not in local_targets.get(kind, set()):
+                        opts.notes.append(
+                            f"rule {r['Name']}: left out target {t['Arn'].split(':')[2]}:{t['Arn'].rsplit(':', 1)[-1]}"
+                        )
+                        continue
+                    if t.get("Input"):
+                        target["input"] = json.loads(t["Input"])
+                    targets.append(target)
+            if targets:
+                rule["targets"] = targets
+            rules.append(rule)
+    return rules
+
+
+def cost(call) -> list[tuple[str, float]]:
+    return [("events.put", 1)] if call["operation"] == "PutEvents" else []
+
+
 SERVICE = Service(
     name="events",
     label="EventBridge buses",
@@ -185,4 +234,6 @@ SERVICE = Service(
     seed_section="rules",
     apply=apply,
     export=export,
+    seed_import=seed_import,
+    cost=cost,
 )
