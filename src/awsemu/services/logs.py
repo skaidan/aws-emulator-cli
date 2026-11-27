@@ -35,5 +35,7 @@ SERVICE = Service(
     missing={
         "watch": "log groups are created by the functions that log; v0.15 adds `logs tail`",
         "completions": "no command takes a log group name yet (v0.15)",
+        "apply": "seeds have no log groups: functions create theirs when they log",
+        "export": "seeds have no log groups: functions create theirs when they log",
     },
 )

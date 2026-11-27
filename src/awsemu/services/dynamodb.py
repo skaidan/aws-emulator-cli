@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from ..awserrors import client_error, is_error
+
 from .. import clients
+from ..runtime import RuntimeErrorWithHint
+from .. import seed as seedlib
+from ..awserrors import client_error, is_error
 from . import COMPLETE_MAX, Service, Snapshot, pages
 
 UI_ITEMS = 20  # items shown by `awsemu ui`
@@ -54,6 +57,80 @@ def watch(c) -> Snapshot:
     return out
 
 
+def _to_item(data):
+    from ..commands.dynamodb import to_item
+
+    return to_item(data)
+
+
+def _from_item(item):
+    from ..commands.dynamodb import from_item
+
+    return from_item(item)
+
+
+def apply(seed, port, report):
+    ddb = clients.client("dynamodb", port)
+    for t in seed.section("tables"):
+        name = t["name"]
+        keys = [(seedlib.key_spec(t["pk"]), "HASH")]
+        if t.get("sk"):
+            keys.append((seedlib.key_spec(t["sk"]), "RANGE"))
+        wanted_schema = [{"AttributeName": n, "KeyType": kt} for (n, _), kt in keys]
+        try:
+            try:
+                current = ddb.describe_table(TableName=name)["Table"]
+                if current["KeySchema"] != wanted_schema:
+                    have = ", ".join(f"{k['AttributeName']} ({k['KeyType'].lower()})" for k in current["KeySchema"])
+                    raise RuntimeErrorWithHint(f"exists with a different key: {have}")
+                result = "unchanged"
+            except RuntimeErrorWithHint:
+                raise
+            except client_error() as exc:
+                if not is_error(exc, "ResourceNotFound"):
+                    raise
+                ddb.create_table(
+                    TableName=name,
+                    BillingMode="PAY_PER_REQUEST",
+                    AttributeDefinitions=[{"AttributeName": n, "AttributeType": k} for (n, k), _ in keys],
+                    KeySchema=wanted_schema,
+                )
+                ddb.get_waiter("table_exists").wait(TableName=name, WaiterConfig={"Delay": 1, "MaxAttempts": 30})
+                result = "created"
+            items = seedlib.load_items(t, seed.base_dir)
+            for i in range(0, len(items), 25):
+                pending: dict | None = {name: [{"PutRequest": {"Item": _to_item(it)}} for it in items[i : i + 25]]}
+                while pending:
+                    pending = ddb.batch_write_item(RequestItems=pending).get("UnprocessedItems") or None
+            if items and result == "unchanged":
+                result = "updated"
+            report.add("table", name, result, f"{len(items)} item(s) written" if items else "")
+        except Exception as exc:
+            report.add("table", name, "failed", clients.describe_error(exc))
+
+
+def export(port: int, opts: seedlib.ExportOptions) -> list[dict]:
+    ddb = clients.client("dynamodb", port)
+    tables = []
+    for page in ddb.get_paginator("list_tables").paginate():
+        for name in page.get("TableNames", []):
+            t = ddb.describe_table(TableName=name)["Table"]
+            types = {d["AttributeName"]: d["AttributeType"] for d in t["AttributeDefinitions"]}
+            entry = {"name": name}
+            for k in t["KeySchema"]:
+                spec = k["AttributeName"] + (
+                    "" if types[k["AttributeName"]] == "S" else f":{types[k['AttributeName']]}"
+                )
+                entry["pk" if k["KeyType"] == "HASH" else "sk"] = spec
+            items = []
+            for p in ddb.get_paginator("scan").paginate(TableName=name):
+                items += [_from_item(i) for i in p.get("Items", [])]
+            if items:
+                entry["items"] = items
+            tables.append(entry)
+    return tables
+
+
 SERVICE = Service(
     name="dynamodb",
     label="DynamoDB tables",
@@ -62,4 +139,7 @@ SERVICE = Service(
     describe=describe,
     watch=watch,
     completions={"table": lambda c, i: pages(c, "list_tables", "TableNames", cap=COMPLETE_MAX)},
+    seed_section="tables",
+    apply=apply,
+    export=export,
 )

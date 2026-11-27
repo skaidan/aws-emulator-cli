@@ -37,5 +37,7 @@ SERVICE = Service(
     missing={
         "watch": "roles change rarely; `awsemu lambda deploy` creates the one it needs",
         "completions": "no command takes a role name",
+        "apply": "seeds have no IAM section: `functions` create the role they need",
+        "export": "seeds have no IAM section: `functions` create the role they need",
     },
 )

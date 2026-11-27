@@ -9,6 +9,8 @@ across services read the registry instead of keeping their own lists:
 ``describe``        ``arn`` and ``describe``: show a resource from its ARN
 ``watch``           ``alias`` and ``watch``: a snapshot to compare between looks
 completion          ``completions``: resource names by kind, for the shell
+``seed apply``      ``seed_section`` and ``apply``: create what a seed section lists
+``seed export``     ``export``: a seed section from what's there (also ``snapshot``)
 ==================  ============================================================
 
 A hook a service doesn't have is ``None`` and must be listed in ``missing``
@@ -28,7 +30,7 @@ from typing import Any
 # A snapshot maps (kind, name) -> a number to compare (messages, items, objects) or None.
 Snapshot = dict[tuple[str, str], "int | None"]
 
-HOOKS = ("names", "details", "describe", "watch", "completions")
+HOOKS = ("names", "details", "describe", "watch", "completions", "apply", "export")
 COMPLETE_MAX = 200  # names offered by shell completion
 
 
@@ -52,6 +54,12 @@ class Service:
     """A snapshot of the service from a boto3 client, for ``awsemu watch``."""
     completions: Mapping[str, Callable[[Any, str], list[str]]] = field(default_factory=dict)
     """``{kind: (client, incomplete) -> names}`` for shell completion of resource names."""
+    seed_section: str = ""
+    """The seed file's section for this service (``queues``), if it has one."""
+    apply: Callable[..., None] | None = None
+    """``(seed, port, report)``: create or update what ``seed_section`` lists; never deletes."""
+    export: Callable[..., list[dict]] | None = None
+    """``(port, opts: seed.ExportOptions) -> entries`` of ``seed_section`` from the emulator."""
     missing: Mapping[str, str] = field(default_factory=dict)
     """``{hook: why}`` for each hook this service doesn't have."""
 
@@ -92,6 +100,11 @@ def registry() -> dict[str, Service]:
 
 def all_services() -> list[Service]:
     return list(registry().values())
+
+
+def seed_sections() -> dict[str, Service]:
+    """``{seed section: Service}`` for the services seeds know."""
+    return {s.seed_section: s for s in all_services() if s.seed_section}
 
 
 def get(name: str) -> Service:
