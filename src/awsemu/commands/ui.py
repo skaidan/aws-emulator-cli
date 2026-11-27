@@ -6,7 +6,7 @@ import click
 
 from .. import _meta, runtime
 from ..context import Ctx, handle_errors, pass_ctx
-from .env import _require_healthy
+from ..health import require_healthy
 
 
 @click.command(name="ui")
@@ -25,5 +25,5 @@ def ui_cmd(c: Ctx):
             "The terminal UI needs Textual, which isn't installed.",
             f"{_meta.install_hint('ui')}  (or: pip install textual)",
         ) from exc
-    _require_healthy(c.port)
+    require_healthy(c.port)
     tui.run(c.port)

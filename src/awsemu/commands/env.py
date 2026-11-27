@@ -83,7 +83,7 @@ def exec_cmd(c: Ctx, command: tuple[str, ...], extras, use_proxy: bool | None):
       awsemu exec --sdk node -- npm test
       awsemu exec --proxy -- pytest       # through the proxy (calls log, faults)
     """
-    _require_healthy(c.port)
+    health.require_healthy(c.port)
     child = envvars.child_env(c.port, extras=_sdk(extras))
     child.update(_proxy_env(c.port, use_proxy, _sdk(extras)))
     try:
@@ -106,7 +106,7 @@ def exec_cmd(c: Ctx, command: tuple[str, ...], extras, use_proxy: bool | None):
 @handle_errors
 def shell(c: Ctx, extras, use_proxy: bool | None):
     """Open a sub-shell already pointed at the emulator ('exit' to leave)."""
-    _require_healthy(c.port)
+    health.require_healthy(c.port)
     if os.name == "nt":  # pragma: no cover
         program = [os.environ.get("COMSPEC", "powershell.exe")]
     else:
@@ -143,7 +143,7 @@ def aws_cmd(c: Ctx, args: tuple[str, ...]):
             "The AWS CLI ('aws') is not installed.",
             "Install AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html",
         )
-    _require_healthy(c.port)
+    health.require_healthy(c.port)
     child = envvars.child_env(c.port)
     child.update(_proxy_env(c.port, None, []))
     sys.exit(subprocess.call(["aws", *args], env=child))
@@ -189,15 +189,6 @@ def _sdk(extras) -> list[str]:
         return list(extras)
     proj = project.load()
     return list(proj.sdk) if proj else []
-
-
-def _require_healthy(port: int) -> None:
-    h = health.check(port)
-    if not h.healthy:
-        flag = "" if port == project.default_port() else f" --port {port}"
-        raise runtime.RuntimeErrorWithHint(
-            f"No healthy emulator on port {port} ({h.detail}).", f"Start one with 'awsemu{flag} start'."
-        )
 
 
 @click.command()

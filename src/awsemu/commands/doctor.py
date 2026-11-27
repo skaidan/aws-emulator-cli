@@ -13,7 +13,7 @@ import click
 from .. import __version__, _meta, envvars, exitcodes, health, project, runtime, settings, ui
 from ..context import Ctx, json_option, pass_ctx
 from ..paths import emulator_settings_file
-from .lifecycle import pin_mismatch
+from ..fidelity import pin_mismatch
 
 
 @click.command()

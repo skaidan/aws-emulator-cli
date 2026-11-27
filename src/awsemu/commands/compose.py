@@ -176,7 +176,7 @@ def compose(c: Ctx, output: Path | None, name: str, no_build: bool, auth, teleme
     )
     client = proxy_port = None
     if with_proxy:
-        from .proxy import default_listen
+        from ..proxy import default_listen
 
         proxy_port = default_listen(c.port) or c.port + 1
         client = client_settings(c.port, proxy_port, opts.auth)

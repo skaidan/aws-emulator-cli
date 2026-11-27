@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
+from . import errors
 from .paths import DEFAULT_HOST, InstanceFiles
 
 
@@ -85,3 +86,15 @@ def wait_port_closed(port: int, timeout: float = 5.0) -> bool:
     from .waiting import until
 
     return until(lambda: not port_open(port), timeout=timeout, interval=0.1)
+
+
+def require_healthy(port: int) -> None:
+    """Raise, with how to start one, unless a healthy emulator answers on ``port``."""
+    from . import project
+
+    h = check(port)
+    if not h.healthy:
+        flag = "" if port == project.default_port() else f" --port {port}"
+        raise errors.RuntimeErrorWithHint(
+            f"No healthy emulator on port {port} ({h.detail}).", f"Start one with 'awsemu{flag} start'."
+        )

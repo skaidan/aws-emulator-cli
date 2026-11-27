@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 from pathlib import Path
 
+from . import errors
 from . import fidelity as fid
 from . import scan as sc
 
@@ -454,3 +455,22 @@ def attach_fixes(report: Report, latest_tag: str, latest_scores: dict) -> None:
             if d.test.id in passing:
                 d.fixed_in = latest_tag
     report.latest = latest_tag
+
+
+def load_index(release: str | None, manifest_ref: str | None = None, refresh: bool = False):
+    """``(release tag, tests version, Index, installed version)`` for check and explain."""
+    tag, scores, installed = fid.pick_release(release, refresh)
+    suite = fid.suite_version(tag) or (None if manifest_ref else latest_suite_version()) or "main"
+    try:
+        if manifest_ref and Path(manifest_ref).is_file():
+            manifest = read_manifest_file(Path(manifest_ref))
+            suite = Path(manifest_ref).name
+        else:
+            suite = manifest_ref or suite
+            manifest = load_manifest(suite, refresh=refresh)
+    except fid.FidelityError as exc:
+        raise errors.RuntimeErrorWithHint(
+            str(exc),
+            "Check your connection, or pass --manifest FILE (manifest.jsonl from a clone of the tests repository).",
+        ) from exc
+    return tag, suite, Index(scores, manifest), installed

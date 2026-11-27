@@ -120,21 +120,8 @@ modules = ["awsemu.commands.*"]
 ignore_imports = [
     "awsemu.** -> awsemu.commands._common",
     # today's exceptions (ROADMAP v0.14 "Layers"):
-    "awsemu.commands.check -> awsemu.commands.fidelity",
-    "awsemu.commands.check -> awsemu.commands.iam",
-    "awsemu.commands.check -> awsemu.commands.proxy",
-    "awsemu.commands.compose -> awsemu.commands.proxy",
-    "awsemu.commands.doctor -> awsemu.commands.lifecycle",
-    "awsemu.commands.explain -> awsemu.commands.check",
-    "awsemu.commands.explain -> awsemu.commands.proxy",
-    "awsemu.commands.iam -> awsemu.commands.proxy",
-    "awsemu.commands.issues -> awsemu.commands.fidelity",
-    "awsemu.commands.lifecycle -> awsemu.commands.proxy",
     "awsemu.commands.lifecycle -> awsemu.commands.seed",
-    "awsemu.commands.proxy -> awsemu.commands.iam",
-    "awsemu.commands.report -> awsemu.commands.proxy",
     "awsemu.commands.snapshot -> awsemu.commands.lifecycle",
     "awsemu.commands.snapshot -> awsemu.commands.seed",
-    "awsemu.commands.ui -> awsemu.commands.env",
     "awsemu.commands.watch -> awsemu.commands.proxy",
 ]

@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from .. import iampolicy as ip
-from .. import proxy as px
+from ..proxy import load_calls
 from .. import ui
 from ..context import Ctx, handle_errors, pass_ctx
 from ..runtime import RuntimeErrorWithHint
@@ -17,19 +17,6 @@ from ..runtime import RuntimeErrorWithHint
 @click.group()
 def iam():
     """IAM permissions your code needs, from the calls it made (the proxy's log)."""
-
-
-def load_calls(port: int, calls_file: Path | None) -> tuple[list[dict], Path]:
-    from .proxy import read_calls
-
-    log = calls_file or px.ProxyFiles(port).calls
-    calls = read_calls(log)
-    if not calls:
-        raise RuntimeErrorWithHint(
-            f"no calls in {log}",
-            "Run your tests through the proxy first: awsemu proxy start -d, then awsemu exec --proxy -- pytest.",
-        )
-    return calls, log
 
 
 @iam.command()

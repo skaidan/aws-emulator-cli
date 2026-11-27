@@ -55,7 +55,7 @@ def report(c: Ctx, call_id: str, output, show_url, open_browser):
     has the request and response.
     """
     from ..fidelity import installed_version
-    from .proxy import read_calls
+    from ..proxy import read_calls
 
     calls = read_calls(px.ProxyFiles(c.port).calls)
     if not calls:

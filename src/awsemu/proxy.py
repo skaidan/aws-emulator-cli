@@ -888,3 +888,46 @@ def client_env(state: dict) -> dict[str, str]:
     if state.get("ca"):
         env["AWS_CA_BUNDLE"] = state["ca"]
     return env
+
+
+# --------------------------------------------------------------------------- the calls log, for the commands
+
+
+def default_listen(emulator_port: int) -> int:
+    """The proxy's port: the project's ``proxy_port``, else the emulator's + 1 (0 with ``--port 0``)."""
+    from . import project
+
+    try:
+        proj = project.load()
+    except project.ProjectError:
+        proj = None
+    if proj and proj.proxy_port is not None:
+        return proj.proxy_port
+    return emulator_port + 1 if emulator_port else 0
+
+
+def read_calls(path: Path, last: int | None = None) -> list[dict]:
+    """The calls in a calls log (the ``last`` ones, if given); unreadable lines are skipped."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    out = []
+    for line in lines[-last:] if last else lines:
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            continue
+    return out
+
+
+def load_calls(port: int, calls_file: Path | None) -> tuple[list[dict], Path]:
+    """The calls of ``calls_file`` or of the proxy in front of ``port``; an error if there are none."""
+    log = calls_file or ProxyFiles(port).calls
+    calls = read_calls(log)
+    if not calls:
+        raise errors.RuntimeErrorWithHint(
+            f"no calls in {log}",
+            "Run your tests through the proxy first: awsemu proxy start -d, then awsemu exec --proxy -- pytest.",
+        )
+    return calls, log

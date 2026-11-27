@@ -8,7 +8,7 @@ import click
 
 from .. import exitcodes
 from .. import fidelity as fid
-from .. import project
+from ..fidelity import pick_release
 from .. import ui
 from ..context import handle_errors, json_option
 from ..runtime import RuntimeErrorWithHint
@@ -18,23 +18,6 @@ def _score_style(pct: float | None) -> str | None:
     if pct is None:
         return None
     return "ok" if pct >= 90 else "warn" if pct >= 60 else "error"
-
-
-def pick_release(release: str | None, refresh: bool = False) -> tuple[str, dict, str | None]:
-    """``(tag, scores, installed)``: --release, else the project's pin, else installed, else latest."""
-    installed = fid.installed_version()
-    pinned = None
-    try:
-        proj = project.load()
-        pinned = proj.emulator_version if proj else None
-    except project.ProjectError:
-        pass
-    wanted = release or pinned or installed or "latest"
-    try:
-        tag, scores = fid.fetch(wanted, refresh=refresh)
-    except fid.FidelityError as exc:
-        raise RuntimeErrorWithHint(str(exc), "Check your connection, or pass --release.") from exc
-    return tag, scores, installed
 
 
 class DefaultGroup(click.Group):

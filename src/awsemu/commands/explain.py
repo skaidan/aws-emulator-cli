@@ -55,8 +55,8 @@ def explain(c: Ctx, call_id: str, release, refresh, as_json):
     answer is a known difference; passing tests and a "bad request" error point
     at the code under test. It's evidence, not proof.
     """
-    from .check import load_index
-    from .proxy import read_calls
+    from ..check import load_index
+    from ..proxy import read_calls
 
     calls = read_calls(px.ProxyFiles(c.port).calls)
     if not calls:
