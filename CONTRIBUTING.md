@@ -22,10 +22,11 @@ pytest
 Before a pull request, the same checks as CI:
 
 ```bash
-pip install ruff mypy
+pip install ruff mypy import-linter
 ruff check src tests scripts          # lint: bug-finding rules (pyproject.toml)
 ruff format src tests scripts         # the format, applied
 mypy                                  # types, on src/
+lint-imports                          # architecture: the core imports no Click, Rich or commands, and commands don't import each other (pyproject.toml)
 pytest --cov                          # tests, with coverage (CI requires 65%)
 python scripts/gen_reference.py       # docs/reference.md, after changing commands or options
 python scripts/gen_schemas.py         # docs/schemas/, after changing a --json output (src/awsemu/schemas.py)

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import click
 
-from .. import clients
+from .. import clients, errors
 from . import Service, pages
 
 
@@ -25,7 +24,7 @@ def describe(a, port, full):
         return iam.get_user(UserName=name)["User"]
     if a.kind == "policy":
         return iam.get_policy(PolicyArn=f"arn:aws:iam::{a.account}:{a.resource}")["Policy"]
-    raise click.ClickException(f"IAM resource type '{a.kind}' isn't supported by describe")
+    raise errors.AwsemuError(f"IAM resource type '{a.kind}' isn't supported by describe")
 
 
 SERVICE = Service(

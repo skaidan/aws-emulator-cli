@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import click
+from . import errors
 
 
 @dataclass
@@ -34,5 +34,5 @@ class Arn:
 def parse_arn(text: str) -> Arn:
     parts = text.split(":", 5)
     if len(parts) != 6 or parts[0] != "arn":
-        raise click.BadParameter(f"'{text}' is not an ARN (arn:aws:SERVICE:REGION:ACCOUNT:RESOURCE)")
+        raise errors.UsageError(f"'{text}' is not an ARN (arn:aws:SERVICE:REGION:ACCOUNT:RESOURCE)")
     return Arn(service=parts[2], region=parts[3], account=parts[4], resource=parts[5])

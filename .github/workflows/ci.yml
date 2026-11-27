@@ -69,10 +69,11 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install -e ".[dev,ui,testcontainers]" "ruff==0.16.9" "mypy==2.3.1"
+      - run: pip install -e ".[dev,ui,testcontainers]" "ruff==0.16.9" "mypy==2.3.1" "import-linter==2.17"
       - run: ruff check src tests scripts
       - run: ruff format --check src tests scripts
       - run: mypy
+      - run: lint-imports
       - name: Package and SBOM build (as the release does)
         run: |
           pip install build
