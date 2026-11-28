@@ -147,6 +147,17 @@ def test_config_layers_and_sources(proj_dir, monkeypatch):
     assert config.resolve({"mode": "docker"})["mode"].value == "docker"
 
 
+@pytest.mark.parametrize("env, file", [(None, None), (None, "port = 9344\n"), ("9355", "port = 9344\n"), ("x", None)])
+def test_default_port_agrees_with_the_config_model(proj_dir, monkeypatch, env, file):
+    from awsemu import config
+
+    if env:
+        monkeypatch.setenv("AWSEMU_PORT", env)
+    if file:
+        (proj_dir / "awsemu.toml").write_text(file)
+    assert default_port() == config.resolve()["port"].value
+
+
 def test_config_line_in_pyproject(proj_dir):
     from awsemu import config
 
