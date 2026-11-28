@@ -45,18 +45,15 @@ def install(version, docker, native, pin, list_, no_verify, dry_run, yes, as_jso
     if docker and native:
         raise click.UsageError("--docker and --native are mutually exclusive.")
     if list_:
-        versions = inst.list_versions()
-        installed = fid.installed_version()
-        proj = _project()
-        pinned = proj.emulator_version if proj else None
+        found = inst.available()
         if as_json:
-            ui.print_json({"versions": versions, "installed": installed, "pinned": pinned})
+            ui.print_json(found.as_dict())
             return
-        for v in versions[:30]:
-            marks = [m for m, on in (("installed", v == installed), ("pinned", v == pinned)) if on]
+        for v in found.versions[:30]:
+            marks = [m for m, on in (("installed", v == found.installed), ("pinned", v == found.pinned)) if on]
             ui.echo(v + (f"  ({', '.join(marks)})" if marks else ""), "ok" if marks else None)
-        if len(versions) > 30:
-            ui.echo(f"… {len(versions) - 30} older (--json lists them all)", "muted")
+        if len(found.versions) > 30:
+            ui.echo(f"… {len(found.versions) - 30} older (--json lists them all)", "muted")
         return
     if as_json:
         raise click.UsageError("--json only goes with --list")

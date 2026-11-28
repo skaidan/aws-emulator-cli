@@ -14,7 +14,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from . import fidelity as fid
@@ -230,3 +230,26 @@ def run_native(plan: Plan) -> int:
 
 def image_tag(version: str | None, base: str = "aws-emulator") -> str:
     return f"{base}:{version}" if version else base
+
+
+@dataclass(frozen=True)
+class Versions:
+    """``awsemu install --list``: the published versions, newest first, and which are in use."""
+
+    versions: list[str]
+    installed: str | None
+    pinned: str | None
+    """The project's ``emulator_version``."""
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+def available() -> Versions:
+    from . import project
+
+    try:
+        proj = project.load()
+    except project.ProjectError:
+        proj = None
+    return Versions(list_versions(), fid.installed_version(), proj.emulator_version if proj else None)
