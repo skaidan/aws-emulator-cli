@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
+from typing import Literal
 
 from . import __version__, _meta, envvars, fidelity, health, project, runtime, settings
 from .paths import emulator_settings_file
@@ -20,8 +21,8 @@ from .paths import emulator_settings_file
 @dataclass(frozen=True)
 class Check:
     check: str
-    result: str
-    """ok, warn (doesn't make doctor fail) or fail."""
+    result: Literal["ok", "warn", "fail"]
+    """warn doesn't make doctor fail."""
     detail: str
     fix: str | None = None
     """How to fix it; only when the result isn't ok."""
@@ -44,7 +45,7 @@ def run(port: int) -> Diagnosis:
     diag = Diagnosis()
 
     def add(name, ok, detail, fix=None, warn_only=False):
-        result = "ok" if ok is True else "warn" if warn_only or ok is None else "fail"
+        result: Literal["ok", "warn", "fail"] = "ok" if ok is True else "warn" if warn_only or ok is None else "fail"
         diag.checks.append(Check(name, result, detail, fix if result != "ok" else None))
 
     add("python", sys.version_info >= (3, 11), platform.python_version())

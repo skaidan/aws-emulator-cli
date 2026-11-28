@@ -91,7 +91,7 @@ Variables to trigger odd cases: `FAKE_EMULATOR_CRASH=1` (exits with code 1) and 
 
 ## Changing the JSON output or exit codes
 
-They're a stable interface (`docs/scripting.md`). Adding a field is fine. Renaming, removing or changing the type of one, or changing an exit code, is a breaking change: update `tests/test_json_contract.py`, `src/awsemu/schemas.py` (then `python scripts/gen_schemas.py`) and `docs/scripting.md`, and list it under **Breaking** in the CHANGELOG. A new `--json` output gets a schema there too, and a test that validates it.
+They're a stable interface (`docs/scripting.md`). Adding a field is fine. Renaming, removing or changing the type of one, or changing an exit code, is a breaking change: update `tests/test_json_contract.py`, `src/awsemu/schemas.py` (then `python scripts/gen_schemas.py`) and `docs/scripting.md`, and list it under **Breaking** in the CHANGELOG. A new `--json` output gets a schema there too, and a test that validates it: if it prints a core dataclass as is (`asdict`), use `from_type(TheClass)` so the schema follows the type; write it by hand only when `as_dict` renames or computes fields.
 
 ## The proxy
 

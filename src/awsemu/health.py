@@ -7,6 +7,7 @@ import ssl
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from typing import Literal
 
 from . import errors
 from .paths import DEFAULT_HOST, InstanceFiles
@@ -20,7 +21,7 @@ class Health:
     detail: str
 
     @property
-    def label(self) -> str:
+    def label(self) -> Literal["healthy", "unhealthy", "stopped"]:
         if self.healthy:
             return "healthy"
         if self.port_open:
