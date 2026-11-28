@@ -546,3 +546,35 @@ def test_diagnosis_counts_only_failures():
         "detail": "y",
         "fix": "fix y",
     }
+
+
+def test_schema_from_type():
+    from dataclasses import dataclass, field
+    from typing import Literal
+
+    from awsemu.schemas import from_type
+
+    @dataclass
+    class Inner:
+        n: int
+
+    @dataclass
+    class Sample:
+        name: str
+        level: Literal["a", "b"]
+        maybe: Literal["x"] | None
+        ratio: float | None
+        tags: list[str] = field(default_factory=list)
+        counts: dict[str, int] = field(default_factory=dict)
+        inner: Inner | None = None
+
+    got = from_type(Sample)
+    assert got["required"] == sorted(got["properties"]) and list(got["properties"])[0] == "name"
+    props = got["properties"]
+    assert props["level"] == {"enum": ["a", "b"]} and props["maybe"] == {"enum": ["x", None]}
+    assert props["ratio"] == {"type": ["number", "null"]}
+    assert props["tags"] == {"type": "array", "items": {"type": "string"}}
+    assert props["counts"] == {"type": "object", "additionalProperties": {"type": "integer"}}
+    assert props["inner"]["oneOf"][0] == {"type": "null"} and props["inner"]["oneOf"][1]["required"] == ["n"]
+    with pytest.raises(TypeError, match="write it by hand"):
+        from_type(set[str])

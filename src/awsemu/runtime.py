@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field
+from typing import Literal
 from pathlib import Path
 
 from . import errors, health, logs, waiting
@@ -540,8 +541,7 @@ class Instance:
     """Everything we know about the instance on a port (``awsemu status``)."""
 
     port: int
-    status: str
-    """healthy, unhealthy, starting or stopped (``health.Health.label``)."""
+    status: Literal["healthy", "unhealthy", "stopped"]
     detail: str
     endpoint: str
     mode: str

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- **JSON Schemas from the types**: the schemas of `status`, `status --all`, `doctor`, `install --list` and `snapshot ls` are generated from the dataclasses those commands print (`awsemu.schemas.from_type`), so a field added to the type is in the schema too.
+
+### Fixed
+
+- The schema of `awsemu snapshot ls --json` said `created_at` and `secrets` are never `null`; they are when a snapshot folder has no readable `snapshot.json`. The schema now allows it, as the output always did.
+
 ## 0.14.1 — 2026-11-28
 
 ### Changed

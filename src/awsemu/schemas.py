@@ -5,11 +5,18 @@ contract tests (``tests/test_json_contract.py``) validate real outputs against t
 schema can't drift from what the command prints. Objects allow extra fields: adding a
 field isn't a breaking change (docs/scripting.md); removing or renaming one is.
 
+Where an output is exactly a core dataclass (``asdict``), its schema comes from the type
+(:func:`from_type`), so a field added to the type is in the schema too; the others, whose
+``as_dict`` renames or computes fields, are written here.
+
 ``COMMANDS`` maps each schema to the command that prints it.
 """
 
 from __future__ import annotations
 
+import dataclasses
+import types
+import typing
 from typing import Any
 
 DRAFT = "https://json-schema.org/draft/2020-12/schema"
@@ -35,21 +42,57 @@ def array(items: dict) -> dict:
     return {"type": "array", "items": items}
 
 
-STATUS = obj(
-    {
-        "port": INT,
-        "status": {"enum": ["healthy", "unhealthy", "stopped"]},
-        "detail": S,
-        "endpoint": S,
-        "mode": S,
-        "pid": INT_NULL,
-        "container": S_NULL,
-        "uptime_seconds": N_NULL,
-        "auth": B_NULL,
-        "files": S,
-        "log": S_NULL,
-    }
-)
+def from_type(tp: Any) -> dict:
+    """The schema of a type: dataclasses (every field required, as ``asdict`` prints them all),
+    ``str``/``int``/``float``/``bool``, ``X | None``, ``Literal``, ``list[X]`` and ``dict[str, X]``."""
+    if dataclasses.is_dataclass(tp) and isinstance(tp, type):
+        hints = typing.get_type_hints(tp)
+        return obj({f.name: from_type(hints[f.name]) for f in dataclasses.fields(tp)})
+    origin, args = typing.get_origin(tp), typing.get_args(tp)
+    if origin is typing.Literal:
+        return {"enum": list(args)}
+    if origin in (typing.Union, types.UnionType) and type(None) in args and len(args) == 2:
+        inner = from_type(next(a for a in args if a is not type(None)))
+        if set(inner) == {"type"} and isinstance(inner["type"], str):
+            return {"type": [inner["type"], "null"]}
+        if set(inner) == {"enum"}:
+            return {"enum": [*inner["enum"], None]}
+        return {"oneOf": [{"type": "null"}, inner]}
+    if origin is list and args:
+        return array(from_type(args[0]))
+    if origin is dict and args:
+        return {"type": "object", "additionalProperties": from_type(args[1])}
+    simple = {str: S, int: INT, float: N, bool: B}
+    if tp in simple:
+        return dict(simple[tp])
+    raise TypeError(f"no JSON Schema for {tp!r}: write it by hand in awsemu.schemas")
+
+
+def _instance() -> dict:
+    from .runtime import Instance
+
+    return from_type(Instance)
+
+
+def _diagnosis_check() -> type:
+    from .diagnosis import Check
+
+    return Check
+
+
+def _versions() -> type:
+    from .install import Versions
+
+    return Versions
+
+
+def _saved_snapshot() -> type:
+    from .seeding import SavedSnapshot
+
+    return SavedSnapshot
+
+
+STATUS = _instance()
 
 CALL = obj(
     {
@@ -101,7 +144,7 @@ SCHEMAS: dict[str, dict] = {
         {
             "ok": B,
             "problems": INT,
-            "checks": array(obj({"check": S, "result": {"enum": ["ok", "warn", "fail"]}, "detail": S, "fix": S_NULL})),
+            "checks": array(from_type(_diagnosis_check())),
         }
     ),
     "fidelity": obj(
@@ -292,20 +335,8 @@ SCHEMAS: dict[str, dict] = {
             {"fails_in_release": B},
         )
     ),
-    "install-list": obj({"versions": STRINGS, "installed": S_NULL, "pinned": S_NULL}),
-    "snapshot-ls": array(
-        obj(
-            {
-                "name": S,
-                "created_at": S,
-                "port": INT_NULL,
-                "emulator_version": S_NULL,
-                "counts": {"type": "object", "additionalProperties": INT},
-                "secrets": B,
-                "path": S,
-            }
-        )
-    ),
+    "install-list": from_type(_versions()),
+    "snapshot-ls": array(from_type(_saved_snapshot())),
     "sqs-ls": array(obj({"name": S, "url": S, "visible": INT_NULL, "in_flight": INT_NULL, "delayed": INT_NULL})),
     "sns-ls": array(obj({"name": S, "arn": S, "subscriptions": AWS_OBJECTS})),
     "ddb-ls": array(

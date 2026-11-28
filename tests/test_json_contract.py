@@ -474,6 +474,15 @@ def test_snapshot_ls(runner, monkeypatch):
     assert set(row) == {"name", "created_at", "port", "emulator_version", "counts", "secrets", "path"}
     assert row["counts"] == {"queues": 1}
 
+    # a folder without snapshot.json (copied by hand, or a crash while saving) still lists, and fits the schema
+    from awsemu.seeding import snapshots_dir
+
+    bare = snapshots_dir() / "bare"
+    bare.mkdir(parents=True)
+    (bare / "seed.yaml").write_text("version: 1\n")
+    rows = {r["name"]: r for r in run_json(runner, "snapshot", "ls", "--json")}
+    assert rows["bare"]["created_at"] is None and rows["bare"]["secrets"] is None
+
 
 def test_schemas_reject_what_breaks_the_contract():
     jsonschema = pytest.importorskip("jsonschema")
