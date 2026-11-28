@@ -2,11 +2,13 @@
 
 ## Unreleased
 
+## 0.14.1 — 2026-11-28
+
 ### Changed
 
 - **The core no longer imports the commands**: what the service registry, the pytest plugin and `awsemu ui` took from command modules moved to the core: `awsemu.grants` (ARNs, service roles, queue and Lambda permissions), `awsemu.seeding` (seed apply and export), Lambda packaging and DynamoDB item conversion in their service modules, and `services.collect` (what `overview` lists). `lint-imports` now allows no exception for the core. Errors while packaging a function are awsemu errors (same exit codes, one-line message).
 - **Commands share logic through the core**: reading the proxy's calls log (`awsemu.proxy.read_calls`, `load_calls`, `default_listen`), choosing the fidelity release (`awsemu.fidelity.pick_release`, `pin_mismatch`), the fidelity index (`awsemu.check.load_index`) and `awsemu.health.require_healthy`. Command-to-command imports went from 17 to 4.
-- **Results as dataclasses**: `awsemu doctor` comes from `awsemu.diagnosis.run` (a `Diagnosis` of `Check`s) `awsemu status` from `awsemu.runtime.Instance`, `awsemu overview` from `awsemu.services.Listing` and `awsemu snapshot ls` from `awsemu.seeding.SavedSnapshot` and `awsemu install --list` from `awsemu.install.Versions`; the table and `--json` print the same object.
+- **Results as dataclasses**: `awsemu doctor` comes from `awsemu.diagnosis.run` (a `Diagnosis` of `Check`s), `awsemu status` from `awsemu.runtime.Instance`, `awsemu overview` from `awsemu.services.Listing` and `awsemu snapshot ls` from `awsemu.seeding.SavedSnapshot`, and `awsemu install --list` from `awsemu.install.Versions`; the table and `--json` print the same object.
 
 ### Fixed
 
