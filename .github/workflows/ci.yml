@@ -258,6 +258,8 @@ jobs:
           awsemu --port 9302 sqs ls | grep from-compose
 
       - name: App containers through the proxy (compose --proxy, proxy --host 0.0.0.0)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}  # check --from-calls reads the fidelity scores from GitHub's API
         run: |
           awsemu --port 9302 compose --proxy --no-build -o compose.proxy.yaml --no-telemetry
           printf '  app:\n    image: amazon/aws-cli:latest\n    <<: *aws-emulator-client\n' >> compose.proxy.yaml
