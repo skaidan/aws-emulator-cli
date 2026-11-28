@@ -33,6 +33,7 @@ def schema_for(args: tuple) -> str | None:
         "proxy shadow": "proxy-shadow",
         "proxy cost": "proxy-cost",
         "snapshot ls": "snapshot-ls",
+        "config explain": "config-explain",
         "sqs ls": "sqs-ls",
         "sns ls": "sns-ls",
         "ddb ls": "ddb-ls",

@@ -51,6 +51,8 @@ src/awsemu/
   seeding.py        apply and export a seed through the service registry (no printing)
   grants.py         wiring services together: ARNs, service roles, queue policies, Lambda permissions
   project.py        awsemu.toml / [tool.awsemu]: upward lookup, validation, per-file cache
+  config.py         one configuration model: flag > environment > project file > default, with the
+                    source of each value (awsemu config explain)
   pytest_plugin.py  pytest plugin (pytest11 entry point): aws_emulator and aws_emulator_fresh
   fidelity.py       download and cache of scores.json.gz from emulator releases; per-service
                     scores; compare (test by test between two releases)

@@ -9,6 +9,7 @@ can be added without notice (docs/scripting.md), so don't set `additionalPropert
 | `lists of AWS resources as AWS returns them (s3 ls, lambda ls, sfn ls, secrets ls, ssm ls…)` | [aws-list.schema.json](aws-list.schema.json) |
 | `awsemu check --json` | [check.schema.json](check.schema.json) |
 | `awsemu check --iam --json` | [check-iam.schema.json](check-iam.schema.json) |
+| `awsemu config explain --json` | [config-explain.schema.json](config-explain.schema.json) |
 | `awsemu ddb ls --json` | [ddb-ls.schema.json](ddb-ls.schema.json) |
 | `awsemu doctor --json` | [doctor.schema.json](doctor.schema.json) |
 | `awsemu explain [CALL] --json` | [explain.schema.json](explain.schema.json) |

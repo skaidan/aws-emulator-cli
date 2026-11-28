@@ -7,40 +7,24 @@ from pathlib import Path
 
 import click
 
-from .. import exitcodes, fidelity, health, logs, project, runtime, ui
+from .. import config, exitcodes, fidelity, health, logs, project, runtime, ui
 from ..context import Ctx, handle_errors, json_option, pass_ctx
 from ..paths import InstanceFiles, known_ports
 
 
-def _pick(flag, project_value, default):
-    """Command-line flag > project setting > default."""
-    if flag is not None:
-        return flag
-    return project_value if project_value is not None else default
-
-
 def _start_options(port, docker, native, auth, telemetry, idle_timeout, image, memory, extra):
-    proj = project.load()
-    if docker:
-        mode = "docker"
-    elif native:
-        mode = "native"
-    else:
-        mode = proj.mode if proj and proj.mode else "auto"
+    """Command-line flag > environment > project file > default (``awsemu.config``)."""
+    mode = "docker" if docker else "native" if native else None
+    flags = {"mode": mode, "auth": auth, "telemetry": telemetry, "idle_timeout": idle_timeout, "image": image}
+    v = {name: value.value for name, value in config.resolve({**flags, "memory": memory}).items()}
     return runtime.StartOptions(
         port=port,
-        mode=mode,
-        auth=_pick(auth, proj and proj.auth, True),
-        telemetry=_pick(telemetry, proj and proj.telemetry, None),
-        idle_timeout=_pick(idle_timeout, proj and proj.idle_timeout, None),
-        image=_pick(
-            image,
-            proj and proj.image,
-            f"{runtime.DEFAULT_IMAGE}:{proj.emulator_version}"
-            if proj and proj.emulator_version
-            else runtime.DEFAULT_IMAGE,
-        ),
-        memory=_pick(memory, proj and proj.memory, "2g"),
+        mode=v["mode"],
+        auth=v["auth"],
+        telemetry=v["telemetry"],
+        idle_timeout=v["idle_timeout"],
+        image=v["image"],
+        memory=v["memory"],
         extra_args=list(extra),
     )
 
