@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.14.2 — 2026-11-28
+
 ### Changed
 
 - **One runtime interface**: native and Docker modes are `awsemu.runtime.Native` and `Docker` behind one `Runtime` protocol (launch, stop, foreground command); `start` and `stop` do the common part once. Nothing changes on the command line.
