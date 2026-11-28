@@ -375,28 +375,28 @@ def status(c: Ctx, all_: bool, as_json: bool):
     ports = sorted(set(known_ports()) | {c.port} | {p for _, p in runtime.list_cli_containers()}) if all_ else [c.port]
     infos = [runtime.instance_info(p) for p in ports]
     if as_json:
-        ui.print_json(infos if all_ else infos[0])
-        if not all_ and infos[0]["status"] != "healthy":
+        ui.print_json([i.as_dict() for i in infos] if all_ else infos[0].as_dict())
+        if not all_ and infos[0].status != "healthy":
             sys.exit(exitcodes.NOT_HEALTHY)
         return
     rows = []
     for i in infos:
-        ident = i["pid"] or i["container"] or ""
-        auth = "" if i["auth"] is None else ("on" if i["auth"] else "off")
+        ident = i.pid or i.container or ""
+        auth = "" if i.auth is None else ("on" if i.auth else "off")
         rows.append(
             [
-                i["port"],
-                ui.styled(i["status"], i["status"]),
-                i["mode"],
+                i.port,
+                ui.styled(i.status, i.status),
+                i.mode,
                 ident,
-                ui.human_duration(i["uptime_seconds"]),
+                ui.human_duration(i.uptime_seconds),
                 auth,
-                i["endpoint"],
+                i.endpoint,
             ]
         )
     ui.table(["port", "status", "mode", "pid/container", "uptime", "auth", "endpoint"], rows)
     for i in infos:
-        if i["status"] != "healthy" and i["detail"] and i["status"] != "stopped":
-            ui.warn(f"port {i['port']}: {i['detail']}")
-    if not all_ and infos[0]["status"] != "healthy":
+        if i.status != "healthy" and i.detail and i.status != "stopped":
+            ui.warn(f"port {i.port}: {i.detail}")
+    if not all_ and infos[0].status != "healthy":
         sys.exit(exitcodes.NOT_HEALTHY)

@@ -533,3 +533,16 @@ def test_java_truststore_trusts_the_emulator_and_what_java_trusted(isolated_home
     monkeypatch.setattr(shutil, "which", lambda name: None)
     monkeypatch.delenv("JAVA_HOME", raising=False)
     assert javatrust.combined(9297) == (files.truststore, None)  # no JDK: the emulator's own
+
+
+def test_diagnosis_counts_only_failures():
+    from awsemu.diagnosis import Check, Diagnosis
+
+    d = Diagnosis([Check("a", "ok", "x"), Check("b", "warn", "y", "fix y"), Check("c", "fail", "z", "fix z")])
+    assert d.problems == 1
+    assert d.as_dict()["ok"] is False and d.as_dict()["checks"][1] == {
+        "check": "b",
+        "result": "warn",
+        "detail": "y",
+        "fix": "fix y",
+    }
