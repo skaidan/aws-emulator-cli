@@ -197,3 +197,34 @@ def test_awsemu_binary_env(runner, monkeypatch, free_port):
         assert CliFiles(free_port).log.exists()
     finally:
         runner.invoke(cli, ["--port", port, "stop"])
+
+
+def test_start_and_stop_go_through_the_mode_runtime(isolated_home, monkeypatch, free_port):
+    """A fake runtime in RUNTIMES: start and stop do the common part (state, health) around it."""
+    from awsemu import runtime as rt
+
+    calls = []
+
+    class Fake:
+        mode = "native"
+
+        def launch(self, opts, wait):
+            calls.append(("launch", opts.port))
+            state = rt.State(port=opts.port, mode="native", started_at=0.0, command=["fake"], pid=1)
+            return state, lambda: "it crashed"
+
+        def foreground_command(self, opts):
+            return ["fake"]
+
+        def stop(self, state, timeout, force):
+            calls.append(("stop", state.port, force))
+            return "stopped the fake"
+
+    monkeypatch.setitem(rt.RUNTIMES, "native", Fake())
+    state, status = rt.start(rt.StartOptions(port=free_port, mode="native"), wait=2)
+    assert calls == [("launch", free_port)] and not status.healthy and "it crashed" in status.detail
+    assert rt.State.load(free_port) is None  # a launch that aborted leaves no state behind
+
+    rt.State(port=free_port, mode="native", started_at=0.0, command=["fake"], pid=1).save()
+    assert rt.stop(free_port, force=True) == "stopped the fake"
+    assert calls[-1] == ("stop", free_port, True) and rt.State.load(free_port) is None

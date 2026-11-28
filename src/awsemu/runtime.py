@@ -20,7 +20,8 @@ import subprocess
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Literal
+from collections.abc import Callable
+from typing import Literal, Protocol
 from pathlib import Path
 
 from . import errors, health, logs, waiting
@@ -370,35 +371,39 @@ def _port_from_url(url: str) -> int | None:
         return None
 
 
-def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]:
-    """Start in the background. With ``opts.port == 0`` the OS picks the port (native only).
+Abort = Callable[[], "str | None"]
+"""Why a starting emulator won't become healthy (it exited, its container stopped), or None."""
 
-    Returns the saved state (``state.port`` is the real port) and the health result.
-    """
-    mode = resolve_mode(opts.mode, opts.binary)
-    random_port = opts.port == 0
-    if random_port and mode == "docker":
-        raise RuntimeErrorWithHint(
-            "Port 0 doesn't work with Docker: Docker can't forward a port chosen at startup.",
-            "Pick a port with --port, or use --native.",
-        )
-    if not random_port and health.port_open(opts.port):
-        raise RuntimeErrorWithHint(
-            f"Something is already listening on 127.0.0.1:{opts.port}.",
-            "Run 'awsemu status --all' or pick another port with '--port'.",
-        )
 
-    if mode == "native":
+class Runtime(Protocol):
+    """How one mode runs the emulator. :func:`start`, :func:`stop` and :func:`run_foreground`
+    do what's common (ports, state, health) and call these; tests can register a fake in
+    :data:`RUNTIMES`. Logs and files don't depend on the mode (``CliFiles``, ``InstanceFiles``)."""
+
+    mode: str
+
+    def launch(self, opts: StartOptions, wait: float) -> tuple[State, Abort]:
+        """Start it in the background; ``State.port`` is 0 if the port couldn't be learnt."""
+
+    def foreground_command(self, opts: StartOptions) -> list[str]:
+        """The command that runs it attached to the terminal."""
+
+    def stop(self, state: State, timeout: float, force: bool) -> str:
+        """Stop it (the state is cleared by :func:`stop`); a human description of what happened."""
+
+
+class Native:
+    mode = "native"
+
+    def launch(self, opts: StartOptions, wait: float) -> tuple[State, Abort]:
         if not native_available(opts.binary):
             raise RuntimeErrorWithHint(
                 f"'{split_binary(opts.binary)[0]}' not found on PATH.",
                 "Install the package, set AWSEMU_BINARY, or use '--docker'.",
             )
+        random_port = opts.port == 0
         cmd = native_command(opts)
-        if random_port:
-            log_file = cli_root() / "pending" / f"{time.time_ns()}.log"
-        else:
-            log_file = CliFiles(opts.port).log
+        log_file = cli_root() / "pending" / f"{time.time_ns()}.log" if random_port else CliFiles(opts.port).log
         proc = _popen_detached(cmd, log_file)
         port = opts.port
 
@@ -411,18 +416,45 @@ def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]
             port = _port_from_url(str((info or {}).get("endpoint_url", ""))) or 0
             if not port:
                 reason = abort() or "no startup line with endpoint_url in the log"
-                return (
-                    State(port=0, mode="native", started_at=time.time(), command=cmd, pid=proc.pid, log=str(log_file)),
-                    health.Health(0, False, False, reason),
+                state = State(
+                    port=0, mode="native", started_at=time.time(), command=cmd, pid=proc.pid, log=str(log_file)
                 )
+                return state, lambda: reason
             final_log = CliFiles(port).log
             if not IS_WINDOWS:  # an open file can be renamed on POSIX
                 final_log.parent.mkdir(parents=True, exist_ok=True)
                 log_file.replace(final_log)
                 log_file = final_log
+        return State(
+            port=port, mode="native", started_at=time.time(), command=cmd, pid=proc.pid, log=str(log_file)
+        ), abort
 
-        state = State(port=port, mode="native", started_at=time.time(), command=cmd, pid=proc.pid, log=str(log_file))
-    else:
+    def foreground_command(self, opts: StartOptions) -> list[str]:
+        return native_command(opts)
+
+    def stop(self, state: State, timeout: float, force: bool) -> str:
+        pid = state.pid or 0
+        if not pid_alive(pid):
+            return "was not running (cleaned up stale state)"
+        _send_stop(pid, force)
+        if not _wait_gone(pid, timeout):
+            raise RuntimeErrorWithHint(
+                f"pid {pid} is still running after {timeout:.0f}s.", "Try 'awsemu stop --force'."
+            )
+        # Give the port a moment to close before deciding the files are stale.
+        health.wait_port_closed(state.port, timeout=1.0)
+        return f"{'forced' if force else 'stopped'} pid {pid}"
+
+
+class Docker:
+    mode = "docker"
+
+    def launch(self, opts: StartOptions, wait: float) -> tuple[State, Abort]:
+        if opts.port == 0:
+            raise RuntimeErrorWithHint(
+                "Port 0 doesn't work with Docker: Docker can't forward a port chosen at startup.",
+                "Pick a port with --port, or use --native.",
+            )
         if not docker_available():
             raise RuntimeErrorWithHint("Docker not found on PATH.")
         if not docker_image_exists(opts.image):
@@ -442,12 +474,39 @@ def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]
         state = State(
             port=opts.port, mode="docker", started_at=time.time(), command=cmd, container=name, log=str(log_file)
         )
+        return state, lambda: None if docker_container_running(name) else "container stopped"
 
-        def abort() -> str | None:
-            if not docker_container_running(name):
-                return "container stopped"
-            return None
+    def foreground_command(self, opts: StartOptions) -> list[str]:
+        emulator_root().mkdir(parents=True, exist_ok=True)
+        return docker_command(opts, detach=False)
 
+    def stop(self, state: State, timeout: float, force: bool) -> str:
+        name = state.container or container_name(state.port)
+        if docker_container_running(name):
+            cmd = ["docker", "kill" if force else "stop"]
+            if not force:
+                cmd += ["-t", str(int(timeout))]
+            subprocess.run(cmd + [name], capture_output=True, text=True)
+        return f"stopped container {name}"
+
+
+RUNTIMES: dict[str, Runtime] = {"native": Native(), "docker": Docker()}
+
+
+def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]:
+    """Start in the background. With ``opts.port == 0`` the OS picks the port (native only).
+
+    Returns the saved state (``state.port`` is the real port) and the health result.
+    """
+    rt = RUNTIMES[resolve_mode(opts.mode, opts.binary)]
+    if opts.port != 0 and health.port_open(opts.port):
+        raise RuntimeErrorWithHint(
+            f"Something is already listening on 127.0.0.1:{opts.port}.",
+            "Run 'awsemu status --all' or pick another port with '--port'.",
+        )
+    state, abort = rt.launch(opts, wait)
+    if not state.port:
+        return state, health.Health(0, False, False, abort() or "the emulator didn't say which port it uses")
     state.save()
     status = health.wait_healthy(state.port, timeout=wait, abort=abort)
     if not status.healthy and abort():
@@ -457,12 +516,7 @@ def start(opts: StartOptions, wait: float = 30.0) -> tuple[State, health.Health]
 
 def run_foreground(opts: StartOptions) -> int:
     """Run attached to the terminal (Ctrl+C stops it cleanly)."""
-    mode = resolve_mode(opts.mode, opts.binary)
-    if mode == "native":
-        cmd = native_command(opts)
-    else:
-        emulator_root().mkdir(parents=True, exist_ok=True)
-        cmd = docker_command(opts, detach=False)
+    cmd = RUNTIMES[resolve_mode(opts.mode, opts.binary)].foreground_command(opts)
     try:
         return subprocess.call(cmd)
     except KeyboardInterrupt:
@@ -488,7 +542,6 @@ def _wait_gone(pid: int, timeout: float) -> bool:
 def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
     """Stop the instance on ``port``. Returns a human description of what happened."""
     state = State.load(port)
-
     if state is None:
         name = container_name(port)
         if docker_available() and docker_container_running(name):
@@ -501,33 +554,12 @@ def stop(port: int, timeout: float = 15.0, force: bool = False) -> str:
         else:
             cleaned = cleanup_instance_files(port)
             return "not running" + (" (removed stale files)" if cleaned else "")
-
-    if state.mode == "docker":
-        name = state.container or container_name(port)
-        if docker_container_running(name):
-            cmd = ["docker", "kill" if force else "stop"]
-            if not force:
-                cmd += ["-t", str(int(timeout))]
-            subprocess.run(cmd + [name], capture_output=True, text=True)
-        State.clear(port)
-        cleanup_instance_files(port)
-        return f"stopped container {name}"
-
-    pid = state.pid or 0
-    if not pid_alive(pid):
-        State.clear(port)
-        cleanup_instance_files(port)
-        return "was not running (cleaned up stale state)"
-
-    _send_stop(pid, force)
-    if not _wait_gone(pid, timeout):
-        raise RuntimeErrorWithHint(f"pid {pid} is still running after {timeout:.0f}s.", "Try 'awsemu stop --force'.")
-    # Give the port a moment to close before deciding the files are stale.
-    health.wait_port_closed(port, timeout=1.0)
+    what = RUNTIMES[state.mode].stop(state, timeout, force)
     State.clear(port)
     cleaned = cleanup_instance_files(port)
-    how = "forced" if force else "stopped"
-    return f"{how} pid {pid}" + (" (removed files it left behind)" if cleaned else "")
+    if cleaned and state.mode == "native" and not what.startswith("was not running"):
+        what += " (removed files it left behind)"
+    return what
 
 
 def build_image(image: str = DEFAULT_IMAGE, arch: str | None = None, version: str | None = None) -> int:

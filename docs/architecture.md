@@ -37,7 +37,8 @@ src/awsemu/
   cli.py            the root command: global options, aliases and prefixes, and the list of
                     commands (LAZY_COMMANDS), each imported only when it runs or --help lists it
   context.py        global --port and error handling (botocore → message + hint)
-  runtime.py        start/stop/status: native, Docker, --port 0, cleanup, Dockerfile
+  runtime.py        start/stop/status: one Runtime per mode (Native, Docker) behind start/stop,
+                    --port 0, cleanup, Dockerfile
   diagnosis.py      what awsemu doctor checks, as a Diagnosis (the command prints it)
   health.py         /__admin/health check with the instance's ca.pem; waiting for health or a closed port
   waiting.py        poll(check, timeout=...): the one polling loop with a deadline

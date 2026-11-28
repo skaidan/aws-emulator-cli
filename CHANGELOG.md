@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **One runtime interface**: native and Docker modes are `awsemu.runtime.Native` and `Docker` behind one `Runtime` protocol (launch, stop, foreground command); `start` and `stop` do the common part once. Nothing changes on the command line.
 - **JSON Schemas from the types**: the schemas of `status`, `status --all`, `doctor`, `install --list` and `snapshot ls` are generated from the dataclasses those commands print (`awsemu.schemas.from_type`), so a field added to the type is in the schema too.
 
 ### Fixed
