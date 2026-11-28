@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **`awsemu config explain`** (`--json`): every awsemu setting here, its value, and where it comes from: the command line, an environment variable, the project file with its line, or the default (`port 9310  awsemu.toml, line 3`). It reads `awsemu.config.resolve`, which `start`, `up` and the default port use too, so what it says is what they do.
+
 ## 0.14.2 — 2026-11-28
 
 ### Changed

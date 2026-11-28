@@ -6,15 +6,16 @@ import os
 
 import click
 
+from .. import config as cfg
 from .. import project, settings, ui
-from ..context import handle_errors
+from ..context import Ctx, handle_errors, json_option, pass_ctx
 from ..paths import emulator_settings_file
 from ._common import AliasedGroup
 
 
 @click.group(cls=AliasedGroup)
 def config():
-    """Read or change the emulator's settings file (config.toml)."""
+    """Read or change the settings: awsemu's (explain) and the emulator's (config.toml)."""
 
 
 @config.command(name="show")
@@ -52,6 +53,37 @@ def config_show():
             )
             if v is not None
         ]
+    )
+
+
+@config.command(name="explain")
+@json_option
+@pass_ctx
+@click.pass_context
+@handle_errors
+def config_explain(ctx: click.Context, c: Ctx, as_json: bool):
+    """Every awsemu setting here, its value, and where it comes from.
+
+    \b
+      awsemu config explain            # port 9310  awsemu.toml, line 3
+      AWSEMU_PORT=9400 awsemu config explain
+
+    Highest first: the command line (--port), an environment variable
+    (AWSEMU_PORT), the project file (awsemu.toml or [tool.awsemu]), the default.
+    """
+    root = ctx.find_root()
+    given = root.get_parameter_source("port") == click.core.ParameterSource.COMMANDLINE
+    values = list(cfg.resolve({"port": c.port} if given else None).values())
+    if as_json:
+        ui.print_json([v.as_dict() for v in values])
+        return
+    shown = [", ".join(map(str, v.value)) if isinstance(v.value, list) else v.value for v in values]
+    ui.table(
+        ["setting", "value", "from"],
+        [
+            [v.name, "-" if x in (None, "") else x, ui.styled(v.source, "muted")]
+            for v, x in zip(values, shown, strict=True)
+        ],
     )
 
 

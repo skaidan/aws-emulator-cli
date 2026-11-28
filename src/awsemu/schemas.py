@@ -62,6 +62,8 @@ def from_type(tp: Any) -> dict:
         return array(from_type(args[0]))
     if origin is dict and args:
         return {"type": "object", "additionalProperties": from_type(args[1])}
+    if tp is Any:
+        return {}  # any JSON value
     simple = {str: S, int: INT, float: N, bool: B}
     if tp in simple:
         return dict(simple[tp])
@@ -78,6 +80,12 @@ def _diagnosis_check() -> type:
     from .diagnosis import Check
 
     return Check
+
+
+def _config_value() -> type:
+    from .config import Value
+
+    return Value
 
 
 def _versions() -> type:
@@ -336,6 +344,7 @@ SCHEMAS: dict[str, dict] = {
         )
     ),
     "install-list": from_type(_versions()),
+    "config-explain": array(from_type(_config_value())),
     "snapshot-ls": array(from_type(_saved_snapshot())),
     "sqs-ls": array(obj({"name": S, "url": S, "visible": INT_NULL, "in_flight": INT_NULL, "delayed": INT_NULL})),
     "sns-ls": array(obj({"name": S, "arn": S, "subscriptions": AWS_OBJECTS})),
@@ -372,6 +381,7 @@ COMMANDS: dict[str, str] = {
     "proxy-cost": "awsemu proxy cost --json",
     "issues": "awsemu issues SERVICE --json",
     "install-list": "awsemu install --list --json",
+    "config-explain": "awsemu config explain --json",
     "snapshot-ls": "awsemu snapshot ls --json",
     "sqs-ls": "awsemu sqs ls --json",
     "sns-ls": "awsemu sns ls --json",

@@ -62,6 +62,7 @@ From the current folder upwards, `awsemu` uses the first `awsemu.toml` it finds,
 
 ```bash
 awsemu config show      # which file is in use and with which values
+awsemu config explain   # every setting, its value and where it comes from
 awsemu doctor           # includes a "project" row
 ```
 
@@ -73,6 +74,20 @@ From highest to lowest:
 2. Environment variables (`AWSEMU_PORT`).
 3. `awsemu.toml` / `[tool.awsemu]`.
 4. Defaults.
+
+`awsemu config explain` shows the result for each setting, with the file line it comes from:
+
+```
+$ AWSEMU_PORT=9400 awsemu config explain
+setting           value                 from
+port              9400                  environment (AWSEMU_PORT)
+mode              native                awsemu.toml, line 3
+telemetry         -                     not set: the emulator decides (its default, on)
+image             aws-emulator:1.0.385  default (from emulator_version)
+…
+```
+
+`--json` prints the same as a list of `{name, value, source}` ([schema](schemas/config-explain.schema.json)).
 
 ## `awsemu init`
 

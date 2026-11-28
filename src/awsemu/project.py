@@ -244,17 +244,10 @@ def set_value(key: str, value: str, path: Path | None = None) -> Path:
 
 
 def default_port() -> int:
-    """``$AWSEMU_PORT``, else the project's ``port`` (awsemu.toml), else 9297."""
-    raw = os.environ.get("AWSEMU_PORT")
-    if raw:
-        try:
-            return int(raw)
-        except ValueError:
-            pass
+    """``$AWSEMU_PORT``, else the project's ``port`` (awsemu.toml), else 9297 (``awsemu.config``)."""
+    from . import config
+
     try:
-        proj = load()
+        return int(config.resolve()["port"].value)
     except ProjectError:
         return DEFAULT_PORT  # reported by the CLI when it loads the project
-    if proj and proj.port:
-        return proj.port
-    return DEFAULT_PORT

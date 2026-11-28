@@ -497,3 +497,11 @@ def test_every_schema_names_its_command():
     from awsemu import schemas
 
     assert set(schemas.SCHEMAS) == set(schemas.COMMANDS)
+
+
+def test_config_explain(runner, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "awsemu.toml").write_text("port = 9310\n")
+    rows = {r["name"]: r for r in run_json(runner, "config", "explain", "--json")}
+    assert rows["port"] == {"name": "port", "value": 9310, "source": "awsemu.toml, line 1"}
+    assert set(rows) >= {"mode", "auth", "telemetry", "image", "faults"}

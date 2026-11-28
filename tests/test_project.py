@@ -129,3 +129,26 @@ def test_old_default_port_import_warns():
 
     with pytest.warns(DeprecationWarning, match="awsemu.project.default_port"):
         assert paths.default_port is default_port
+
+
+def test_config_layers_and_sources(proj_dir, monkeypatch):
+    from awsemu import config
+
+    (proj_dir / "awsemu.toml").write_text('# team settings\nport = 9344\nproxy = false\nemulator_version = "1.0.385"\n')
+    v = config.resolve()
+    assert (v["port"].value, v["port"].source) == (9344, "awsemu.toml, line 2")
+    assert v["proxy"].source == "awsemu.toml, line 3"  # set to the default value, still from the file
+    assert (v["mode"].value, v["mode"].source) == ("auto", "default")
+    assert v["image"].value == "aws-emulator:1.0.385" and v["image"].source == "default (from emulator_version)"
+    assert v["telemetry"].value is None and v["telemetry"].source.startswith("not set: the emulator decides")
+    monkeypatch.setenv("AWSEMU_PORT", "9355")
+    assert config.resolve()["port"].source == "environment (AWSEMU_PORT)"
+    assert config.resolve({"port": 9400, "mode": "docker"})["port"].source == "command line"
+    assert config.resolve({"mode": "docker"})["mode"].value == "docker"
+
+
+def test_config_line_in_pyproject(proj_dir):
+    from awsemu import config
+
+    (proj_dir / "pyproject.toml").write_text('[project]\nname = "x"\nport = 1\n\n[tool.awsemu]\nport = 9361\n')
+    assert config.resolve()["port"].source == "pyproject.toml [tool.awsemu], line 6"

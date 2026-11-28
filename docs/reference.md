@@ -12,7 +12,7 @@ Global options (before the command): `--port/-p PORT` (default: `$AWSEMU_PORT`, 
 - [`check`](#awsemu-check) — Find the AWS operations your project uses and the known emulator differences for them.
 - [`completion`](#awsemu-completion) — Print the shell completion script (commands, options and resource names).
 - [`compose`](#awsemu-compose) — Print a Docker Compose service for the emulator (same setup as 'start --docker').
-- [`config`](#awsemu-config) — Read or change the emulator's settings file (config.toml).
+- [`config`](#awsemu-config) — Read or change the settings: awsemu's (explain) and the emulator's (config.toml).
 - [`describe`](#awsemu-describe) — Show any supported resource from its ARN.
 - [`doctor`](#awsemu-doctor) — Check your setup and explain how to fix what's missing.
 - [`down`](#awsemu-down) — Stop this project's emulator (same as 'awsemu stop').
@@ -169,7 +169,26 @@ awsemu compose [OPTIONS]
 
 ## `awsemu config`
 
-Read or change the emulator's settings file (config.toml).
+Read or change the settings: awsemu's (explain) and the emulator's (config.toml).
+
+### `awsemu config explain`
+
+Every awsemu setting here, its value, and where it comes from.
+
+```bash
+awsemu config explain            # port 9310  awsemu.toml, line 3
+AWSEMU_PORT=9400 awsemu config explain
+```
+Highest first: the command line (--port), an environment variable
+(AWSEMU_PORT), the project file (awsemu.toml or [tool.awsemu]), the default.
+
+```
+awsemu config explain [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--json` | Machine-readable JSON output (format: docs/scripting.md). |
 
 ### `awsemu config path`
 
